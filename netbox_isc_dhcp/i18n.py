@@ -44,6 +44,8 @@ TR = {
     "lbl.generated_at": ("Vygenerované (posledná zmena)", "Generated (last change)"),
     "lbl.never": ("ešte nevygenerované", "not generated yet"),
     "lbl.file": ("Súbor", "File"),
+    "lbl.subdirs": ("Podadresáre", "Subdirectories"),
+    "lbl.add_subdir": ("Pridať podadresár", "Add subdirectory"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

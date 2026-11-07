@@ -36,7 +36,6 @@ menu = PluginMenu(
             (
                 _open_item("baseconfig", "menu.base"),
                 _list_item("dhcpgroup", "menu.groups"),
-                _list_item("dhcppath", "menu.paths"),
                 _list_item("dnsserver", "menu.dns"),
                 _open_item("pluginsettings", "menu.settings"),
             ),

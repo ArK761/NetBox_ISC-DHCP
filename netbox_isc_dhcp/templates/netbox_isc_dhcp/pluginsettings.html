@@ -4,6 +4,18 @@
   <h5 class="card-header">{% tr "lbl.settings" %}</h5>
   <table class="table table-hover attr-table">
     <tr><th scope="row">{% tr "lbl.language" %}</th><td>{{ object.get_language_display }}</td></tr>
-  </table>
-</div></div></div>
+    <tr><th scope="row">{% tr "lbl.config_path" %}</th><td><code>{{ object.config_path }}</code></td></tr>
+    <tr><th scope="row">{% tr "lbl.base_path" %}</th><td><code>{{ object.base_path }}</code></td></tr>
+  </table></div></div>
+  <div class="col col-md-6"><div class="card">
+  <h5 class="card-header d-flex justify-content-between">{% tr "lbl.subdirs" %}
+    <a class="btn btn-sm btn-primary" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_add' %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.add_subdir" %}</a></h5>
+  <table class="table table-hover mb-0">
+    <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.path" %}</th><th></th></tr></thead>
+    {% for d in subdirs %}
+    <tr><td>{{ d.name }}</td><td><code>{{ d.path }}</code></td>
+      <td class="text-end"><a class="btn btn-sm btn-warning" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_edit' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-pencil"></i></a>
+      <a class="btn btn-sm btn-danger" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_delete' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-trash-can-outline"></i></a></td></tr>
+    {% endfor %}
+  </table></div></div></div>
 {% endblock %}

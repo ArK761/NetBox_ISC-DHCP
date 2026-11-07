@@ -9,7 +9,7 @@ from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, Plugin
 class BaseConfigForm(NetBoxModelForm):
     class Meta:
         model = BaseConfig
-        fields = ("name", "config_path", "base_path", "static_text", "prefix_field", "prefix_value", "tags")
+        fields = ("name", "static_text", "prefix_field", "prefix_value", "tags")
         widgets = {"static_text": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
 
 
@@ -53,4 +53,4 @@ class DNSServerForm(NetBoxModelForm):
 class PluginSettingsForm(NetBoxModelForm):
     class Meta:
         model = PluginSettings
-        fields = ("language", "tags")
+        fields = ("language", "config_path", "base_path", "tags")

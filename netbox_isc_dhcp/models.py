@@ -15,8 +15,6 @@ class BaseConfig(NetBoxModel):
     """Primary dhcpd.conf: passive text written by the user + generated include lists."""
 
     name = models.CharField(max_length=100, unique=True, default="dhcpd.conf")
-    config_path = models.CharField(max_length=255, default="/etc/dhcp", help_text="Directory of dhcpd.conf on the DHCP server.")
-    base_path = models.CharField(max_length=255, default=DEFAULT_BASE_PATH, help_text="Base directory of all other DHCP files; directories (TABLE, SUBNET...) live below it.")
     static_text = models.TextField(
         blank=True, default=default_static_text,
         help_text="Passive part of dhcpd.conf. Used as plain text, nothing in it is processed.",
@@ -36,22 +34,10 @@ class BaseConfig(NetBoxModel):
     def __str__(self):
         return self.name
 
-    def clean(self):
-        super().clean()
-        errors = {f: "Must be an absolute path without spaces, quotes or '..'." for f in ("config_path", "base_path") if not is_safe_path(getattr(self, f))}
-        if errors:
-            raise ValidationError(errors)
-
-    def save(self, *args, **kwargs):
-        creating = self._state.adding
-        super().save(*args, **kwargs)
-        if creating:
-            for order, name in ((10, "TABLE"), (20, "SUBNET")):
-                DHCPPath.objects.get_or_create(name=name, defaults={"order": order})
 
 
 def base_path() -> str:
-    cfg = BaseConfig.objects.first()
+    cfg = PluginSettings.objects.first()
     return (cfg.base_path if cfg else DEFAULT_BASE_PATH).rstrip("/")
 
 
@@ -146,12 +132,27 @@ class PluginSettings(NetBoxModel):
     """Global plugin settings (single row)."""
 
     language = models.CharField(max_length=2, default="sk", choices=(("sk", "Slovenčina"), ("en", "English")))
+    config_path = models.CharField(max_length=255, default="/etc/dhcp", help_text="Directory of dhcpd.conf on the DHCP server.")
+    base_path = models.CharField(max_length=255, default=DEFAULT_BASE_PATH, help_text="Base directory of all other DHCP files; subdirectories (TABLE, SUBNET...) live below it.")
 
     class Meta:
         verbose_name_plural = "plugin settings"
 
     def __str__(self):
         return "Plugin settings"
+
+    def clean(self):
+        super().clean()
+        errors = {f: "Must be an absolute path without spaces, quotes or '..'." for f in ("config_path", "base_path") if not is_safe_path(getattr(self, f))}
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        creating = self._state.adding
+        super().save(*args, **kwargs)
+        if creating:
+            for order, name in ((10, "TABLE"), (20, "SUBNET")):
+                DHCPPath.objects.get_or_create(name=name, defaults={"order": order})
 
 
 class DNSServer(NetBoxModel):

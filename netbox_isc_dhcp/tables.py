@@ -10,8 +10,8 @@ class BaseConfigTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = BaseConfig
-        fields = ("pk", "id", "name", "config_path", "base_path", "prefix_field", "prefix_value")
-        default_columns = ("name", "config_path", "base_path")
+        fields = ("pk", "id", "name", "prefix_field", "prefix_value")
+        default_columns = ("name",)
 
 
 class DHCPPathTable(NetBoxTable):

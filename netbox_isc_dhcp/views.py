@@ -11,7 +11,7 @@ from .models import MAX_ACTIVE_DNS, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, D
 from .services import build_base_config
 
 
-def _crud(model, form_cls, table_cls, singleton=False):
+def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
     """Register list / detail / add / edit / delete views for a model."""
 
     if singleton:
@@ -34,6 +34,9 @@ def _crud(model, form_cls, table_cls, singleton=False):
     class DetailView(generic.ObjectView):
         queryset = model.objects.all()
         template_name = f"netbox_isc_dhcp/{model._meta.model_name}.html"
+
+        def get_extra_context(self, request, instance):
+            return extra_context(request, instance) if extra_context else {}
 
     @register_model_view(model, "add", detail=False)
     @register_model_view(model, "edit")
@@ -70,8 +73,9 @@ _crud(DHCPGroup, forms.DHCPGroupForm, tables.DHCPGroupTable)
 _crud(DNSServer, forms.DNSServerForm, tables.DNSServerTable)
 
 
-# --- Plugin settings -------------------------------------------------------------
-_crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True)
+# --- Plugin settings: language, dhcpd.conf path, base path and subdirectories ---
+_crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
+      extra_context=lambda request, instance: {"subdirs": DHCPPath.objects.all()})
 
 
 # --- DNS checkbox ----------------------------------------------------------------
