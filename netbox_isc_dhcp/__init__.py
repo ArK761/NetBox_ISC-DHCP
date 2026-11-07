@@ -1,0 +1,22 @@
+try:
+    from netbox.plugins import PluginConfig
+except ImportError:  # allows importing pure modules (pools.py) outside NetBox, e.g. in tests
+    PluginConfig = object
+
+
+class ISCDHCPConfig(PluginConfig):
+    name = "netbox_isc_dhcp"
+    verbose_name = "ISC DHCP"
+    description = "Generate ISC DHCP configuration from NetBox data"
+    version = "0.1.0"
+    author = "ArK761"
+    base_url = "isc-dhcp"
+    min_version = "4.0.0"
+    default_settings = {
+        # smallest prefix length that may use a pool profile (/26 = 64 addresses)
+        "min_prefix_length": 26,
+        "min_dynamic_addresses": 10,
+    }
+
+
+config = ISCDHCPConfig
