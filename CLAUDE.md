@@ -32,6 +32,9 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 - NO import, export, changelog, journal, tags anywhere in the plugin (list actions = Add + Delete selected; table row menu = edit/delete;
   changelog/journal tabs removed from registry in ready(); forms drop tags + changelog_message).
 - Values on settings / dhcpd.conf pages are click-to-edit inline (<details> + form, no JS). Layout single column, top to bottom.
+- TODO next update: delete confirmation pages still show "Changelog message" + "Background job". Fix: plugin copies of
+  generic/bulk_delete.html (set BulkDeleteView.template_name) and htmx/delete_form.html (ObjectDeleteView renders it hardcoded for htmx,
+  template_name for full page) without the meta-fields block; extend links.py to GET each /delete/ page and POST bulk delete confirm page.
 - Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
 
 ## Status
