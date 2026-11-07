@@ -1,42 +1,60 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}
+<style>
+  details.ie > summary { list-style: none; cursor: pointer; display: inline-block; }
+  details.ie > summary::-webkit-details-marker { display: none; }
+  details.ie > summary:hover { text-decoration: underline dotted; }
+  details.ie[open] > summary { display: none; }
+  details.ie form { display: flex; gap: .5rem; max-width: 34rem; }
+</style>
 <div class="row"><div class="col-12 col-xl-8">
 
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.settings" %}</h5>
-    <table class="table table-hover attr-table mb-0">
-      <tr><th scope="row" style="width:35%">{% tr "lbl.language" %}</th><td>{{ object.get_language_display }}</td></tr>
+    <table class="table attr-table mb-0">
+      <tr><th scope="row" style="width:35%">{% tr "lbl.language" %}</th><td>
+        <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{{ object.get_language_display }} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+          <form method="post" action="{% url 'plugins:netbox_isc_dhcp:pluginsettings_inline' pk=object.pk %}">{% csrf_token %}
+            <input type="hidden" name="field" value="language">
+            <select name="value" class="form-select form-select-sm">
+              <option value="sk"{% if object.language == "sk" %} selected{% endif %}>Slovenčina</option>
+              <option value="en"{% if object.language == "en" %} selected{% endif %}>English</option></select>
+            <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr>
     </table>
   </div>
 
   <div class="card mb-3">
     <h5 class="card-header"><i class="mdi mdi-folder-cog-outline me-1"></i>{% tr "lbl.paths" %}</h5>
-    <table class="table table-hover attr-table mb-0">
-      <tr><th scope="row" style="width:35%">{% tr "lbl.config_path" %}</th>
-        <td>{% if object.config_path %}<code>{{ object.config_path }}/dhcpd.conf</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %}</td></tr>
-      <tr><th scope="row">{% tr "lbl.base_path" %}</th>
-        <td>{% if object.base_path %}<code>{{ object.base_path }}</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %}</td></tr>
+    <table class="table attr-table mb-0">
+      {% for field, label, value, ph in path_rows %}
+      <tr><th scope="row" style="width:35%">{% tr label %}</th><td>
+        <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if value %}<code>{{ value }}</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+          <form method="post" action="{% url 'plugins:netbox_isc_dhcp:pluginsettings_inline' pk=object.pk %}">{% csrf_token %}
+            <input type="hidden" name="field" value="{{ field }}">
+            <input name="value" value="{{ value }}" placeholder="{{ ph }}" class="form-control form-control-sm font-monospace" autofocus>
+            <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr>
+      {% endfor %}
     </table>
     <div class="card-body border-top">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <strong>{% tr "lbl.subdirs" %}</strong>
-        <a class="btn btn-sm btn-primary" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_add' %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.add_subdir" %}</a>
-      </div>
-      {% if subdirs %}
-      <ul class="list-group">
+      <strong class="d-block mb-2">{% tr "lbl.subdirs" %}</strong>
+      <ul class="list-group mb-2">
         {% for d in subdirs %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span><i class="mdi mdi-subdirectory-arrow-right me-2 text-muted"></i><strong class="d-inline-block" style="min-width:9rem">{{ d.name }}</strong><code>{{ d.path }}</code></span>
-          <span class="text-nowrap">
-            <a class="btn btn-sm btn-warning" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_edit' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-pencil"></i></a>
-            <a class="btn btn-sm btn-danger" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_delete' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-trash-can-outline"></i></a>
-          </span>
+          <span class="d-flex align-items-center"><i class="mdi mdi-subdirectory-arrow-right me-2 text-muted"></i>
+            <details class="ie d-inline-block" style="min-width:9rem"><summary title="{% tr 'lbl.click_edit' %}"><strong>{{ d.name }}</strong> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+              <form method="post" action="{% url 'plugins:netbox_isc_dhcp:dhcppath_inline' pk=d.pk %}">{% csrf_token %}
+                <input name="value" value="{{ d.name }}" class="form-control form-control-sm font-monospace">
+                <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
+            <code class="ms-3">{{ d.path }}</code></span>
+          <a class="btn btn-sm btn-danger" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_delete' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-trash-can-outline"></i></a>
         </li>
+        {% empty %}
+        <li class="list-group-item text-muted">{% tr "lbl.no_subdirs" %}</li>
         {% endfor %}
       </ul>
-      {% else %}
-      <div class="text-muted">{% tr "lbl.no_subdirs" %}</div>
-      {% endif %}
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:dhcppath_inline_add' %}" class="d-flex gap-2" style="max-width:34rem">{% csrf_token %}
+        <input name="value" placeholder="{% tr 'lbl.new_subdir' %}" class="form-control form-control-sm font-monospace" required>
+        <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.add_subdir" %}</button></form>
     </div>
   </div>
 

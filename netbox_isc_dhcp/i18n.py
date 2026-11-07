@@ -49,6 +49,10 @@ TR = {
     "lbl.paths": ("Cesty na DHCP serveri", "Paths on the DHCP server"),
     "lbl.not_set": ("nenastavené", "not set"),
     "lbl.no_subdirs": ("Zatiaľ žiadne podadresáre.", "No subdirectories yet."),
+    "msg.saved": ("Uložené.", "Saved."),
+    "lbl.save": ("Uložiť", "Save"),
+    "lbl.click_edit": ("Kliknite pre úpravu", "Click to edit"),
+    "lbl.new_subdir": ("názov, napr. TABLE", "name, e.g. TABLE"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

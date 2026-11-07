@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.views import View
 from netbox.views import generic
@@ -75,7 +75,13 @@ _crud(DNSServer, forms.DNSServerForm, tables.DNSServerTable)
 
 # --- Plugin settings: language, dhcpd.conf path, base path and subdirectories ---
 _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
-      extra_context=lambda request, instance: {"subdirs": DHCPPath.objects.all()})
+      extra_context=lambda request, instance: {
+          "subdirs": DHCPPath.objects.all(),
+          "path_rows": [
+              ("config_path", "lbl.config_path", instance.config_path, "/etc/dhcp"),
+              ("base_path", "lbl.base_path", instance.base_path, "/opt/dhcp"),
+          ],
+      })
 
 
 # --- DNS checkbox ----------------------------------------------------------------
@@ -130,3 +136,42 @@ class DHCPFileRegenerateView(View):
 
 
 register_model_view(DHCPFile, "regenerate", path="regenerate")(DHCPFileRegenerateView)
+
+
+# --- Inline editing on the settings page (click a value, type, save) -------------
+class PluginSettingsInlineView(View):
+    FIELDS = ("language", "config_path", "base_path")
+
+    def post(self, request, pk):
+        if not request.user.has_perm("netbox_isc_dhcp.change_pluginsettings"):
+            raise PermissionDenied
+        obj = get_object_or_404(PluginSettings, pk=pk)
+        field = request.POST.get("field")
+        if field in self.FIELDS:
+            setattr(obj, field, request.POST.get("value", "").strip())
+            try:
+                obj.full_clean()
+                obj.save()
+                messages.success(request, t("msg.saved"))
+            except ValidationError as exc:
+                messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
+        return redirect(obj.get_absolute_url())
+
+
+class DHCPPathInlineView(View):
+    """Add a subdirectory (no pk) or rename one (pk) right on the settings page."""
+
+    def post(self, request, pk=None):
+        perm = "change_dhcppath" if pk else "add_dhcppath"
+        if not request.user.has_perm(f"netbox_isc_dhcp.{perm}"):
+            raise PermissionDenied
+        obj = get_object_or_404(DHCPPath, pk=pk) if pk else DHCPPath(order=(DHCPPath.objects.count() + 1) * 10)
+        obj.name = request.POST.get("value", "").strip()
+        try:
+            obj.full_clean()
+            obj.save()
+            messages.success(request, t("msg.saved"))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
+        st = PluginSettings.objects.first()
+        return redirect(st.get_absolute_url() if st else "plugins:netbox_isc_dhcp:pluginsettings_list")
