@@ -52,7 +52,8 @@ def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
 
 
 # --- Base config -----------------------------------------------------------------
-_crud(BaseConfig, forms.BaseConfigForm, tables.BaseConfigTable, singleton=True)
+_crud(BaseConfig, forms.BaseConfigForm, tables.BaseConfigTable, singleton=True,
+      extra_context=lambda request, instance: _baseconfig_context(request, instance))
 
 
 @register_model_view(BaseConfig, name="preview", path="preview")
@@ -77,6 +78,7 @@ _crud(DNSServer, forms.DNSServerForm, tables.DNSServerTable)
 _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
       extra_context=lambda request, instance: {
           "subdirs": DHCPPath.objects.all(),
+          "dir_rows": [("table_dir", "lbl.table_dir", instance.table_dir), ("subnet_dir", "lbl.subnet_dir2", instance.subnet_dir)],
           "path_rows": [
               ("config_path", "lbl.config_path", instance.config_path, "/etc/dhcp"),
               ("base_path", "lbl.base_path", instance.base_path, "/opt/dhcp"),
@@ -140,7 +142,7 @@ register_model_view(DHCPFile, "regenerate", path="regenerate")(DHCPFileRegenerat
 
 # --- Inline editing on the settings page (click a value, type, save) -------------
 class PluginSettingsInlineView(View):
-    FIELDS = ("language", "config_path", "base_path")
+    FIELDS = ("language", "config_path", "base_path", "table_dir", "subnet_dir")
 
     def post(self, request, pk):
         if not request.user.has_perm("netbox_isc_dhcp.change_pluginsettings"):
@@ -148,7 +150,10 @@ class PluginSettingsInlineView(View):
         obj = get_object_or_404(PluginSettings, pk=pk)
         field = request.POST.get("field")
         if field in self.FIELDS:
-            setattr(obj, field, request.POST.get("value", "").strip())
+            value = request.POST.get("value", "").strip()
+            if field in ("table_dir", "subnet_dir"):
+                field, value = f"{field}_id", (int(value) if value.isdigit() else None)
+            setattr(obj, field, value)
             try:
                 obj.full_clean()
                 obj.save()
@@ -175,3 +180,42 @@ class DHCPPathInlineView(View):
             messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
         st = PluginSettings.objects.first()
         return redirect(st.get_absolute_url() if st else "plugins:netbox_isc_dhcp:pluginsettings_list")
+
+
+class BaseConfigInlineView(View):
+    FIELDS = ("source_model", "prefix_field", "prefix_value", "static_text")
+
+    def post(self, request, pk):
+        if not request.user.has_perm("netbox_isc_dhcp.change_baseconfig"):
+            raise PermissionDenied
+        obj = get_object_or_404(BaseConfig, pk=pk)
+        field = request.POST.get("field")
+        if field in self.FIELDS:
+            value = request.POST.get("value", "")
+            setattr(obj, field, value if field == "static_text" else value.strip())
+            try:
+                obj.full_clean()
+                obj.save()
+                messages.success(request, t("msg.saved"))
+            except ValidationError as exc:
+                messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
+        return redirect(obj.get_absolute_url())
+
+
+def _baseconfig_context(request, instance):
+    from extras.models import CustomField
+    from ipam.models import Prefix
+
+    from .models import settings_obj
+
+    st = settings_obj()
+    cfs = sorted(CustomField.objects.get_for_model(Prefix), key=lambda c: c.name)
+    cur = next((c for c in cfs if c.name == instance.prefix_field), None)
+    values = []
+    if cur is not None:
+        if cur.type == "boolean":
+            values = ["true", "false"]
+        elif getattr(cur, "choice_set", None):
+            values = [c[0] for c in cur.choice_set.choices]
+    path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
+    return {"cf_choices": [(c.name, c.label or c.name) for c in cfs], "value_choices": values, "file_path": path}

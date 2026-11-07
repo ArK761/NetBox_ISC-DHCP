@@ -7,6 +7,7 @@ app = "netbox_isc_dhcp"
 
 urlpatterns = [
     path("settings/<int:pk>/inline/", views.PluginSettingsInlineView.as_view(), name="pluginsettings_inline"),
+    path("base-config/<int:pk>/inline/", views.BaseConfigInlineView.as_view(), name="baseconfig_inline"),
     path("settings/paths/inline/", views.DHCPPathInlineView.as_view(), name="dhcppath_inline_add"),
     path("settings/paths/<int:pk>/inline/", views.DHCPPathInlineView.as_view(), name="dhcppath_inline"),
 ]

@@ -19,6 +19,10 @@ class BaseConfig(NetBoxModel):
         blank=True, default=default_static_text,
         help_text="Passive part of dhcpd.conf. Used as plain text, nothing in it is processed.",
     )
+    source_model = models.CharField(
+        max_length=50, default="ipam.prefix", choices=(("ipam.prefix", "IPAM › Prefix"),),
+        help_text="Object the subnet includes are built from.",
+    )
     prefix_field = models.CharField(
         max_length=100, default="DHCP_POOL",
         help_text="Name of the prefix custom field that switches a prefix on.",
@@ -34,6 +38,10 @@ class BaseConfig(NetBoxModel):
     def __str__(self):
         return self.name
 
+
+
+def settings_obj():
+    return PluginSettings.objects.select_related("table_dir", "subnet_dir").first()
 
 
 def base_path() -> str:
@@ -115,8 +123,17 @@ class DHCPFile(NetBoxModel):
         return self.name
 
     @property
+    def effective_directory(self):
+        """Own subdirectory, otherwise the default one from plugin settings."""
+        if self.directory_id:
+            return self.directory
+        st = settings_obj()
+        return st.table_dir if st else None
+
+    @property
     def full_path(self) -> str:
-        return f"{self.directory.path}/{self.name}" if self.directory else self.name
+        d = self.effective_directory
+        return f"{d.path}/{self.name}" if d else self.name
 
     def clean(self):
         super().clean()
@@ -134,6 +151,10 @@ class PluginSettings(NetBoxModel):
     language = models.CharField(max_length=2, default="sk", choices=(("sk", "Slovenčina"), ("en", "English")))
     config_path = models.CharField(max_length=255, blank=True, default="", help_text="Directory of dhcpd.conf on the DHCP server.")
     base_path = models.CharField(max_length=255, blank=True, default="", help_text="Base directory of all other DHCP files; subdirectories (TABLE, SUBNET...) live below it.")
+    table_dir = models.ForeignKey("DHCPPath", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+                                  help_text="Default subdirectory of tenant table files.")
+    subnet_dir = models.ForeignKey("DHCPPath", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+                                   help_text="Subdirectory of the subnet (prefix) files.")
 
     class Meta:
         verbose_name_plural = "plugin settings"

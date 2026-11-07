@@ -7,46 +7,57 @@ from tenancy.models import Tenant
 
 from .base_config import is_safe_name, render_base_config
 from .dhcp_tables import FileResult, build_file
-from .models import BaseConfig, DHCPFile, DHCPPath, base_path
+from extras.models import CustomField
+
+from .i18n import t
+from .models import BaseConfig, DHCPFile, base_path, settings_obj
 
 
 def dhcp_prefixes(cfg: BaseConfig) -> list[str]:
-    lookup = {f"custom_field_data__{cfg.prefix_field}": cfg.prefix_value}
+    value = cfg.prefix_value
+    cf = next((c for c in CustomField.objects.get_for_model(Prefix) if c.name == cfg.prefix_field), None)
+    if cf is not None and cf.type == "boolean":
+        value = str(value).strip().lower() in ("1", "true", "yes", "ano", "áno")
+    lookup = {f"custom_field_data__{cfg.prefix_field}": value}
     return [str(p) for p in Prefix.objects.filter(**lookup).values_list("prefix", flat=True)]
 
 
-def _dir_path(name: str):
-    d = DHCPPath.objects.filter(name=name).first()
-    return d.path if d else None
-
-
 def table_includes() -> tuple[list[str], list[str]]:
-    """Full paths of all enabled table files in include order, plus warnings."""
+    """Full paths of all enabled table files in include order, plus (at most a few, short) warnings."""
+    st = settings_obj()
     files = (
         DHCPFile.objects.filter(enabled=True, group__enabled=True)
         .select_related("group__group", "directory")
         .order_by("group__order", "group__group__name", "order", "name")
     )
-    paths, warnings = [], []
+    paths, no_dir, bad = [], [], []
     for f in files:
-        if f.directory is None:
-            warnings.append(f"File '{f.name}' skipped: no subdirectory chosen.")
-        elif is_safe_name(f.name):
-            paths.append(f.full_path)
+        d = f.directory or (st.table_dir if st else None)
+        if d is None:
+            no_dir.append(f.name)
+        elif not is_safe_name(f.name):
+            bad.append(f.name)
         else:
-            warnings.append(f"File '{f.name}' skipped: name contains characters not allowed in file names.")
-    table = _dir_path("TABLE")
-    return paths + ([f"{table}/Netbox_Devices-MAC"] if table else []), warnings
+            paths.append(f"{d.path}/{f.name}")
+    warnings = []
+    if no_dir:
+        warnings.append(t("warn.no_table_dir", n=len(no_dir)))
+    if bad:
+        warnings.append(t("warn.bad_names", names=", ".join(bad)))
+    if st and st.table_dir:
+        paths.append(f"{st.table_dir.path}/Netbox_Devices-MAC")
+    return paths, warnings
 
 
 def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:
     """Return (dhcpd.conf text, warnings)."""
+    st = settings_obj()
     tables, warnings = table_includes()
     if not base_path():
-        warnings.append("Base path is empty: set it in plugin settings.")
-    subnet = _dir_path("SUBNET")
+        warnings.insert(0, t("warn.no_base_path"))
+    subnet = st.subnet_dir.path if st and st.subnet_dir else None
     if subnet is None:
-        warnings.append("No SUBNET subdirectory: prefix includes are left out.")
+        warnings.append(t("warn.no_subnet_dir"))
     text = render_base_config(cfg.static_text, tables, dhcp_prefixes(cfg) if subnet else [], subnet_dir=subnet or "")
     return text, warnings
 
