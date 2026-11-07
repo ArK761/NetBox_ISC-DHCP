@@ -1,0 +1,10 @@
+{% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
+{% block content %}
+{% for w in files.warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
+<div class="row mb-3">
+  <div class="col-md-6"><div class="card"><h5 class="card-header">{{ object.group.name }}_Table ({{ files.dynamic_count }})</h5>
+    <pre class="card-body m-0" style="max-height:600px;overflow:auto">{{ files.table }}</pre></div></div>
+  <div class="col-md-6"><div class="card"><h5 class="card-header">{{ object.group.name }}_StaticTable ({{ files.static_count }})</h5>
+    <pre class="card-body m-0" style="max-height:600px;overflow:auto">{{ files.static }}</pre></div></div>
+</div>
+{% endblock %}

@@ -3,6 +3,8 @@ from django.db import models
 from netbox.models import NetBoxModel
 
 from .base_config import default_static_text
+from .dhcp_tables import build_group_files, default_static_template, default_table_template
+from .renderer import RenderError
 from .i18n import t
 
 MAX_ACTIVE_DNS = 2
@@ -40,12 +42,27 @@ class DHCPGroup(NetBoxModel):
     group = models.OneToOneField("tenancy.TenantGroup", on_delete=models.CASCADE, related_name="+")
     enabled = models.BooleanField(default=True, verbose_name="Export to dhcpd.conf")
     order = models.PositiveSmallIntegerField(default=100, help_text="Order of the include lines.")
+    mac_fields = models.JSONField(default=list, blank=True, help_text="Tenant custom fields that hold a MAC address.")
+    ip_field = models.CharField(max_length=100, blank=True, help_text="Tenant custom field with the static IP (optional).")
+    table_template = models.TextField(blank=True, default=default_table_template, help_text="Jinja template of <Group>_Table.")
+    static_template = models.TextField(blank=True, default=default_static_template, help_text="Jinja template of <Group>_StaticTable.")
 
     class Meta:
         ordering = ("order", "group__name")
 
     def __str__(self):
         return self.group.name
+
+    def clean(self):
+        super().clean()
+        try:  # catches template syntax errors before they can reach a generated file
+            build_group_files(
+                "Sample",
+                [("PC1", ["AA:BB:CC:DD:EE:01"], None), ("PC2", ["AA:BB:CC:DD:EE:02", "AA:BB:CC:DD:EE:03"], "10.0.0.2")],
+                self.table_template, self.static_template,
+            )
+        except RenderError as exc:
+            raise ValidationError(f"Template error: {exc}") from exc
 
 
 class PluginSettings(NetBoxModel):

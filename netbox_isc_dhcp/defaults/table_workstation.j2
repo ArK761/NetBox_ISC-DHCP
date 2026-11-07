@@ -1,0 +1,28 @@
+ class "{{ class_name }}" {
+{% if pairs %}
+   #lease limit 10;
+   match if (
+{% for p in pairs %}
+        (substring(hardware, 1, 6) = {{ p.mac }} and option host-name = "{{ p.name }}"){{ " or" if not loop.last else "  " }}
+{% endfor %}
+        );
+{% else %}
+   match if false;
+{% endif %}
+        }
+{% if tenants %}
+ class "MismatchedClients"  {
+   #lease limit 1;
+   match if
+{% for t in tenants %}
+{% for m in t.macs %}
+        ((substring(hardware, 1, 6) = {{ m }}) and (option host-name != "{{ t.name }}")) or
+{% endfor %}
+{% if t.macs|length == 1 %}
+        ((substring(hardware, 1, 6) != {{ t.macs[0] }}) and (option host-name = "{{ t.name }}")){{ " or" if not loop.last else " ;" }}
+{% else %}
+        ((option host-name = "{{ t.name }}"){% for m in t.macs %} and (substring(hardware, 1, 6) != {{ m }}){% endfor %}){{ " or" if not loop.last else " ;" }}
+{% endif %}
+{% endfor %}
+        }
+{% endif %}

@@ -32,5 +32,9 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 Done: base config generator (pure), BaseConfig/DHCPGroup/DNSServer/PluginSettings models + UI.
 Version badge (plugin version + git commit from pip direct_url.json) is injected into plugin HTML pages by the middleware (top-right, in page flow); bump `__version__` in netbox_isc_dhcp/__init__.py on every release.
 NetBox keeps a menu group expanded only if the menu link URL is a substring of the page URL (sidenav.ts): singleton menu links therefore use the list URL (redirects to the object), never a separate "open" URL.
-Next: Pool templates, tables (tenants/devices), generated files + manifest, signals, IP-restricted pages.
+DONE v0.2.0: tenant TABLE generation. DHCPGroup (tenant group) has: tick-box tenant custom fields for MAC, IP field, and TWO editable Jinja templates
+(table_template, static_template). Defaults in defaults/*.j2 reproduce the owner's WorkStation_Table byte for byte (golden test, natural sort order).
+Template context: class_name, tenants, pairs, static_tenants, hosts (host has _1/_2/_3 suffix for several MACs).
+Testing: a real NetBox 4.7.4 is set up in the sandbox (/home/user/nb_ref + /home/user/nbvenv, Postgres 5433, Redis 6380); start PG with pg_ctl as user postgres, then `manage.py shell < /home/user/it.py`.
+Next: Pool templates (per POOL_TYPE, with export yes/no checkbox, Jinja, helpers first_usable/last_usable/ip(n), range validation), Netbox_Devices-MAC, generated files + hashes + manifest, signals, IP-restricted pages.
 Not tested inside NetBox by us: owner tests and reports back.

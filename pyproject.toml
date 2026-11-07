@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "NetBox plugin: generate ISC DHCP configuration from NetBox data"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["jinja2>=3.1"]
 
 [tool.setuptools.dynamic]
 version = { attr = "netbox_isc_dhcp.__version__" }
@@ -17,4 +17,4 @@ version = { attr = "netbox_isc_dhcp.__version__" }
 include = ["netbox_isc_dhcp*"]
 
 [tool.setuptools.package-data]
-netbox_isc_dhcp = ["defaults/*.conf", "templates/**/*.html"]
+netbox_isc_dhcp = ["defaults/*.conf", "defaults/*.j2", "templates/**/*.html"]

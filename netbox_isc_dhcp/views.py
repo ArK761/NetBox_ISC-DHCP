@@ -90,3 +90,16 @@ class DNSServerToggleView(View):
 
 
 register_model_view(DNSServer, "toggle", path="toggle")(DNSServerToggleView)
+
+
+# --- DHCP group: preview of the two generated files ----------------------------
+@register_model_view(DHCPGroup, name="preview", path="preview")
+class DHCPGroupPreviewView(generic.ObjectView):
+    queryset = DHCPGroup.objects.all()
+    template_name = "netbox_isc_dhcp/dhcpgroup_preview.html"
+    tab = ViewTab(label=t_lazy("tab.preview"))
+
+    def get_extra_context(self, request, instance):
+        from .services import group_files
+
+        return {"files": group_files(instance)}

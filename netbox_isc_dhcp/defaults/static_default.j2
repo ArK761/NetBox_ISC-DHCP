@@ -1,0 +1,7 @@
+{% for h in hosts %}
+host {{ h.host }} {
+      hardware ethernet {{ h.mac }};
+      fixed-address {{ h.ip }};
+      option host-name {{ h.name }};
+        }
+{% endfor %}
