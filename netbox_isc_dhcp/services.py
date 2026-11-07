@@ -11,7 +11,7 @@ def dhcp_prefixes(cfg: BaseConfig) -> list[str]:
 
 
 def dhcp_group_names() -> list[str]:
-    return [g.group.name for g in DHCPGroup.objects.select_related("group")]
+    return [g.group.name for g in DHCPGroup.objects.filter(enabled=True).select_related("group")]
 
 
 def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:

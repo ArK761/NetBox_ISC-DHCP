@@ -38,6 +38,7 @@ class DHCPGroup(NetBoxModel):
     """A tenant group that gets <Group>_Table and <Group>_StaticTable files."""
 
     group = models.OneToOneField("tenancy.TenantGroup", on_delete=models.CASCADE, related_name="+")
+    enabled = models.BooleanField(default=True, verbose_name="Export to dhcpd.conf")
     order = models.PositiveSmallIntegerField(default=100, help_text="Order of the include lines.")
 
     class Meta:

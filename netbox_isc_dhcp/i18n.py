@@ -28,6 +28,7 @@ TR = {
     "lbl.order": ("Poradie", "Order"),
     "lbl.files": ("Súbory", "Files"),
     "lbl.language": ("Jazyk", "Language"),
+    "col.export": ("Exportovať do configu", "Export to config"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

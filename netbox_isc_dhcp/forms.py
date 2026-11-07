@@ -12,7 +12,7 @@ class BaseConfigForm(NetBoxModelForm):
 class DHCPGroupForm(NetBoxModelForm):
     class Meta:
         model = DHCPGroup
-        fields = ("group", "order", "tags")
+        fields = ("group", "enabled", "order", "tags")
 
 
 class DNSServerForm(NetBoxModelForm):

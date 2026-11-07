@@ -15,12 +15,18 @@ class BaseConfigTable(NetBoxTable):
 
 
 class DHCPGroupTable(NetBoxTable):
-    group = tables.Column(linkify=True)
+    group = tables.Column(linkify=True, verbose_name=t_lazy("lbl.tenant_group"))
+    enabled = columns.BooleanColumn(verbose_name=t_lazy("col.export"))
+    files = tables.Column(empty_values=(), orderable=False, verbose_name=t_lazy("lbl.files"))
+    order = tables.Column(verbose_name=t_lazy("lbl.order"))
+
+    def render_files(self, record):
+        return f"{record.group.name}_Table, {record.group.name}_StaticTable"
 
     class Meta(NetBoxTable.Meta):
         model = DHCPGroup
-        fields = ("pk", "id", "group", "order")
-        default_columns = ("group", "order")
+        fields = ("pk", "id", "group", "enabled", "files", "order")
+        default_columns = ("group", "enabled", "files", "order")
 
 
 TOGGLE = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dnsserver_toggle' pk=record.pk %}" class="d-inline">
