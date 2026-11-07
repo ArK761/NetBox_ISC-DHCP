@@ -31,6 +31,19 @@ TR = {
     "col.export": ("Exportovať do configu", "Export to config"),
     "lbl.fields": ("Polia tenanta", "Tenant fields"),
     "lbl.template": ("šablóna", "template"),
+    "menu.paths": ("Adresáre", "Directories"),
+    "lbl.path": ("Cesta", "Path"),
+    "lbl.directory": ("Adresár", "Directory"),
+    "col.include": ("Zahrnúť do configu", "Include in config"),
+    "lbl.config_path": ("Cesta k dhcpd.conf", "dhcpd.conf path"),
+    "lbl.base_path": ("Základná cesta súborov", "Base path of files"),
+    "lbl.add_file": ("Pridať súbor", "Add file"),
+    "lbl.regenerate": ("Pregenerovať", "Regenerate"),
+    "msg.regen_changed": ("Súbor bol pregenerovaný, obsah sa zmenil.", "File regenerated, the content changed."),
+    "msg.regen_same": ("Súbor bol pregenerovaný, obsah je rovnaký (bez zmeny).", "File regenerated, content is the same (no change)."),
+    "lbl.generated_at": ("Vygenerované (posledná zmena)", "Generated (last change)"),
+    "lbl.never": ("ešte nevygenerované", "not generated yet"),
+    "lbl.file": ("Súbor", "File"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }
@@ -50,6 +63,8 @@ def current_language() -> str:
 
 
 def t(key: str, **kw) -> str:
+    if key not in TR:  # a missing translation must never break a page
+        return key
     sk, en = TR[key]
     text = en if current_language() == "en" else sk
     return text.format(**kw) if kw else text

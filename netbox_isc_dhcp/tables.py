@@ -2,7 +2,7 @@ import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 
 from .i18n import t_lazy
-from .models import BaseConfig, DHCPGroup, DNSServer, PluginSettings
+from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 
 
 class BaseConfigTable(NetBoxTable):
@@ -10,8 +10,22 @@ class BaseConfigTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = BaseConfig
-        fields = ("pk", "id", "name", "table_dir", "subnet_dir", "prefix_field", "prefix_value")
-        default_columns = ("name", "table_dir", "subnet_dir")
+        fields = ("pk", "id", "name", "config_path", "base_path", "prefix_field", "prefix_value")
+        default_columns = ("name", "config_path", "base_path")
+
+
+class DHCPPathTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name=t_lazy("lbl.name"))
+    path = tables.Column(empty_values=(), orderable=False, verbose_name=t_lazy("lbl.path"))
+    order = tables.Column(verbose_name=t_lazy("lbl.order"))
+
+    def render_path(self, record):
+        return record.path
+
+    class Meta(NetBoxTable.Meta):
+        model = DHCPPath
+        fields = ("pk", "id", "name", "path", "order")
+        default_columns = ("name", "path", "order")
 
 
 class DHCPGroupTable(NetBoxTable):
@@ -21,12 +35,30 @@ class DHCPGroupTable(NetBoxTable):
     order = tables.Column(verbose_name=t_lazy("lbl.order"))
 
     def render_files(self, record):
-        return f"{record.group.name}_Table, {record.group.name}_StaticTable"
+        return ", ".join(f.name for f in record.files.all())
 
     class Meta(NetBoxTable.Meta):
         model = DHCPGroup
         fields = ("pk", "id", "group", "enabled", "files", "order")
         default_columns = ("group", "enabled", "files", "order")
+
+
+REGEN = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dhcpfile_regenerate' pk=record.pk %}" class="d-inline">
+{% csrf_token %}<button type="submit" class="btn btn-link p-0 border-0" title="Regenerate"><i class="mdi mdi-refresh fs-4"></i></button></form>"""
+
+
+class DHCPFileTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name=t_lazy("lbl.name"))
+    directory = tables.Column(verbose_name=t_lazy("lbl.directory"))
+    enabled = columns.BooleanColumn(verbose_name=t_lazy("col.include"))
+    order = tables.Column(verbose_name=t_lazy("lbl.order"))
+    generated = tables.DateTimeColumn(verbose_name=t_lazy("lbl.generated_at"))
+    regen = tables.TemplateColumn(template_code=REGEN, verbose_name="", orderable=False)
+
+    class Meta(NetBoxTable.Meta):
+        model = DHCPFile
+        fields = ("pk", "id", "name", "group", "directory", "enabled", "order", "generated", "regen")
+        default_columns = ("name", "directory", "enabled", "generated", "regen")
 
 
 TOGGLE = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dnsserver_toggle' pk=record.pk %}" class="d-inline">

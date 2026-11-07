@@ -7,7 +7,7 @@ from utilities.views import ViewTab, register_model_view
 
 from . import forms, tables
 from .i18n import t, t_lazy
-from .models import MAX_ACTIVE_DNS, BaseConfig, DHCPGroup, DNSServer, PluginSettings
+from .models import MAX_ACTIVE_DNS, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 from .services import build_base_config
 
 
@@ -92,14 +92,37 @@ class DNSServerToggleView(View):
 register_model_view(DNSServer, "toggle", path="toggle")(DNSServerToggleView)
 
 
-# --- DHCP group: preview of the two generated files ----------------------------
-@register_model_view(DHCPGroup, name="preview", path="preview")
-class DHCPGroupPreviewView(generic.ObjectView):
-    queryset = DHCPGroup.objects.all()
-    template_name = "netbox_isc_dhcp/dhcpgroup_preview.html"
+# --- Directories and files ---------------------------------------------------------
+_crud(DHCPPath, forms.DHCPPathForm, tables.DHCPPathTable)
+_crud(DHCPFile, forms.DHCPFileForm, tables.DHCPFileTable)
+
+
+@register_model_view(DHCPFile, name="preview", path="preview")
+class DHCPFilePreviewView(generic.ObjectView):
+    """Shows the STORED file. Nothing is generated here (except once for a file that never was)."""
+
+    queryset = DHCPFile.objects.all()
+    template_name = "netbox_isc_dhcp/dhcpfile_preview.html"
     tab = ViewTab(label=t_lazy("tab.preview"))
 
     def get_extra_context(self, request, instance):
-        from .services import group_files
+        if instance.generated is None:
+            from .services import regenerate_file
 
-        return {"files": group_files(instance)}
+            regenerate_file(instance)
+        return {"line_count": instance.content.count("\n")}
+
+
+class DHCPFileRegenerateView(View):
+    def post(self, request, pk):
+        from .services import regenerate_file
+
+        obj = get_object_or_404(DHCPFile.objects.select_related("group__group", "directory"), pk=pk)
+        if not request.user.has_perm("netbox_isc_dhcp.change_dhcpfile"):
+            raise PermissionDenied
+        changed = regenerate_file(obj)
+        messages.success(request, t("msg.regen_changed" if changed else "msg.regen_same"))
+        return redirect("plugins:netbox_isc_dhcp:dhcpfile_preview", pk=obj.pk)
+
+
+register_model_view(DHCPFile, "regenerate", path="regenerate")(DHCPFileRegenerateView)

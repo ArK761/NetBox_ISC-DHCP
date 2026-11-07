@@ -1,4 +1,4 @@
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 try:
     from netbox.plugins import PluginConfig
@@ -14,6 +14,11 @@ class ISCDHCPConfig(PluginConfig):
     author = "ArK761"
     base_url = "isc-dhcp"
     middleware = ["netbox_isc_dhcp.middleware.DNSWarningMiddleware"]
+
+    def ready(self):
+        super().ready()
+        from . import signals  # noqa: F401  (connects the regeneration signals)
+
     min_version = "4.0.0"
     default_settings = {
         # IPs allowed to read the generated files without a password (used in a later step)

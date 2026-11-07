@@ -50,20 +50,28 @@ def default_static_text() -> str:
     return resources.files("netbox_isc_dhcp").joinpath("defaults/dhcpd_static.conf").read_text("utf-8")
 
 
-def render_dynamic_part(group_names, prefixes, *, table_dir="/opt/dhcp/TABLE", subnet_dir="/opt/dhcp/SUBNET") -> str:
-    table_dir, subnet_dir = table_dir.rstrip("/"), subnet_dir.rstrip("/")
-    groups, _ = split_groups(group_names)
+_BAD_PATH_CHARS = re.compile(r'[\s"\';{}\\]')
+
+
+def is_safe_name(name: str) -> bool:
+    return bool(_SAFE_NAME.match(name or ""))
+
+
+def is_safe_path(path: str) -> bool:
+    """Absolute path without '..', whitespace, quotes or characters that break dhcpd.conf."""
+    return bool(path) and path.startswith("/") and ".." not in path.split("/") and not _BAD_PATH_CHARS.search(path)
+
+
+def render_dynamic_part(table_includes, prefixes, *, subnet_dir="/opt/dhcp/SUBNET") -> str:
+    """table_includes: full paths of the table files, in the order they are included."""
+    subnet_dir = subnet_dir.rstrip("/")
     lines = [" ### MAC TABLE OR SUBCLASS ##"]
-    for g in groups:
-        lines.append(f' include "{table_dir}/{g}_Table";')
-        lines.append(f' include "{table_dir}/{g}_StaticTable";')
-    lines.append(f' include "{table_dir}/Netbox_Devices-MAC";')
+    lines += [f' include "{p}";' for p in table_includes]
     lines.append("### DHCP_POOL ###")
-    for p in subnet_includes(prefixes):
-        lines.append(f' include "{subnet_dir}/{p.file}";')
+    lines += [f' include "{subnet_dir}/{p.file}";' for p in subnet_includes(prefixes)]
     return "\n".join(lines) + "\n"
 
 
-def render_base_config(static_text, group_names, prefixes, **dirs) -> str:
+def render_base_config(static_text, table_includes, prefixes, **kw) -> str:
     """Passive text is taken verbatim (no template processing), dynamic part follows it."""
-    return static_text.rstrip("\n") + "\n\n" + render_dynamic_part(group_names, prefixes, **dirs)
+    return static_text.rstrip("\n") + "\n\n" + render_dynamic_part(table_includes, prefixes, **kw)

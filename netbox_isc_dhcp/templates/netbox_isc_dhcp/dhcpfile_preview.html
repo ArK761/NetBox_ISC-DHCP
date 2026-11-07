@@ -1,0 +1,14 @@
+{% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
+{% block content %}
+{% for w in object.warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
+<div class="card"><h5 class="card-header d-flex justify-content-between align-items-center">
+  <span><code>{{ object.full_path }}</code></span>
+  <span class="d-flex align-items-center gap-3 fw-normal small">
+    <span>{{ line_count }} lines</span>
+    <span title="{{ object.sha256 }}">sha256 <code>{{ object.sha256|slice:":12" }}</code></span>
+    <span>{% tr "lbl.generated_at" %}: {% if object.generated %}{{ object.generated }}{% else %}{% tr "lbl.never" %}{% endif %}</span>
+    <form method="post" action="{% url 'plugins:netbox_isc_dhcp:dhcpfile_regenerate' pk=object.pk %}" class="d-inline">{% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-secondary" title="{% tr 'lbl.regenerate' %}"><i class="mdi mdi-refresh"></i> {% tr "lbl.regenerate" %}</button></form>
+  </span></h5>
+  <pre class="card-body m-0" style="max-height:700px;overflow:auto">{{ object.content }}</pre></div>
+{% endblock %}

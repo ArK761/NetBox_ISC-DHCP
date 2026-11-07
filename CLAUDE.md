@@ -36,5 +36,9 @@ DONE v0.2.0: tenant TABLE generation. DHCPGroup (tenant group) has: tick-box ten
 (table_template, static_template). Defaults in defaults/*.j2 reproduce the owner's WorkStation_Table byte for byte (golden test, natural sort order).
 Template context: class_name, tenants, pairs, static_tenants, hosts (host has _1/_2/_3 suffix for several MACs).
 Testing: a real NetBox 4.7.4 is set up in the sandbox (/home/user/nb_ref + /home/user/nbvenv, Postgres 5433, Redis 6380); start PG with pg_ctl as user postgres, then `manage.py shell < /home/user/it.py`.
-Next: Pool templates (per POOL_TYPE, with export yes/no checkbox, Jinja, helpers first_usable/last_usable/ip(n), range validation), Netbox_Devices-MAC, generated files + hashes + manifest, signals, IP-restricted pages.
+DONE v0.3.0: BaseConfig has config_path + base_path; DHCPPath = named directories below base_path (TABLE, SUBNET, ...); a DHCPGroup owns many DHCPFile
+(own name, directory, include checkbox, MAC fields, IP field, Jinja template). New group gets Name_Table + Name_StaticTable. Generated files are STORED
+(content, sha256, generated) and refreshed by signals (tenant/group/file changes) or the regenerate button; pages never generate (only once if never generated).
+dhcpd.conf includes come from enabled files + <TABLE dir>/Netbox_Devices-MAC + SUBNET prefixes. TODO: store dhcpd.conf itself the same way; path change -> list old files as "delete" in manifest.
+Integration test: /home/user/it3.py (run with manage.py shell). Next: Pool templates (per POOL_TYPE, with export yes/no checkbox, Jinja, helpers first_usable/last_usable/ip(n), range validation), Netbox_Devices-MAC, generated files + hashes + manifest, signals, IP-restricted pages.
 Not tested inside NetBox by us: owner tests and reports back.

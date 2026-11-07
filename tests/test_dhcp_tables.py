@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from netbox_isc_dhcp.dhcp_tables import build_group_files, normalize_mac, prepare
+from netbox_isc_dhcp.dhcp_tables import build_file, default_static_template, normalize_mac, prepare
 
 GOLDEN = os.environ.get(
     "WS_TABLE", "/root/.claude/uploads/bcbdb6b0-0bfa-5ea5-9582-099d35bea307/111d06b6-WorkStation_Table"
@@ -18,9 +18,9 @@ def test_normalize_mac():
 
 
 def test_static_format_and_suffix():
-    f = build_group_files("G", [("PC1", ["aa:bb:cc:dd:ee:01"], "10.0.0.5"),
-                                ("PC2", ["aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03", ""], "10.0.0.6")])
-    assert f.static == (
+    f = build_file("G", [("PC1", ["aa:bb:cc:dd:ee:01"], "10.0.0.5"),
+                         ("PC2", ["aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03", ""], "10.0.0.6")], default_static_template())
+    assert f.text == (
         "host PC1 {\n      hardware ethernet AA:BB:CC:DD:EE:01;\n      fixed-address 10.0.0.5;\n"
         "      option host-name PC1;\n        }\n"
         "host PC2_1 {\n      hardware ethernet AA:BB:CC:DD:EE:02;\n      fixed-address 10.0.0.6;\n"
@@ -29,7 +29,7 @@ def test_static_format_and_suffix():
         "      option host-name PC2;\n        }\n"
     )
     assert f.static_count == 2 and f.dynamic_count == 0
-    assert "match if false;" in f.table
+    assert "match if false;" in build_file("G", []).text
 
 
 def test_tenant_without_mac_skipped_silently_but_invalid_mac_warns():
@@ -50,9 +50,9 @@ def test_duplicates_and_bad_values_skipped_with_warning():
 
 
 def test_multi_mac_mismatch_does_not_flag_own_macs():
-    f = build_group_files("G", [("PC1", ["aa:aa:aa:aa:aa:01", "aa:aa:aa:aa:aa:02"], None)])
+    f = build_file("G", [("PC1", ["aa:aa:aa:aa:aa:01", "aa:aa:aa:aa:aa:02"], None)])
     assert '((option host-name = "PC1") and (substring(hardware, 1, 6) != AA:AA:AA:AA:AA:01) and ' \
-           '(substring(hardware, 1, 6) != AA:AA:AA:AA:AA:02))' in f.table
+           '(substring(hardware, 1, 6) != AA:AA:AA:AA:AA:02))' in f.text
 
 
 @pytest.mark.skipif(not os.path.exists(GOLDEN), reason="original WorkStation_Table not available")
@@ -64,7 +64,7 @@ def test_regenerates_original_workstation_table_exactly_for_single_mac_tenants()
     for mac, name in pos:
         by_name.setdefault(name, []).append(mac)
     raw = [(n, m, None) for n, m in by_name.items()]
-    out = build_group_files("WorkStation", raw, ).table
+    out = build_file("WorkStation", raw).text
     orig_class, orig_mis = text.split(' class "MismatchedClients"')
     new_class, new_mis = out.split(' class "MismatchedClients"')
     assert new_class == orig_class                               # whole WorkStation class is byte-identical
@@ -73,10 +73,8 @@ def test_regenerates_original_workstation_table_exactly_for_single_mac_tenants()
     assert keep(new_mis) == keep(orig_mis)                       # mismatch identical for single-MAC tenants
 
 
-def test_each_group_can_have_its_own_templates():
-    office_table = 'class "{{ class_name }}" {\n  match if {% for p in pairs %}hardware = {{ p.mac }}{{ " or " if not loop.last }}{% endfor %};\n}\n'
-    office_static = "{% for h in hosts %}{{ h.host }}={{ h.ip }}\n{% endfor %}"
-    f = build_group_files("Office", [("A", ["aa:aa:aa:aa:aa:01"], None), ("B", ["aa:aa:aa:aa:aa:02"], "10.0.0.2")],
-                          office_table, office_static)
-    assert f.table == 'class "Office" {\n  match if hardware = AA:AA:AA:AA:AA:01;\n}\n'
-    assert f.static == "B=10.0.0.2\n"
+def test_each_file_has_its_own_template():
+    office = 'class "{{ class_name }}" {\n  match if {% for p in pairs %}hardware = {{ p.mac }}{{ " or " if not loop.last }}{% endfor %};\n}\n'
+    raw = [("A", ["aa:aa:aa:aa:aa:01"], None), ("B", ["aa:aa:aa:aa:aa:02"], "10.0.0.2")]
+    assert build_file("Office", raw, office).text == 'class "Office" {\n  match if hardware = AA:AA:AA:AA:AA:01;\n}\n'
+    assert build_file("Office", raw, "{% for h in hosts %}{{ h.host }}={{ h.ip }}\n{% endfor %}").text == "B=10.0.0.2\n"

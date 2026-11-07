@@ -22,9 +22,8 @@ class Tenant:
 
 
 @dataclass
-class GroupFiles:
-    table: str
-    static: str
+class FileResult:
+    text: str
     warnings: list[str]
     dynamic_count: int
     static_count: int
@@ -102,8 +101,8 @@ def default_static_template() -> str:
     return resources.files("netbox_isc_dhcp").joinpath("defaults/static_default.j2").read_text("utf-8")
 
 
-def build_group_files(class_name, raw_tenants, table_template=None, static_template=None) -> GroupFiles:
-    """Render the two files of a group from its two (user editable) Jinja templates.
+def build_file(class_name, raw_tenants, template=None) -> FileResult:
+    """Render ONE file from its (user editable) Jinja template.
 
     Context: class_name; tenants (dynamic: .name .macs); pairs (one per dynamic MAC: .name .mac);
     static_tenants (.name .macs .ip); hosts (one per static MAC: .host .name .mac .ip, host has the
@@ -116,9 +115,8 @@ def build_group_files(class_name, raw_tenants, table_template=None, static_templ
         for i, m in enumerate(t.macs, 1)
     ]
     ctx = {"class_name": class_name, "tenants": dynamic, "pairs": pairs, "static_tenants": static, "hosts": hosts}
-    return GroupFiles(
-        table=render(table_template or default_table_template(), ctx),
-        static=render(static_template or default_static_template(), ctx),
+    return FileResult(
+        text=render(template or default_table_template(), ctx),
         warnings=warnings,
         dynamic_count=len(dynamic),
         static_count=len(static),
