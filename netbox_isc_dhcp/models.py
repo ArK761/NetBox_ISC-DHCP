@@ -20,8 +20,7 @@ class BaseConfig(NetBoxModel):
         help_text="Passive part of dhcpd.conf. Used as plain text, nothing in it is processed.",
     )
     source_model = models.CharField(
-        max_length=50, blank=True, default="", choices=(("ipam.prefix", "IPAM › Prefix"),),
-        help_text="Object the subnet includes are built from.",
+        max_length=100, blank=True, default="", help_text="Object (any NetBox object type) the config is built from.",
     )
     conditions = models.JSONField(default=list, blank=True, help_text="Fields of the object and the accepted values (all must match).")
 

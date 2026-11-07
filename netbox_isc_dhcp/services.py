@@ -18,7 +18,7 @@ def dhcp_prefixes(cfg: BaseConfig) -> list[str]:
     from .source_fields import build_q, get_model
 
     model = get_model(cfg.source_model)
-    if model is None or not [c for c in cfg.conditions if c.get("field") and c.get("value", "") != ""]:
+    if model is None or "prefix" not in {f.name for f in model._meta.get_fields()} or not [c for c in cfg.conditions if c.get("field") and c.get("value", "") != ""]:
         return []
     return [str(p) for p in model.objects.filter(build_q(model, cfg.conditions)).values_list("prefix", flat=True)]
 

@@ -230,6 +230,11 @@ class BaseConfigInlineView(View):
         idx = request.POST.get("index", "")
         idx = int(idx) if idx.isdigit() else None
         if field == "source_model":
+            from .source_fields import get_model as _gm
+
+            if value.strip() and _gm(value.strip()) is None:
+                messages.error(request, "Unknown object type.")
+                return redirect(obj.get_absolute_url())
             if value.strip() != obj.source_model:
                 obj.conditions = []  # fields belong to the object
             obj.source_model = value.strip()
@@ -257,7 +262,7 @@ class BaseConfigInlineView(View):
 
 def _baseconfig_context(request, instance):
     from .models import settings_obj
-    from .source_fields import SOURCE_MODELS, field_options, get_model, label_for, value_choices, value_label
+    from .source_fields import field_options, get_model, label_for, source_label, source_models, value_choices, value_label
 
     st = settings_obj()
     model = get_model(instance.source_model)
@@ -269,4 +274,8 @@ def _baseconfig_context(request, instance):
             "choices": value_choices(model, c.get("field")),
         })
     path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
-    return {"source_models": SOURCE_MODELS, "field_options": field_options(model), "cond_rows": rows, "file_path": path}
+    groups = {}
+    for value, app, label in source_models():
+        groups.setdefault(app, []).append((value, label))
+    return {"source_groups": groups, "source_label": source_label(instance.source_model),
+            "field_options": field_options(model), "cond_rows": rows, "file_path": path}

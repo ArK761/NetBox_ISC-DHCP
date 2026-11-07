@@ -4,9 +4,30 @@ from django.db import models
 from django.db.models import Q
 from extras.models import CustomField
 
-SOURCE_MODELS = (("ipam.prefix", "IPAM › Prefix"),)
+
+
+def source_models() -> list[tuple[str, str, str]]:
+    """Every public NetBox object type: (value 'app.model', group label, model label), sorted."""
+    from core.models import ObjectType
+
+    out = []
+    for ot in ObjectType.objects.public():
+        m = ot.model_class()
+        if m is None or ot.app_label in _INTERNAL_APPS:
+            continue
+        app = apps.get_app_config(ot.app_label).verbose_name
+        out.append((f"{ot.app_label}.{ot.model}", str(app), str(m._meta.verbose_name).capitalize()))
+    return sorted(out, key=lambda o: (o[1].lower(), o[2].lower()))
+
+
+def source_label(value: str) -> str:
+    m = get_model(value)
+    if m is None:
+        return ""
+    return f"{apps.get_app_config(m._meta.app_label).verbose_name} › {str(m._meta.verbose_name).capitalize()}"
 _SKIP = {"id", "created", "last_updated", "custom_field_data", "_depth", "_children", "lft", "rght", "tree_id", "level"}
 MAX_FK_CHOICES = 500
+_INTERNAL_APPS = {"core", "extras", "users", "netbox_isc_dhcp"}  # internal objects (tags, journal, export templates...) are not offered
 
 
 def get_model(label):

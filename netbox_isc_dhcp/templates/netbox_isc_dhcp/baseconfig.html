@@ -9,10 +9,10 @@
         <td>{% if file_path %}<code>{{ file_path }}</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %}
           <a class="ms-2 small" href="{% url 'plugins:netbox_isc_dhcp:pluginsettings_list' %}"><i class="mdi mdi-cog-outline"></i> {% tr "menu.settings" %}</a></td></tr>
       <tr><th scope="row">{% tr "lbl.source" %}</th><td>
-        <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if object.source_model %}{{ object.get_source_model_display }}{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if object.source_model %}{{ source_label }}{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
           <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="source_model">
             <select name="value" class="form-select form-select-sm"><option value="">{% tr "lbl.none" %}</option>
-              {% for v, l in source_models %}<option value="{{ v }}"{% if v == object.source_model %} selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+              {% for app, items in source_groups.items %}<optgroup label="{{ app }}">{% for v, l in items %}<option value="{{ v }}"{% if v == object.source_model %} selected{% endif %}>{{ l }}</option>{% endfor %}</optgroup>{% endfor %}</select>
             <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr>
     </table>
     <div class="card-body border-top">

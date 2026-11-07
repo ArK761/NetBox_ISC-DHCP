@@ -33,7 +33,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   changelog/journal tabs removed from registry in ready(); forms drop tags + changelog_message).
 - Values on settings / dhcpd.conf pages are click-to-edit inline (<details> + form, no JS). Layout single column, top to bottom.
 - Delete confirmations (single, htmx modal, bulk) use plugin templates without changelog message / background job.
-- dhcpd.conf source: object (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
+- dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
   click-to-add / click-to-set value (select for choices/bool/FK, text otherwise), all must match (source_fields.build_q).
 - Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
 
