@@ -8,7 +8,10 @@ version = "0.1.0"
 description = "NetBox plugin: generate ISC DHCP configuration from NetBox data"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["jinja2>=3.1"]
 
 [tool.setuptools.packages.find]
 include = ["netbox_isc_dhcp*"]
+
+[tool.setuptools.package-data]
+netbox_isc_dhcp = ["templates/*.j2"]
