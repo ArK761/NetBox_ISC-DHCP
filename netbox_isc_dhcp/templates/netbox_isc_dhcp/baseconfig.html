@@ -1,0 +1,18 @@
+{% extends 'generic/object.html' %}
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-5"><div class="card">
+    <h5 class="card-header">Settings</h5>
+    <table class="table table-hover attr-table">
+      <tr><th scope="row">Name</th><td>{{ object.name }}</td></tr>
+      <tr><th scope="row">Table directory</th><td><code>{{ object.table_dir }}</code></td></tr>
+      <tr><th scope="row">Subnet directory</th><td><code>{{ object.subnet_dir }}</code></td></tr>
+      <tr><th scope="row">Prefix selected by</th><td>{{ object.prefix_field }} = {{ object.prefix_value }}</td></tr>
+    </table>
+  </div></div>
+  <div class="col col-md-7"><div class="card">
+    <h5 class="card-header">Static (passive) part</h5>
+    <pre class="card-body m-0">{{ object.static_text }}</pre>
+  </div></div>
+</div>
+{% endblock %}

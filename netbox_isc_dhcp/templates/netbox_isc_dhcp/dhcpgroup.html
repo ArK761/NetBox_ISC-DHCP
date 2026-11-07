@@ -1,0 +1,11 @@
+{% extends 'generic/object.html' %}
+{% block content %}
+<div class="row mb-3"><div class="col col-md-6"><div class="card">
+  <h5 class="card-header">DHCP group</h5>
+  <table class="table table-hover attr-table">
+    <tr><th scope="row">Tenant group</th><td><a href="{{ object.group.get_absolute_url }}">{{ object.group }}</a></td></tr>
+    <tr><th scope="row">Order</th><td>{{ object.order }}</td></tr>
+    <tr><th scope="row">Files</th><td><code>{{ object.group.name }}_Table</code>, <code>{{ object.group.name }}_StaticTable</code></td></tr>
+  </table>
+</div></div></div>
+{% endblock %}

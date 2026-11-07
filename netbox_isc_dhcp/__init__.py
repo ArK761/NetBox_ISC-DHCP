@@ -13,9 +13,8 @@ class ISCDHCPConfig(PluginConfig):
     base_url = "isc-dhcp"
     min_version = "4.0.0"
     default_settings = {
-        # smallest prefix length that may use a pool profile (/26 = 64 addresses)
-        "min_prefix_length": 26,
-        "min_dynamic_addresses": 10,
+        # IPs allowed to read the generated files without a password (used in a later step)
+        "allowed_client_ips": [],
     }
 
 
