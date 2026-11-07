@@ -1,6 +1,6 @@
 from netbox.forms import NetBoxModelForm
 
-from .models import BaseConfig, DHCPGroup, DNSServer
+from .models import BaseConfig, DHCPGroup, DNSServer, PluginSettings
 
 
 class BaseConfigForm(NetBoxModelForm):
@@ -19,3 +19,9 @@ class DNSServerForm(NetBoxModelForm):
     class Meta:
         model = DNSServer
         fields = ("name", "ip", "active", "tags")
+
+
+class PluginSettingsForm(NetBoxModelForm):
+    class Meta:
+        model = PluginSettings
+        fields = ("language", "tags")

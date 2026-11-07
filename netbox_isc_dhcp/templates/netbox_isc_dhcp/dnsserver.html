@@ -1,11 +1,11 @@
-{% extends 'generic/object.html' %}
+{% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}
 <div class="row mb-3"><div class="col col-md-6"><div class="card">
-  <h5 class="card-header">DNS server</h5>
+  <h5 class="card-header">{% tr "lbl.dns" %}</h5>
   <table class="table table-hover attr-table">
-    <tr><th scope="row">Name</th><td>{{ object.name }}</td></tr>
+    <tr><th scope="row">{% tr "lbl.name" %}</th><td>{{ object.name }}</td></tr>
     <tr><th scope="row">IP</th><td>{{ object.ip }}</td></tr>
-    <tr><th scope="row">In use</th><td>{% if object.active %}<span class="text-success">yes</span>{% else %}no{% endif %}</td></tr>
+    <tr><th scope="row">{% tr "col.in_use" %}</th><td>{% if object.active %}<span class="text-success">{% tr "lbl.yes" %}</span>{% else %}{% tr "lbl.no" %}{% endif %}</td></tr>
   </table>
 </div></div></div>
 {% endblock %}

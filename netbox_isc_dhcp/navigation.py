@@ -1,10 +1,12 @@
 from netbox.plugins import PluginMenu, PluginMenuButton, PluginMenuItem
 
+from .i18n import t_lazy
 
-def _item(model, label):
+
+def _list_item(model, key):
     return PluginMenuItem(
         link=f"plugins:netbox_isc_dhcp:{model}_list",
-        link_text=label,
+        link_text=t_lazy(key),
         permissions=[f"netbox_isc_dhcp.view_{model}"],
         buttons=(
             PluginMenuButton(
@@ -17,10 +19,26 @@ def _item(model, label):
     )
 
 
+def _open_item(model, key, view):
+    return PluginMenuItem(
+        link=f"plugins:netbox_isc_dhcp:{view}",
+        link_text=t_lazy(key),
+        permissions=[f"netbox_isc_dhcp.view_{model}"],
+    )
+
+
 menu = PluginMenu(
     label="ISC DHCP",
     groups=(
-        ("Config", (_item("baseconfig", "dhcpd.conf"), _item("dhcpgroup", "Groups"), _item("dnsserver", "DNS"))),
+        (
+            "DHCP",
+            (
+                _open_item("baseconfig", "menu.base", "baseconfig_open"),
+                _list_item("dhcpgroup", "menu.groups"),
+                _list_item("dnsserver", "menu.dns"),
+                _open_item("pluginsettings", "menu.settings", "pluginsettings_open"),
+            ),
+        ),
     ),
     icon_class="mdi mdi-lan",
 )

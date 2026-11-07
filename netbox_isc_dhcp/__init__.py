@@ -8,9 +8,10 @@ class ISCDHCPConfig(PluginConfig):
     name = "netbox_isc_dhcp"
     verbose_name = "ISC DHCP"
     description = "Generate ISC DHCP configuration from NetBox data"
-    version = "0.1.0"
+    version = "0.1.2"
     author = "ArK761"
     base_url = "isc-dhcp"
+    middleware = ["netbox_isc_dhcp.middleware.DNSWarningMiddleware"]
     min_version = "4.0.0"
     default_settings = {
         # IPs allowed to read the generated files without a password (used in a later step)

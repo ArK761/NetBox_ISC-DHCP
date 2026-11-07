@@ -1,6 +1,6 @@
-{% extends 'generic/object.html' %}
+{% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}
 {% for w in warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
-<div class="card"><h5 class="card-header">Generated {{ object.name }}</h5>
+<div class="card"><h5 class="card-header">{% tr "lbl.generated" %} {{ object.name }}</h5>
   <pre class="card-body m-0">{{ generated }}</pre></div>
 {% endblock %}

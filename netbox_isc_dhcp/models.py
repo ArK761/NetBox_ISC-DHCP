@@ -3,6 +3,7 @@ from django.db import models
 from netbox.models import NetBoxModel
 
 from .base_config import default_static_text
+from .i18n import t
 
 MAX_ACTIVE_DNS = 2
 
@@ -46,6 +47,18 @@ class DHCPGroup(NetBoxModel):
         return self.group.name
 
 
+class PluginSettings(NetBoxModel):
+    """Global plugin settings (single row)."""
+
+    language = models.CharField(max_length=2, default="sk", choices=(("sk", "Slovenčina"), ("en", "English")))
+
+    class Meta:
+        verbose_name_plural = "plugin settings"
+
+    def __str__(self):
+        return "Plugin settings"
+
+
 class DNSServer(NetBoxModel):
     name = models.CharField(max_length=100, unique=True)
     ip = models.GenericIPAddressField(protocol="IPv4", verbose_name="IP")
@@ -62,4 +75,4 @@ class DNSServer(NetBoxModel):
         if self.active:
             others = DNSServer.objects.filter(active=True).exclude(pk=self.pk).count()
             if others >= MAX_ACTIVE_DNS:
-                raise ValidationError({"active": f"At most {MAX_ACTIVE_DNS} DNS servers can be in use at once."})
+                raise ValidationError({"active": t("err.max_dns", n=MAX_ACTIVE_DNS)})
