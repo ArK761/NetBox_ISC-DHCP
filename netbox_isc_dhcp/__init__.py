@@ -1,3 +1,5 @@
+__version__ = "0.1.3"
+
 try:
     from netbox.plugins import PluginConfig
 except ImportError:  # allows importing pure modules (pools.py) outside NetBox, e.g. in tests
@@ -8,7 +10,7 @@ class ISCDHCPConfig(PluginConfig):
     name = "netbox_isc_dhcp"
     verbose_name = "ISC DHCP"
     description = "Generate ISC DHCP configuration from NetBox data"
-    version = "0.1.2"
+    version = __version__
     author = "ArK761"
     base_url = "isc-dhcp"
     middleware = ["netbox_isc_dhcp.middleware.DNSWarningMiddleware"]

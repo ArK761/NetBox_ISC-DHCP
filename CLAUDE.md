@@ -30,5 +30,6 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 
 ## Status
 Done: base config generator (pure), BaseConfig/DHCPGroup/DNSServer/PluginSettings models + UI.
+Version badge (plugin version + git commit from pip direct_url.json) shown bottom-left on plugin pages; bump `__version__` in netbox_isc_dhcp/__init__.py on every release.
 Next: Pool templates, tables (tenants/devices), generated files + manifest, signals, IP-restricted pages.
 Not tested inside NetBox by us: owner tests and reports back.
