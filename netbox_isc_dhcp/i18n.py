@@ -29,6 +29,8 @@ TR = {
     "lbl.files": ("Súbory", "Files"),
     "lbl.language": ("Jazyk", "Language"),
     "col.export": ("Exportovať do configu", "Export to config"),
+    "lbl.fields": ("Polia tenanta", "Tenant fields"),
+    "lbl.template": ("šablóna", "template"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

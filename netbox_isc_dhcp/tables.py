@@ -15,7 +15,7 @@ class BaseConfigTable(NetBoxTable):
 
 
 class DHCPGroupTable(NetBoxTable):
-    group = tables.Column(linkify=True, verbose_name=t_lazy("lbl.tenant_group"))
+    group = tables.Column(linkify=lambda record: record.get_absolute_url(), verbose_name=t_lazy("lbl.tenant_group"))
     enabled = columns.BooleanColumn(verbose_name=t_lazy("col.export"))
     files = tables.Column(empty_values=(), orderable=False, verbose_name=t_lazy("lbl.files"))
     order = tables.Column(verbose_name=t_lazy("lbl.order"))

@@ -8,5 +8,18 @@
     <tr><th scope="row">{% tr "lbl.order" %}</th><td>{{ object.order }}</td></tr>
     <tr><th scope="row">{% tr "lbl.files" %}</th><td><code>{{ object.group.name }}_Table</code>, <code>{{ object.group.name }}_StaticTable</code></td></tr>
   </table>
+</div></div>
+<div class="col col-md-6"><div class="card">
+  <h5 class="card-header">{% tr "lbl.fields" %}</h5>
+  <table class="table table-hover attr-table">
+    <tr><th scope="row">MAC</th><td>{% for f in object.mac_fields %}<code>{{ f }}</code> {% empty %}&mdash;{% endfor %}</td></tr>
+    <tr><th scope="row">IP</th><td>{% if object.ip_field %}<code>{{ object.ip_field }}</code>{% else %}&mdash;{% endif %}</td></tr>
+  </table>
 </div></div></div>
+<div class="row mb-3">
+  <div class="col-md-8"><div class="card"><h5 class="card-header">{{ object.group.name }}_Table: {% tr "lbl.template" %}</h5>
+    <pre class="card-body m-0" style="max-height:400px;overflow:auto">{{ object.table_template }}</pre></div></div>
+  <div class="col-md-4"><div class="card"><h5 class="card-header">{{ object.group.name }}_StaticTable: {% tr "lbl.template" %}</h5>
+    <pre class="card-body m-0" style="max-height:400px;overflow:auto">{{ object.static_template }}</pre></div></div>
+</div>
 {% endblock %}
