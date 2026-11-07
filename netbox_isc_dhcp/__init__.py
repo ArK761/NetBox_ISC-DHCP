@@ -1,4 +1,4 @@
-__version__ = "0.4.1"
+__version__ = "0.4.4"
 
 try:
     from netbox.plugins import PluginConfig
@@ -18,6 +18,11 @@ class ISCDHCPConfig(PluginConfig):
     def ready(self):
         super().ready()
         from . import signals  # noqa: F401  (connects the regeneration signals)
+        from netbox.registry import registry
+
+        # No changelog / journal tabs anywhere in this plugin.
+        for model_views in registry["views"].get("netbox_isc_dhcp", {}).values():
+            model_views[:] = [v for v in model_views if v["name"] not in ("changelog", "journal")]
 
     min_version = "4.0.0"
     default_settings = {

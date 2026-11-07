@@ -28,6 +28,12 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 - Changes in tenants/devices/prefixes/groups must recompute only affected files (hash per file) and expose a manifest.
 - Speed matters: files pre-generated and stored with SHA256, never computed on request.
 
+## UI rules (owner)
+- NO import, export, changelog, journal, tags anywhere in the plugin (list actions = Add + Delete selected; table row menu = edit/delete;
+  changelog/journal tabs removed from registry in ready(); forms drop tags + changelog_message).
+- Values on settings / dhcpd.conf pages are click-to-edit inline (<details> + form, no JS). Layout single column, top to bottom.
+- Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
+
 ## Status
 Done: base config generator (pure), BaseConfig/DHCPGroup/DNSServer/PluginSettings models + UI.
 Version badge (plugin version + git commit from pip direct_url.json) is injected into plugin HTML pages by the middleware (top-right, in page flow); bump `__version__` in netbox_isc_dhcp/__init__.py on every release.

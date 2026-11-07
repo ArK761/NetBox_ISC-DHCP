@@ -28,7 +28,7 @@ TR = {
     "lbl.order": ("Poradie", "Order"),
     "lbl.files": ("Súbory", "Files"),
     "lbl.language": ("Jazyk", "Language"),
-    "col.export": ("Exportovať do configu", "Export to config"),
+    "col.export": ("Zahrnúť do configu", "Include in config"),
     "lbl.fields": ("Polia tenanta", "Tenant fields"),
     "lbl.template": ("šablóna", "template"),
     "menu.paths": ("Adresáre", "Directories"),

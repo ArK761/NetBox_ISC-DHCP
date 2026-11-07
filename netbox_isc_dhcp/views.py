@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.views import View
+from netbox.object_actions import AddObject, BulkDelete
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -27,6 +28,12 @@ def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
     else:
         @register_model_view(model, "list", path="", detail=False)
         class ListView(generic.ObjectListView):
+            queryset = model.objects.all()
+            table = table_cls
+            actions = (AddObject, BulkDelete)  # no import / export in this plugin
+
+        @register_model_view(model, "bulk_delete", path="delete", detail=False)
+        class BulkDeleteView(generic.BulkDeleteView):
             queryset = model.objects.all()
             table = table_cls
 

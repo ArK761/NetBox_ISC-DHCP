@@ -6,6 +6,7 @@ from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, Plugin
 
 
 class BaseConfigTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
     name = tables.Column(linkify=True)
 
     class Meta(NetBoxTable.Meta):
@@ -15,6 +16,7 @@ class BaseConfigTable(NetBoxTable):
 
 
 class DHCPPathTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
     name = tables.Column(linkify=True, verbose_name=t_lazy("lbl.name"))
     path = tables.Column(empty_values=(), orderable=False, verbose_name=t_lazy("lbl.path"))
     order = tables.Column(verbose_name=t_lazy("lbl.order"))
@@ -29,6 +31,7 @@ class DHCPPathTable(NetBoxTable):
 
 
 class DHCPGroupTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
     group = tables.Column(linkify=lambda record: record.get_absolute_url(), verbose_name=t_lazy("lbl.tenant_group"))
     enabled = columns.BooleanColumn(verbose_name=t_lazy("col.export"))
     files = tables.Column(empty_values=(), orderable=False, verbose_name=t_lazy("lbl.files"))
@@ -48,6 +51,7 @@ REGEN = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dhcpfile_
 
 
 class DHCPFileTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
     name = tables.Column(linkify=True, verbose_name=t_lazy("lbl.name"))
     directory = tables.Column(verbose_name=t_lazy("lbl.directory"))
     enabled = columns.BooleanColumn(verbose_name=t_lazy("col.include"))
@@ -66,6 +70,7 @@ TOGGLE = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dnsserve
 
 
 class DNSServerTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
     name = tables.Column(linkify=True, verbose_name=t_lazy("col.name"))
     active = tables.TemplateColumn(template_code=TOGGLE, verbose_name=t_lazy("col.in_use"), orderable=False)
 
@@ -76,6 +81,7 @@ class DNSServerTable(NetBoxTable):
 
 
 class PluginSettingsTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
     language = tables.Column(linkify=True)
 
     class Meta(NetBoxTable.Meta):

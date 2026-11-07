@@ -1,6 +1,16 @@
 from django import forms
 from extras.models import CustomField
-from netbox.forms import NetBoxModelForm
+from netbox.forms import NetBoxModelForm as _NetBoxModelForm
+
+
+class NetBoxModelForm(_NetBoxModelForm):
+    """No tags in this plugin."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("tags", "changelog_message"):  # no tags, no changelog in this plugin
+            self.fields.pop(name, None)
+
 from tenancy.models import Tenant
 
 from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
@@ -9,20 +19,21 @@ from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, Plugin
 class BaseConfigForm(NetBoxModelForm):
     class Meta:
         model = BaseConfig
-        fields = ("name", "static_text", "source_model", "prefix_field", "prefix_value", "tags")
+        fields = ("name", "static_text", "source_model", "prefix_field", "prefix_value")
         widgets = {"static_text": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
 
 
 class DHCPPathForm(NetBoxModelForm):
     class Meta:
         model = DHCPPath
-        fields = ("name", "order", "tags")
+        fields = ("name", "order")
 
 
 class DHCPGroupForm(NetBoxModelForm):
     class Meta:
         model = DHCPGroup
-        fields = ("group", "enabled", "order", "tags")
+        fields = ("group", "enabled", "order")
+        labels = {"enabled": "Include in dhcpd.conf"}
 
 
 class DHCPFileForm(NetBoxModelForm):
@@ -33,7 +44,7 @@ class DHCPFileForm(NetBoxModelForm):
 
     class Meta:
         model = DHCPFile
-        fields = ("group", "name", "directory", "enabled", "order", "mac_fields", "ip_field", "template", "tags")
+        fields = ("group", "name", "directory", "enabled", "order", "mac_fields", "ip_field", "template")
         widgets = {"template": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
 
     def __init__(self, *args, **kwargs):
@@ -47,10 +58,10 @@ class DHCPFileForm(NetBoxModelForm):
 class DNSServerForm(NetBoxModelForm):
     class Meta:
         model = DNSServer
-        fields = ("name", "ip", "active", "tags")
+        fields = ("name", "ip", "active")
 
 
 class PluginSettingsForm(NetBoxModelForm):
     class Meta:
         model = PluginSettings
-        fields = ("language", "config_path", "base_path", "table_dir", "subnet_dir", "tags")
+        fields = ("language", "config_path", "base_path", "table_dir", "subnet_dir")
