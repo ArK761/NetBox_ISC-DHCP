@@ -55,10 +55,9 @@ def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:
     tables, warnings = table_includes()
     if not base_path():
         warnings.insert(0, t("warn.no_base_path"))
-    subnet = st.subnet_dir.path if st and st.subnet_dir else None
-    if subnet is None:
-        warnings.append(t("warn.no_subnet_dir"))
-    text = render_base_config(cfg.static_text, tables, dhcp_prefixes(cfg) if subnet else [], subnet_dir=subnet or "")
+    # Subnet files (<network>_CFG) are not generated yet (no pool templates), so no subnet includes:
+    # including a file nobody creates would break dhcpd.
+    text = render_base_config(cfg.static_text, tables, [], subnet_dir="")
     return text, warnings
 
 
