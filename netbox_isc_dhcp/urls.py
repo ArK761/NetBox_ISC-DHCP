@@ -5,10 +5,7 @@ from . import views  # noqa: F401  (registers the views)
 
 app = "netbox_isc_dhcp"
 
-urlpatterns = [
-    path("open/base-config/", views.BaseConfigOpenView.as_view(), name="baseconfig_open"),
-    path("open/settings/", views.PluginSettingsOpenView.as_view(), name="pluginsettings_open"),
-]
+urlpatterns = []
 for prefix, model in (("base-config", "baseconfig"), ("groups", "dhcpgroup"), ("dns", "dnsserver"), ("settings", "pluginsettings")):
     urlpatterns += [
         path(f"{prefix}/", include(get_model_urls(app, model, detail=False))),

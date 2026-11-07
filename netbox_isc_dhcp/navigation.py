@@ -19,9 +19,10 @@ def _list_item(model, key):
     )
 
 
-def _open_item(model, key, view):
+def _open_item(model, key):
+    """Singleton: the list URL redirects to the single object."""
     return PluginMenuItem(
-        link=f"plugins:netbox_isc_dhcp:{view}",
+        link=f"plugins:netbox_isc_dhcp:{model}_list",
         link_text=t_lazy(key),
         permissions=[f"netbox_isc_dhcp.view_{model}"],
     )
@@ -33,10 +34,10 @@ menu = PluginMenu(
         (
             "DHCP",
             (
-                _open_item("baseconfig", "menu.base", "baseconfig_open"),
+                _open_item("baseconfig", "menu.base"),
                 _list_item("dhcpgroup", "menu.groups"),
                 _list_item("dnsserver", "menu.dns"),
-                _open_item("pluginsettings", "menu.settings", "pluginsettings_open"),
+                _open_item("pluginsettings", "menu.settings"),
             ),
         ),
     ),

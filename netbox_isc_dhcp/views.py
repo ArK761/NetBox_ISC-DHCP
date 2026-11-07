@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect
 from django.views import View
 from netbox.views import generic
@@ -10,13 +11,24 @@ from .models import MAX_ACTIVE_DNS, BaseConfig, DHCPGroup, DNSServer, PluginSett
 from .services import build_base_config
 
 
-def _crud(model, form_cls, table_cls):
+def _crud(model, form_cls, table_cls, singleton=False):
     """Register list / detail / add / edit / delete views for a model."""
 
-    @register_model_view(model, "list", path="", detail=False)
-    class ListView(generic.ObjectListView):
-        queryset = model.objects.all()
-        table = table_cls
+    if singleton:
+        # The list URL is the menu link. It redirects to the one object, whose URL contains the
+        # menu link, so NetBox keeps the menu group expanded.
+        @register_model_view(model, "list", path="", detail=False)
+        class ListView(View):
+            def get(self, request):
+                if not request.user.has_perm(f"netbox_isc_dhcp.view_{model._meta.model_name}"):
+                    raise PermissionDenied
+                obj = model.objects.first() or model.objects.create()
+                return redirect(obj.get_absolute_url())
+    else:
+        @register_model_view(model, "list", path="", detail=False)
+        class ListView(generic.ObjectListView):
+            queryset = model.objects.all()
+            table = table_cls
 
     @register_model_view(model)
     class DetailView(generic.ObjectView):
@@ -37,7 +49,7 @@ def _crud(model, form_cls, table_cls):
 
 
 # --- Base config -----------------------------------------------------------------
-_crud(BaseConfig, forms.BaseConfigForm, tables.BaseConfigTable)
+_crud(BaseConfig, forms.BaseConfigForm, tables.BaseConfigTable, singleton=True)
 
 
 @register_model_view(BaseConfig, name="preview", path="preview")
@@ -59,25 +71,7 @@ _crud(DNSServer, forms.DNSServerForm, tables.DNSServerTable)
 
 
 # --- Plugin settings -------------------------------------------------------------
-_crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable)
-
-
-# --- Singleton entry points (menu opens the one existing object) ----------------
-class _OpenSingleton(View):
-    model = None
-    viewname = None
-
-    def get(self, request):
-        obj = self.model.objects.first() or self.model.objects.create()
-        return redirect(obj.get_absolute_url())
-
-
-class BaseConfigOpenView(_OpenSingleton):
-    model = BaseConfig
-
-
-class PluginSettingsOpenView(_OpenSingleton):
-    model = PluginSettings
+_crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True)
 
 
 # --- DNS checkbox ----------------------------------------------------------------
