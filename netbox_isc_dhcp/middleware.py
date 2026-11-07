@@ -7,7 +7,7 @@ from .version import label
 PLUGIN_PATH = "/plugins/isc-dhcp/"
 
 _BADGE = (
-    '<div id="isc-dhcp-version" style="position:fixed;left:12px;bottom:12px;z-index:2000;'
+    '<div id="isc-dhcp-version" style="position:fixed;left:8px;top:6px;z-index:2000;'
     "padding:2px 10px;border-radius:999px;font-size:12px;background:rgba(108,117,125,.9);"
     'color:#fff;pointer-events:none;"><i class="mdi mdi-tag-outline me-1"></i>%s</div>'
 )
