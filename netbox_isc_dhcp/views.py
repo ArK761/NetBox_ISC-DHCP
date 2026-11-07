@@ -277,5 +277,10 @@ def _baseconfig_context(request, instance):
     groups = {}
     for value, app, label in source_models():
         groups.setdefault(app, []).append((value, label))
-    return {"source_groups": groups, "source_label": source_label(instance.source_model),
+    from .source_fields import build_q
+
+    active = [c for c in instance.conditions or [] if c.get("field") and c.get("value", "") != ""]
+    count = model.objects.filter(build_q(model, active)).count() if model is not None and active else 0
+    matched_text = t("lbl.matched", n=count) if active else t("lbl.matched_none")
+    return {"matched_count": count, "matched_text": matched_text, "source_groups": groups, "source_label": source_label(instance.source_model),
             "field_options": field_options(model), "cond_rows": rows, "file_path": path}

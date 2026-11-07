@@ -69,6 +69,9 @@ TR = {
     "lbl.pick_field": ("— vyberte pole —", "— pick a field —"),
     "lbl.no_conds": ("Zatiaľ žiadne podmienky.", "No conditions yet."),
     "lbl.pick_object_first": ("Najprv zvoľte objekt.", "Pick the object first."),
+    "lbl.any_value": ("ľubovoľná (nefiltruje)", "any (no filter)"),
+    "lbl.matched": ("Vybrané: {n} objektov", "Selected: {n} objects"),
+    "lbl.matched_none": ("Vybrané: nič (nastavte aspoň jednu hodnotu)", "Selected: nothing (set at least one value)"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }
