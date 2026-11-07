@@ -36,6 +36,7 @@ def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
         class BulkDeleteView(generic.BulkDeleteView):
             queryset = model.objects.all()
             table = table_cls
+            template_name = "netbox_isc_dhcp/bulk_delete.html"  # no changelog message / background job
 
     @register_model_view(model)
     class DetailView(generic.ObjectView):
@@ -53,7 +54,33 @@ def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
 
     @register_model_view(model, "delete")
     class DeleteView(generic.ObjectDeleteView):
+        """Delete confirmation without changelog message."""
+
         queryset = model.objects.all()
+        template_name = "netbox_isc_dhcp/object_delete.html"
+
+        def get(self, request, *args, **kwargs):
+            from utilities.htmx import htmx_partial
+
+            if not htmx_partial(request):
+                return super().get(request, *args, **kwargs)
+            from django.shortcuts import render
+            from utilities.forms import DeleteForm
+            from utilities.views import get_action_url
+
+            obj = self.get_object(**kwargs)
+            try:
+                dependent_objects = self._get_dependent_objects(obj)
+            except Exception:
+                return super().get(request, *args, **kwargs)
+            return render(request, "netbox_isc_dhcp/delete_form.html", {
+                "object": obj,
+                "object_type": self.queryset.model._meta.verbose_name,
+                "form": DeleteForm(instance=obj, initial=request.GET),
+                "form_url": get_action_url(self.queryset.model, action="delete", kwargs={"pk": obj.pk}),
+                "dependent_objects": dependent_objects,
+                **self.get_extra_context(request, obj),
+            })
 
     return ListView, DetailView, EditView, DeleteView
 
@@ -190,39 +217,56 @@ class DHCPPathInlineView(View):
 
 
 class BaseConfigInlineView(View):
-    FIELDS = ("source_model", "prefix_field", "prefix_value", "static_text")
+    """Click-to-edit on the dhcpd.conf page: object, conditions (field + accepted value), passive text."""
 
     def post(self, request, pk):
+        from .source_fields import field_options, get_model
+
         if not request.user.has_perm("netbox_isc_dhcp.change_baseconfig"):
             raise PermissionDenied
         obj = get_object_or_404(BaseConfig, pk=pk)
-        field = request.POST.get("field")
-        if field in self.FIELDS:
-            value = request.POST.get("value", "")
-            setattr(obj, field, value if field == "static_text" else value.strip())
-            try:
-                obj.full_clean()
-                obj.save()
-                messages.success(request, t("msg.saved"))
-            except ValidationError as exc:
-                messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
+        field, value = request.POST.get("field"), request.POST.get("value", "")
+        conds = list(obj.conditions or [])
+        idx = request.POST.get("index", "")
+        idx = int(idx) if idx.isdigit() else None
+        if field == "source_model":
+            if value.strip() != obj.source_model:
+                obj.conditions = []  # fields belong to the object
+            obj.source_model = value.strip()
+        elif field == "static_text":
+            obj.static_text = value
+        elif field == "cond_add":
+            keys = {o["key"] for o in field_options(get_model(obj.source_model))}
+            if value in keys:
+                conds.append({"field": value, "value": ""})
+                obj.conditions = conds
+        elif field == "cond_value" and idx is not None and idx < len(conds):
+            conds[idx]["value"] = value.strip()
+            obj.conditions = conds
+        elif field == "cond_del" and idx is not None and idx < len(conds):
+            conds.pop(idx)
+            obj.conditions = conds
+        try:
+            obj.full_clean()
+            obj.save()
+            messages.success(request, t("msg.saved"))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
         return redirect(obj.get_absolute_url())
 
 
 def _baseconfig_context(request, instance):
-    from extras.models import CustomField
-    from ipam.models import Prefix
-
     from .models import settings_obj
+    from .source_fields import SOURCE_MODELS, field_options, get_model, label_for, value_choices, value_label
 
     st = settings_obj()
-    cfs = sorted(CustomField.objects.get_for_model(Prefix), key=lambda c: c.name)
-    cur = next((c for c in cfs if c.name == instance.prefix_field), None)
-    values = []
-    if cur is not None:
-        if cur.type == "boolean":
-            values = ["true", "false"]
-        elif getattr(cur, "choice_set", None):
-            values = [c[0] for c in cur.choice_set.choices]
+    model = get_model(instance.source_model)
+    rows = []
+    for i, c in enumerate(instance.conditions or []):
+        rows.append({
+            "index": i, "key": c.get("field"), "label": label_for(model, c.get("field")),
+            "value": c.get("value", ""), "value_label": value_label(model, c.get("field"), c.get("value", "")),
+            "choices": value_choices(model, c.get("field")),
+        })
     path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
-    return {"cf_choices": [(c.name, c.label or c.name) for c in cfs], "value_choices": values, "file_path": path}
+    return {"source_models": SOURCE_MODELS, "field_options": field_options(model), "cond_rows": rows, "file_path": path}

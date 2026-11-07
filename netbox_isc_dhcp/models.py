@@ -20,17 +20,10 @@ class BaseConfig(NetBoxModel):
         help_text="Passive part of dhcpd.conf. Used as plain text, nothing in it is processed.",
     )
     source_model = models.CharField(
-        max_length=50, default="ipam.prefix", choices=(("ipam.prefix", "IPAM › Prefix"),),
+        max_length=50, blank=True, default="", choices=(("ipam.prefix", "IPAM › Prefix"),),
         help_text="Object the subnet includes are built from.",
     )
-    prefix_field = models.CharField(
-        max_length=100, default="DHCP_POOL",
-        help_text="Name of the prefix custom field that switches a prefix on.",
-    )
-    prefix_value = models.CharField(
-        max_length=100, default="YES",
-        help_text="Value of that custom field for which the prefix gets an include.",
-    )
+    conditions = models.JSONField(default=list, blank=True, help_text="Fields of the object and the accepted values (all must match).")
 
     class Meta:
         ordering = ("name",)

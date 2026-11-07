@@ -9,7 +9,7 @@ class BaseConfigSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = BaseConfig
-        fields = ('id', 'url', 'display', 'name', 'source_model', 'prefix_field', 'prefix_value', 'static_text', 'tags', 'custom_fields', 'created', 'last_updated')
+        fields = ('id', 'url', 'display', 'name', 'source_model', 'conditions', 'static_text', 'tags', 'custom_fields', 'created', 'last_updated')
         brief_fields = ('id', 'url', 'display')
 
 

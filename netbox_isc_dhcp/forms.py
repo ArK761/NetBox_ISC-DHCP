@@ -19,7 +19,7 @@ from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, Plugin
 class BaseConfigForm(NetBoxModelForm):
     class Meta:
         model = BaseConfig
-        fields = ("name", "static_text", "source_model", "prefix_field", "prefix_value")
+        fields = ("name", "static_text", "source_model")
         widgets = {"static_text": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
 
 

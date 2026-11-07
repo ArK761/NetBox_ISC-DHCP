@@ -64,6 +64,11 @@ TR = {
     "lbl.src_field": ("Pole objektu", "Object field"),
     "lbl.src_value": ("Hodnota poľa", "Field value"),
     "lbl.none": ("— žiadny —", "— none —"),
+    "lbl.conditions": ("Podmienky (všetky musia platiť)", "Conditions (all must match)"),
+    "lbl.add_cond": ("Pridať pole", "Add field"),
+    "lbl.pick_field": ("— vyberte pole —", "— pick a field —"),
+    "lbl.no_conds": ("Zatiaľ žiadne podmienky.", "No conditions yet."),
+    "lbl.pick_object_first": ("Najprv zvoľte objekt.", "Pick the object first."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }
