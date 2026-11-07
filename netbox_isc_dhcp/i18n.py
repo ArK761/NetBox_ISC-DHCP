@@ -46,6 +46,9 @@ TR = {
     "lbl.file": ("Súbor", "File"),
     "lbl.subdirs": ("Podadresáre", "Subdirectories"),
     "lbl.add_subdir": ("Pridať podadresár", "Add subdirectory"),
+    "lbl.paths": ("Cesty na DHCP serveri", "Paths on the DHCP server"),
+    "lbl.not_set": ("nenastavené", "not set"),
+    "lbl.no_subdirs": ("Zatiaľ žiadne podadresáre.", "No subdirectories yet."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

@@ -42,6 +42,8 @@ def table_includes() -> tuple[list[str], list[str]]:
 def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:
     """Return (dhcpd.conf text, warnings)."""
     tables, warnings = table_includes()
+    if not base_path():
+        warnings.append("Base path is empty: set it in plugin settings.")
     subnet = _dir_path("SUBNET")
     if subnet is None:
         warnings.append("No SUBNET subdirectory: prefix includes are left out.")

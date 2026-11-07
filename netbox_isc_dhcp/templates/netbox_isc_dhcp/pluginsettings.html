@@ -1,21 +1,44 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}
-<div class="row mb-3"><div class="col col-md-6"><div class="card">
-  <h5 class="card-header">{% tr "lbl.settings" %}</h5>
-  <table class="table table-hover attr-table">
-    <tr><th scope="row">{% tr "lbl.language" %}</th><td>{{ object.get_language_display }}</td></tr>
-    <tr><th scope="row">{% tr "lbl.config_path" %}</th><td><code>{{ object.config_path }}</code></td></tr>
-    <tr><th scope="row">{% tr "lbl.base_path" %}</th><td><code>{{ object.base_path }}</code></td></tr>
-  </table></div></div>
-  <div class="col col-md-6"><div class="card">
-  <h5 class="card-header d-flex justify-content-between">{% tr "lbl.subdirs" %}
-    <a class="btn btn-sm btn-primary" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_add' %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.add_subdir" %}</a></h5>
-  <table class="table table-hover mb-0">
-    <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.path" %}</th><th></th></tr></thead>
-    {% for d in subdirs %}
-    <tr><td>{{ d.name }}</td><td><code>{{ d.path }}</code></td>
-      <td class="text-end"><a class="btn btn-sm btn-warning" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_edit' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-pencil"></i></a>
-      <a class="btn btn-sm btn-danger" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_delete' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-trash-can-outline"></i></a></td></tr>
-    {% endfor %}
-  </table></div></div></div>
+<div class="row"><div class="col-12 col-xl-8">
+
+  <div class="card mb-3">
+    <h5 class="card-header">{% tr "lbl.settings" %}</h5>
+    <table class="table table-hover attr-table mb-0">
+      <tr><th scope="row" style="width:35%">{% tr "lbl.language" %}</th><td>{{ object.get_language_display }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card mb-3">
+    <h5 class="card-header"><i class="mdi mdi-folder-cog-outline me-1"></i>{% tr "lbl.paths" %}</h5>
+    <table class="table table-hover attr-table mb-0">
+      <tr><th scope="row" style="width:35%">{% tr "lbl.config_path" %}</th>
+        <td>{% if object.config_path %}<code>{{ object.config_path }}/dhcpd.conf</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %}</td></tr>
+      <tr><th scope="row">{% tr "lbl.base_path" %}</th>
+        <td>{% if object.base_path %}<code>{{ object.base_path }}</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %}</td></tr>
+    </table>
+    <div class="card-body border-top">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong>{% tr "lbl.subdirs" %}</strong>
+        <a class="btn btn-sm btn-primary" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_add' %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.add_subdir" %}</a>
+      </div>
+      {% if subdirs %}
+      <ul class="list-group">
+        {% for d in subdirs %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span><i class="mdi mdi-subdirectory-arrow-right me-2 text-muted"></i><strong class="d-inline-block" style="min-width:9rem">{{ d.name }}</strong><code>{{ d.path }}</code></span>
+          <span class="text-nowrap">
+            <a class="btn btn-sm btn-warning" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_edit' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-pencil"></i></a>
+            <a class="btn btn-sm btn-danger" href="{% url 'plugins:netbox_isc_dhcp:dhcppath_delete' pk=d.pk %}?return_url={{ request.path|urlencode }}"><i class="mdi mdi-trash-can-outline"></i></a>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="text-muted">{% tr "lbl.no_subdirs" %}</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div></div>
 {% endblock %}
