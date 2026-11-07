@@ -83,7 +83,7 @@ class DHCPGroup(NetBoxModel):
         if creating and not self.files.exists():  # start with the two usual files, user can rename or add more
             from .dhcp_tables import default_static_template
 
-            d, _ = DHCPPath.objects.get_or_create(name="TABLE", defaults={"order": 10})
+            d = DHCPPath.objects.filter(name="TABLE").first()  # no directory yet -> user picks it later
             DHCPFile.objects.create(group=self, name=f"{self.group.name}_Table", directory=d, order=10,
                                     template=default_table_template())
             DHCPFile.objects.create(group=self, name=f"{self.group.name}_StaticTable", directory=d, order=20,
@@ -95,7 +95,7 @@ class DHCPFile(NetBoxModel):
 
     group = models.ForeignKey(DHCPGroup, on_delete=models.CASCADE, related_name="files")
     name = models.CharField(max_length=100, help_text="File name, e.g. WorkStation_Table.")
-    directory = models.ForeignKey(DHCPPath, on_delete=models.PROTECT, related_name="files")
+    directory = models.ForeignKey(DHCPPath, on_delete=models.PROTECT, null=True, blank=True, related_name="files")
     enabled = models.BooleanField(default=True, verbose_name="Include in dhcpd.conf")
     order = models.PositiveSmallIntegerField(default=100)
     mac_fields = models.JSONField(default=list, blank=True, help_text="Tenant custom fields that hold a MAC address.")
@@ -116,7 +116,7 @@ class DHCPFile(NetBoxModel):
 
     @property
     def full_path(self) -> str:
-        return f"{self.directory.path}/{self.name}"
+        return f"{self.directory.path}/{self.name}" if self.directory else self.name
 
     def clean(self):
         super().clean()
@@ -146,13 +146,6 @@ class PluginSettings(NetBoxModel):
         errors = {f: "Must be an absolute path without spaces, quotes or '..'." for f in ("config_path", "base_path") if not is_safe_path(getattr(self, f))}
         if errors:
             raise ValidationError(errors)
-
-    def save(self, *args, **kwargs):
-        creating = self._state.adding
-        super().save(*args, **kwargs)
-        if creating:
-            for order, name in ((10, "TABLE"), (20, "SUBNET")):
-                DHCPPath.objects.get_or_create(name=name, defaults={"order": order})
 
 
 class DNSServer(NetBoxModel):

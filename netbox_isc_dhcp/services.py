@@ -15,9 +15,9 @@ def dhcp_prefixes(cfg: BaseConfig) -> list[str]:
     return [str(p) for p in Prefix.objects.filter(**lookup).values_list("prefix", flat=True)]
 
 
-def _dir_path(name: str) -> str:
+def _dir_path(name: str):
     d = DHCPPath.objects.filter(name=name).first()
-    return d.path if d else f"{base_path()}/{name}"
+    return d.path if d else None
 
 
 def table_includes() -> tuple[list[str], list[str]]:
@@ -29,17 +29,23 @@ def table_includes() -> tuple[list[str], list[str]]:
     )
     paths, warnings = [], []
     for f in files:
-        if is_safe_name(f.name):
+        if f.directory is None:
+            warnings.append(f"File '{f.name}' skipped: no subdirectory chosen.")
+        elif is_safe_name(f.name):
             paths.append(f.full_path)
         else:
             warnings.append(f"File '{f.name}' skipped: name contains characters not allowed in file names.")
-    return paths + [f"{_dir_path('TABLE')}/Netbox_Devices-MAC"], warnings
+    table = _dir_path("TABLE")
+    return paths + ([f"{table}/Netbox_Devices-MAC"] if table else []), warnings
 
 
 def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:
     """Return (dhcpd.conf text, warnings)."""
     tables, warnings = table_includes()
-    text = render_base_config(cfg.static_text, tables, dhcp_prefixes(cfg), subnet_dir=_dir_path("SUBNET"))
+    subnet = _dir_path("SUBNET")
+    if subnet is None:
+        warnings.append("No SUBNET subdirectory: prefix includes are left out.")
+    text = render_base_config(cfg.static_text, tables, dhcp_prefixes(cfg) if subnet else [], subnet_dir=subnet or "")
     return text, warnings
 
 
