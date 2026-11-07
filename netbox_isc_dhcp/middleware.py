@@ -6,11 +6,14 @@ from .version import label
 
 PLUGIN_PATH = "/plugins/isc-dhcp/"
 
-_BADGE = (
-    '<div id="isc-dhcp-version" style="position:fixed;left:8px;top:6px;z-index:2000;'
-    "padding:2px 10px;border-radius:999px;font-size:12px;background:rgba(108,117,125,.9);"
-    'color:#fff;pointer-events:none;"><i class="mdi mdi-tag-outline me-1"></i>%s</div>'
+_PILL = (
+    '<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;'
+    'font-weight:600;background:rgba(108,117,125,.9);color:#fff;">'
+    '<i class="mdi mdi-tag-outline me-1"></i>%s</span>'
 )
+# Right-aligned, in the normal page flow (overlaps nothing), above the page messages.
+_BADGE = '<div id="isc-dhcp-version" class="text-end mb-2">' + _PILL + "</div>"
+_MARKER = '<div class="container-fluid tab-content py-3">'
 
 
 def inject_badge(response):
@@ -21,10 +24,17 @@ def inject_badge(response):
         return response
     charset = getattr(response, "charset", None) or "utf-8"
     body = response.content.decode(charset)
-    i = body.rfind("</body>")
-    if i == -1 or 'id="isc-dhcp-version"' in body:
+    if 'id="isc-dhcp-version"' in body:
         return response
-    response.content = (body[:i] + _BADGE % escape(label()) + body[i:]).encode(charset)
+    badge = _BADGE % escape(label())
+    i = body.find(_MARKER)
+    if i != -1:
+        i += len(_MARKER)
+    else:  # unknown layout: fall back to the end of the page
+        i = body.rfind("</body>")
+        if i == -1:
+            return response
+    response.content = (body[:i] + badge + body[i:]).encode(charset)
     if response.has_header("Content-Length"):
         response["Content-Length"] = str(len(response.content))
     return response
