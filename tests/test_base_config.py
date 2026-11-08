@@ -47,11 +47,8 @@ def test_static_text_is_verbatim_even_with_template_syntax():
     assert "{{ not a template }}" in out
 
 
-def test_default_static_text_has_no_includes_and_keeps_primary():
-    s = default_static_text()
-    assert "include " not in s
-    assert "subnet 192.168.0.0 netmask 255.255.255.0 {}" in s
-    assert s.count("binary-to-ascii") == 6
+def test_default_static_text_is_empty_no_site_data_shipped():
+    assert default_static_text() == ""
 
 
 def test_empty_data_still_valid():

@@ -13,7 +13,8 @@
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.static" %}</h5>
     <div class="card-body">
-      <details class="ie wide"><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.static_text }}</pre></summary>
+      <div class="alert alert-warning d-flex align-items-start gap-2 mb-3"><i class="mdi mdi-account-edit-outline"></i><span>{% tr "lbl.static_info" %}</span></div>
+      <details class="ie wide"><summary title="{% tr 'lbl.click_edit' %}" class="d-block">{% if object.static_text %}<pre class="m-0">{{ object.static_text }}</pre>{% else %}<span class="text-warning">{% tr "lbl.static_empty" %}</span> <i class="mdi mdi-pencil-outline text-muted"></i>{% endif %}</summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="static_text">
           <textarea name="value" rows="28" class="form-control font-monospace">{{ object.static_text }}</textarea>
           <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details>

@@ -47,7 +47,8 @@ def split_groups(group_names) -> tuple[list[str], list[str]]:
 
 
 def default_static_text() -> str:
-    return resources.files("netbox_isc_dhcp").joinpath("defaults/dhcpd_static.conf").read_text("utf-8")
+    """Empty on purpose: the static part of dhcpd.conf is written by the user, the plugin ships no site data."""
+    return ""
 
 
 _BAD_PATH_CHARS = re.compile(r'[\s"\';{}\\]')

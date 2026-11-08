@@ -17,4 +17,4 @@ version = { attr = "netbox_isc_dhcp.__version__" }
 include = ["netbox_isc_dhcp*"]
 
 [tool.setuptools.package-data]
-netbox_isc_dhcp = ["defaults/*.conf", "defaults/*.j2", "templates/**/*.html"]
+netbox_isc_dhcp = ["defaults/*.j2", "templates/**/*.html"]

@@ -35,6 +35,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 - Delete confirmations (single, htmx modal, bulk) use plugin templates without changelog message / background job.
 - MENU: sidebar has ONLY two items: 'CFG pluginu' (settings) and 'DHCP-CFG' (hub page /plugins/isc-dhcp/dhcp/ with links: dhcpd.conf, DNS, Hosty a MAC adresy; later Subnety).
   All DHCP pages live under dhcp/ (dhcp/base-config, dhcp/dns, dhcp/groups, dhcp/groups/files) so DHCP-CFG stays highlighted.
+- NEVER ship owner site data (dhcpd.conf text, domains, IPs, MACs, host names) in the repo. Static part default is EMPTY + note that the user must set it.
 - dhcpd.conf page: ONLY static part (click-to-edit) + dynamic part (read-only include lines + info that the plugin writes only INCLUDE paths).
   Object/conditions picker (source_model, conditions, source_fields.py) is hidden from dhcpd.conf; reuse it for the subnet cfg.
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
