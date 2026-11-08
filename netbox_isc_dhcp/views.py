@@ -262,25 +262,9 @@ class BaseConfigInlineView(View):
 
 def _baseconfig_context(request, instance):
     from .models import settings_obj
-    from .source_fields import field_options, get_model, label_for, source_label, source_models, value_choices, value_label
+    from .services import table_includes
 
     st = settings_obj()
-    model = get_model(instance.source_model)
-    rows = []
-    for i, c in enumerate(instance.conditions or []):
-        rows.append({
-            "index": i, "key": c.get("field"), "label": label_for(model, c.get("field")),
-            "value": c.get("value", ""), "value_label": value_label(model, c.get("field"), c.get("value", "")),
-            "choices": value_choices(model, c.get("field")),
-        })
+    includes, warnings = table_includes()
     path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
-    groups = {}
-    for value, app, label in source_models():
-        groups.setdefault(app, []).append((value, label))
-    from .source_fields import build_q
-
-    active = [c for c in instance.conditions or [] if c.get("field") and c.get("value", "") != ""]
-    count = model.objects.filter(build_q(model, active)).count() if model is not None and active else 0
-    matched_text = t("lbl.matched", n=count) if active else t("lbl.matched_none")
-    return {"matched_count": count, "matched_text": matched_text, "source_groups": groups, "source_label": source_label(instance.source_model),
-            "field_options": field_options(model), "cond_rows": rows, "file_path": path}
+    return {"file_path": path, "includes": includes, "include_warnings": warnings}

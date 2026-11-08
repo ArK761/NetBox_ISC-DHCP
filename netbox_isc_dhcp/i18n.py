@@ -72,6 +72,11 @@ TR = {
     "lbl.any_value": ("ľubovoľná (nefiltruje)", "any (no filter)"),
     "lbl.matched": ("Vybrané: {n} objektov", "Selected: {n} objects"),
     "lbl.matched_none": ("Vybrané: nič (nastavte aspoň jednu hodnotu)", "Selected: nothing (set at least one value)"),
+    "menu.hosts": ("Hosty a MAC adresy", "Hosts and MAC addresses"),
+    "lbl.dynamic": ("Dynamická časť", "Dynamic part"),
+    "lbl.dynamic_info": ("Plugin do tejto časti zapisuje výhradne cesty INCLUDE súborov, nie časti konfigurácie DHCP servera (žiadne statické IP, hosty ani subnety).",
+                         "The plugin writes only INCLUDE file paths into this part, never parts of the DHCP server configuration (no static IPs, hosts or subnets)."),
+    "lbl.no_includes": ("Zatiaľ žiadne INCLUDE súbory.", "No INCLUDE files yet."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

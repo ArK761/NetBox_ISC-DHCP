@@ -31,13 +31,13 @@ def _open_item(model, key):
 menu = PluginMenu(
     label="ISC DHCP",
     groups=(
+        ("CFG plugin", (_open_item("pluginsettings", "menu.settings"),)),
         (
-            "DHCP",
+            "DHCP-CFG",
             (
                 _open_item("baseconfig", "menu.base"),
-                _list_item("dhcpgroup", "menu.groups"),
                 _list_item("dnsserver", "menu.dns"),
-                _open_item("pluginsettings", "menu.settings"),
+                _list_item("dhcpgroup", "menu.hosts"),
             ),
         ),
     ),
