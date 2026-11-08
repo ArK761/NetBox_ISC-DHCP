@@ -46,6 +46,8 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   Pool-type key refused on fields with > 100 values. Global gateway = SubnetConfig.gateway_mode (first/last usable) -> template var `gateway`.
   Subnet directory chosen on the Subnety page (= PluginSettings.subnet_dir).
   NEXT: store generated <network>_CFG files (sha256) + subnet includes in dhcpd.conf.
+  TODO AT THE END (owner): save-time protection of pool code: render on ALL prefixes of the pool, refuse save on errors (Jinja, ip(n) out of range,
+  ranges, gateway in range, braces, quotes, parentheses, missing ";", commas in concat). NO dhcpd on the NetBox server (never), so no dhcpd -t.
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
   click-to-add / click-to-set value (select for choices/bool/FK, text otherwise), all must match (source_fields.build_q).
 - Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
