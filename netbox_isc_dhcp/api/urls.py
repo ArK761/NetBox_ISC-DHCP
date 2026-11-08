@@ -10,4 +10,5 @@ router.register("dhcpgroup", views.DHCPGroupViewSet)
 router.register("dhcpfile", views.DHCPFileViewSet)
 router.register("dnsserver", views.DNSServerViewSet)
 router.register("pluginsettings", views.PluginSettingsViewSet)
+router.register("subnetconfig", views.SubnetConfigViewSet)
 urlpatterns = router.urls

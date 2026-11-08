@@ -33,3 +33,8 @@ class PluginSettingsViewSet(NetBoxModelViewSet):
     queryset = models.PluginSettings.objects.order_by("pk")
     serializer_class = serializers.PluginSettingsSerializer
 
+
+
+class SubnetConfigViewSet(NetBoxModelViewSet):
+    queryset = models.SubnetConfig.objects.all()
+    serializer_class = serializers.SubnetConfigSerializer

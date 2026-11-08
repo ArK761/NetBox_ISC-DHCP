@@ -10,10 +10,10 @@ from .dhcp_tables import FileResult, build_file
 from extras.models import CustomField
 
 from .i18n import t
-from .models import BaseConfig, DHCPFile, base_path, settings_obj
+from .models import BaseConfig, SubnetConfig, DHCPFile, base_path, settings_obj
 
 
-def dhcp_prefixes(cfg: BaseConfig) -> list[str]:
+def dhcp_prefixes(cfg) -> list[str]:
     """Prefixes of the chosen object that match all conditions (nothing when no object/condition is set)."""
     from .source_fields import build_q, get_model
 

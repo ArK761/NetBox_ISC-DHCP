@@ -85,6 +85,9 @@ TR = {
     "lbl.static_info": ("Statickú časť si musí používateľ nastaviť sám: globálne nastavenia DHCP servera (napr. authoritative, lease časy, logovanie, primárny subnet rozhrania). Plugin ju nemení ani nevypĺňa.",
                         "The static part must be set by the user: global DHCP server settings (e.g. authoritative, lease times, logging, the primary interface subnet). The plugin never changes or fills it."),
     "lbl.static_empty": ("Zatiaľ prázdne – kliknite a napíšte vlastnú konfiguráciu.", "Empty – click and write your own configuration."),
+    "menu.subnets": ("Subnety", "Subnets"),
+    "hub.subnets": ("Objekt a podmienky (ľubovoľné polia a hodnoty), z ktorých sa vyberajú subnety.", "Object and conditions (any fields and values) the subnets are selected from."),
+    "lbl.subnet_source": ("Zdroj subnetov", "Subnet source"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

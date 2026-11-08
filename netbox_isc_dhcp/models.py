@@ -19,11 +19,6 @@ class BaseConfig(NetBoxModel):
         blank=True, default=default_static_text,
         help_text="Passive part of dhcpd.conf. Used as plain text, nothing in it is processed.",
     )
-    source_model = models.CharField(
-        max_length=100, blank=True, default="", help_text="Object (any NetBox object type) the config is built from.",
-    )
-    conditions = models.JSONField(default=list, blank=True, help_text="Fields of the object and the accepted values (all must match).")
-
     class Meta:
         ordering = ("name",)
 
@@ -39,6 +34,21 @@ def settings_obj():
 def base_path() -> str:
     cfg = PluginSettings.objects.first()
     return (cfg.base_path if cfg else "").rstrip("/")
+
+
+class SubnetConfig(NetBoxModel):
+    """Subnets: the object they are taken from and the conditions (any field + accepted value, all must match)."""
+
+    name = models.CharField(max_length=100, unique=True, default="subnets")
+    source_model = models.CharField(max_length=100, blank=True, default="", help_text="Object (any NetBox object type) the subnets are taken from.")
+    conditions = models.JSONField(default=list, blank=True, help_text="Fields of the object and the accepted values (all must match).")
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "subnet config"
+
+    def __str__(self):
+        return "Subnety"
 
 
 class DHCPPath(NetBoxModel):

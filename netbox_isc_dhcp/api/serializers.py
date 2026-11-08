@@ -1,7 +1,7 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from ..models import BaseConfig, DHCPPath, DHCPGroup, DHCPFile, DNSServer, PluginSettings
+from ..models import SubnetConfig, BaseConfig, DHCPPath, DHCPGroup, DHCPFile, DNSServer, PluginSettings
 
 
 class BaseConfigSerializer(NetBoxModelSerializer):
@@ -9,7 +9,7 @@ class BaseConfigSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = BaseConfig
-        fields = ('id', 'url', 'display', 'name', 'source_model', 'conditions', 'static_text', 'tags', 'custom_fields', 'created', 'last_updated')
+        fields = ('id', 'url', 'display', 'name', 'static_text', 'tags', 'custom_fields', 'created', 'last_updated')
         brief_fields = ('id', 'url', 'display')
 
 
@@ -57,3 +57,12 @@ class PluginSettingsSerializer(NetBoxModelSerializer):
         fields = ('id', 'url', 'display', 'language', 'config_path', 'base_path', 'table_dir', 'subnet_dir', 'tags', 'custom_fields', 'created', 'last_updated')
         brief_fields = ('id', 'url', 'display')
 
+
+
+class SubnetConfigSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_isc_dhcp-api:subnetconfig-detail")
+
+    class Meta:
+        model = SubnetConfig
+        fields = ('id', 'url', 'display', 'name', 'source_model', 'conditions', 'tags', 'custom_fields', 'created', 'last_updated')
+        brief_fields = ('id', 'url', 'display')

@@ -9,7 +9,7 @@ from utilities.views import ViewTab, register_model_view
 
 from . import forms, tables
 from .i18n import t, t_lazy
-from .models import MAX_ACTIVE_DNS, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
+from .models import MAX_ACTIVE_DNS, SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 from .services import build_base_config
 
 
@@ -218,14 +218,28 @@ class DHCPPathInlineView(View):
 
 
 class BaseConfigInlineView(View):
-    """Click-to-edit on the dhcpd.conf page: object, conditions (field + accepted value), passive text."""
+    """Click-to-edit of the static part of dhcpd.conf."""
+
+    def post(self, request, pk):
+        if not request.user.has_perm("netbox_isc_dhcp.change_baseconfig"):
+            raise PermissionDenied
+        obj = get_object_or_404(BaseConfig, pk=pk)
+        if request.POST.get("field") == "static_text":
+            obj.static_text = request.POST.get("value", "")
+            obj.save()
+            messages.success(request, t("msg.saved"))
+        return redirect(obj.get_absolute_url())
+
+
+class SubnetConfigInlineView(View):
+    """Click-to-edit on the subnets page: object and conditions (field + accepted value)."""
 
     def post(self, request, pk):
         from .source_fields import field_options, get_model
 
-        if not request.user.has_perm("netbox_isc_dhcp.change_baseconfig"):
+        if not request.user.has_perm("netbox_isc_dhcp.change_subnetconfig"):
             raise PermissionDenied
-        obj = get_object_or_404(BaseConfig, pk=pk)
+        obj = get_object_or_404(SubnetConfig, pk=pk)
         field, value = request.POST.get("field"), request.POST.get("value", "")
         conds = list(obj.conditions or [])
         idx = request.POST.get("index", "")
@@ -239,8 +253,6 @@ class BaseConfigInlineView(View):
             if value.strip() != obj.source_model:
                 obj.conditions = []  # fields belong to the object
             obj.source_model = value.strip()
-        elif field == "static_text":
-            obj.static_text = value
         elif field == "cond_add":
             keys = {o["key"] for o in field_options(get_model(obj.source_model))}
             if value in keys:
@@ -279,6 +291,29 @@ class DHCPHubView(LoginRequiredMixin, View):
         items = [
             ("plugins:netbox_isc_dhcp:baseconfig_list", "mdi-file-cog-outline", "menu.base", "hub.base"),
             ("plugins:netbox_isc_dhcp:dnsserver_list", "mdi-dns-outline", "menu.dns", "hub.dns"),
+            ("plugins:netbox_isc_dhcp:subnetconfig_list", "mdi-ip-network-outline", "menu.subnets", "hub.subnets"),
             ("plugins:netbox_isc_dhcp:dhcpgroup_list", "mdi-lan-connect", "menu.hosts", "hub.hosts"),
         ]
         return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
+
+
+def _subnetconfig_context(request, instance):
+    from .source_fields import build_q, field_options, get_model, label_for, source_label, source_models, value_choices, value_label
+
+    model = get_model(instance.source_model)
+    rows = [{
+        "index": i, "key": c.get("field"), "label": label_for(model, c.get("field")),
+        "value": c.get("value", ""), "value_label": value_label(model, c.get("field"), c.get("value", "")),
+        "choices": value_choices(model, c.get("field")),
+    } for i, c in enumerate(instance.conditions or [])]
+    groups = {}
+    for value, app, label in source_models():
+        groups.setdefault(app, []).append((value, label))
+    active = [c for c in instance.conditions or [] if c.get("field") and c.get("value", "") != ""]
+    count = model.objects.filter(build_q(model, active)).count() if model is not None and active else 0
+    return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
+            "cond_rows": rows, "matched_count": count, "matched_text": t("lbl.matched", n=count) if active else t("lbl.matched_none")}
+
+
+_crud(SubnetConfig, forms.SubnetConfigForm, tables.SubnetConfigTable, singleton=True,
+      extra_context=lambda request, instance: _subnetconfig_context(request, instance))

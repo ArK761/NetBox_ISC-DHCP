@@ -2,7 +2,7 @@ import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 
 from .i18n import t_lazy
-from .models import BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
+from .models import SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 
 
 class BaseConfigTable(NetBoxTable):
@@ -88,3 +88,13 @@ class PluginSettingsTable(NetBoxTable):
         model = PluginSettings
         fields = ("pk", "id", "language")
         default_columns = ("language",)
+
+
+class SubnetConfigTable(NetBoxTable):
+    actions = columns.ActionsColumn(actions=("edit", "delete"))
+    name = tables.Column(linkify=True)
+
+    class Meta(NetBoxTable.Meta):
+        model = SubnetConfig
+        fields = ("pk", "id", "name", "source_model")
+        default_columns = ("name", "source_model")
