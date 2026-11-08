@@ -9,7 +9,7 @@ from utilities.views import ViewTab, register_model_view
 
 from . import forms, tables
 from .i18n import t, t_lazy
-from .models import MAX_ACTIVE_DNS, SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
+from .models import MAX_ACTIVE_DNS, PoolTemplate, SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 from .services import build_base_config
 
 
@@ -232,44 +232,48 @@ class BaseConfigInlineView(View):
 
 
 class SubnetConfigInlineView(View):
-    """Click-to-edit on the subnets page: object and conditions (field + accepted value)."""
+    """Click-to-edit on the subnets page: object, conditions (ticked values, include/exclude), pool type field."""
 
     def post(self, request, pk):
-        from .source_fields import field_options, get_model
+        from .source_fields import distinct_values, field_options, get_model
 
         if not request.user.has_perm("netbox_isc_dhcp.change_subnetconfig"):
             raise PermissionDenied
         obj = get_object_or_404(SubnetConfig, pk=pk)
-        field, value = request.POST.get("field"), request.POST.get("value", "")
-        conds = list(obj.conditions or [])
+        model = get_model(obj.source_model)
+        action, value = request.POST.get("field"), request.POST.get("value", "").strip()
         idx = request.POST.get("index", "")
         idx = int(idx) if idx.isdigit() else None
-        if field == "source_model":
-            from .source_fields import get_model as _gm
-
-            if value.strip() and _gm(value.strip()) is None:
+        conds = [dict(c) for c in obj.conditions or []]
+        row = conds[idx] if idx is not None and idx < len(conds) else None
+        if action == "source_model":
+            if value and get_model(value) is None:
                 messages.error(request, "Unknown object type.")
                 return redirect(obj.get_absolute_url())
-            if value.strip() != obj.source_model:
-                obj.conditions = []  # fields belong to the object
-            obj.source_model = value.strip()
-        elif field == "cond_add":
-            keys = {o["key"] for o in field_options(get_model(obj.source_model))}
-            if value in keys:
-                conds.append({"field": value, "value": ""})
-                obj.conditions = conds
-        elif field == "cond_value" and idx is not None and idx < len(conds):
-            conds[idx]["value"] = value.strip()
-            obj.conditions = conds
-        elif field == "cond_del" and idx is not None and idx < len(conds):
+            if value != obj.source_model:
+                conds = []
+            obj.source_model = value
+        elif action == "cond_add" and value in {o["key"] for o in field_options(model)}:
+            conds.append({"field": value, "values": [], "mode": "include"})
+        elif row is not None and action == "cond_set":
+            row["values"] = request.POST.getlist("values")
+            row["mode"] = "exclude" if request.POST.get("mode") == "exclude" else "include"
+            row.pop("value", None)
+        elif row is not None and action == "cond_all":
+            row["values"] = [v for v, _ in distinct_values(model, row["field"])]
+            row.pop("value", None)
+        elif row is not None and action == "cond_none":
+            row["values"] = []
+            row.pop("value", None)
+        elif row is not None and action == "cond_poolkey":
+            for c in conds:
+                c["pool_key"] = False
+            row["pool_key"] = True
+        elif row is not None and action == "cond_del":
             conds.pop(idx)
-            obj.conditions = conds
-        try:
-            obj.full_clean()
-            obj.save()
-            messages.success(request, t("msg.saved"))
-        except ValidationError as exc:
-            messages.error(request, "; ".join(m for ms in exc.message_dict.values() for m in ms))
+        obj.conditions = conds
+        obj.save()
+        messages.success(request, t("msg.saved"))
         return redirect(obj.get_absolute_url())
 
 
@@ -297,23 +301,96 @@ class DHCPHubView(LoginRequiredMixin, View):
         return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
 
 
-def _subnetconfig_context(request, instance):
-    from .source_fields import build_q, field_options, get_model, label_for, source_label, source_models, value_choices, value_label
+def _pool_info(instance):
+    """(model, matched queryset, pool key condition) of the subnet config."""
+    from .source_fields import build_q, get_model
 
     model = get_model(instance.source_model)
-    rows = [{
-        "index": i, "key": c.get("field"), "label": label_for(model, c.get("field")),
-        "value": c.get("value", ""), "value_label": value_label(model, c.get("field"), c.get("value", "")),
-        "choices": value_choices(model, c.get("field")),
-    } for i, c in enumerate(instance.conditions or [])]
+    if model is None:
+        return None, None, None
+    active = [c for c in instance.conditions or [] if c.get("field")]
+    qs = model.objects.filter(build_q(model, active))
+    key = next((c for c in active if c.get("pool_key")), None)
+    return model, qs, key
+
+
+def _pool_names(model, qs, key) -> list[str]:
+    from .dhcp_tables import natural_key
+    from .source_fields import cond_values
+
+    if key.get("mode", "include") == "include" and cond_values(key):
+        return sorted(cond_values(key), key=natural_key)
+    f = key["field"]
+    lookup = f"custom_field_data__{f[3:]}" if f.startswith("cf_") else f
+    return sorted({str(v) for v in qs.values_list(lookup, flat=True).distinct() if v not in (None, "")}, key=natural_key)
+
+
+def _subnetconfig_context(request, instance):
+    from .source_fields import (_field_q, cond_values, distinct_values, field_options, is_active, label_for,
+                                source_label, source_models)
+
+    model, qs, key = _pool_info(instance)
+    rows = []
+    for i, c in enumerate(instance.conditions or []):
+        vals = cond_values(c)
+        mode = c.get("mode", "include")
+        summary = (t("lbl.all_except", n=len(vals)) if mode == "exclude" else t("lbl.n_selected", n=len(vals))) if vals else ""
+        rows.append({"index": i, "key": c.get("field"), "label": label_for(model, c.get("field")), "values": vals, "mode": mode,
+                     "pool_key": bool(c.get("pool_key")), "summary": summary, "options": distinct_values(model, c.get("field"))})
     groups = {}
     for value, app, label in source_models():
         groups.setdefault(app, []).append((value, label))
-    active = [c for c in instance.conditions or [] if c.get("field") and c.get("value", "") != ""]
-    count = model.objects.filter(build_q(model, active)).count() if model is not None and active else 0
+    any_active = any(is_active(c) for c in instance.conditions or [])
+    count = qs.count() if qs is not None and any_active else 0
+    pools = []
+    if key is not None and any_active:
+        for name in _pool_names(model, qs, key):
+            pt, _ = PoolTemplate.objects.get_or_create(name=name)
+            pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [name])).count()})
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
-            "cond_rows": rows, "matched_count": count, "matched_text": t("lbl.matched", n=count) if active else t("lbl.matched_none")}
+            "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools,
+            "matched_text": t("lbl.matched", n=count) if any_active else t("lbl.matched_none")}
 
 
 _crud(SubnetConfig, forms.SubnetConfigForm, tables.SubnetConfigTable, singleton=True,
       extra_context=lambda request, instance: _subnetconfig_context(request, instance))
+
+
+
+# --- Pools: template (code) per pool type, preview on a real prefix ---------------
+def _pooltemplate_context(request, instance):
+    from .models import DNSServer
+    from .source_fields import _field_q
+    from .subnet_render import render_subnet
+
+    cfg = SubnetConfig.objects.first()
+    model, qs, key = _pool_info(cfg) if cfg else (None, None, None)
+    prefixes = list(qs.filter(_field_q(model, key["field"], [instance.name]))[:2000]) if key is not None else []
+    chosen = next((p for p in prefixes if str(p.pk) == request.GET.get("p")), prefixes[0] if prefixes else None)
+    text, errors = "", []
+    if chosen is not None:
+        dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
+        text, errors = render_subnet(instance.template, str(getattr(chosen, "prefix", "")), dns,
+                                     {"obj": chosen, "cf": getattr(chosen, "custom_field_data", {}) or {}})
+    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors}
+
+
+class PoolTemplateInlineView(View):
+    def post(self, request, pk):
+        if not request.user.has_perm("netbox_isc_dhcp.change_pooltemplate"):
+            raise PermissionDenied
+        obj = get_object_or_404(PoolTemplate, pk=pk)
+        field = request.POST.get("field")
+        if field == "template":
+            obj.template = request.POST.get("value", "")
+        elif field == "enabled":
+            obj.enabled = request.POST.get("value") == "1"
+        obj.save()
+        messages.success(request, t("msg.saved"))
+        url = obj.get_absolute_url()
+        p = request.POST.get("p", "")
+        return redirect(f"{url}?p={p}" if p.isdigit() else url)
+
+
+_crud(PoolTemplate, forms.PoolTemplateForm, tables.PoolTemplateTable,
+      extra_context=lambda request, instance: _pooltemplate_context(request, instance))

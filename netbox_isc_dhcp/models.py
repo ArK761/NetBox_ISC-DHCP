@@ -6,6 +6,7 @@ from .base_config import default_static_text, is_safe_name, is_safe_path
 from .dhcp_tables import build_file, default_table_template
 from .i18n import t
 from .renderer import RenderError
+from .subnet_render import default_pool_template
 
 MAX_ACTIVE_DNS = 2
 DEFAULT_BASE_PATH = "/opt/dhcp"
@@ -49,6 +50,21 @@ class SubnetConfig(NetBoxModel):
 
     def __str__(self):
         return "Subnety"
+
+
+class PoolTemplate(NetBoxModel):
+    """Template (script) of one pool type: how <network>_CFG of every subnet of that type looks."""
+
+    name = models.CharField(max_length=100, unique=True, help_text="Pool type value, e.g. WorkStation.")
+    enabled = models.BooleanField(default=True, verbose_name="Generate")
+    template = models.TextField(blank=True, default=default_pool_template, help_text="Jinja template of the subnet file.")
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "pool"
+
+    def __str__(self):
+        return self.name
 
 
 class DHCPPath(NetBoxModel):

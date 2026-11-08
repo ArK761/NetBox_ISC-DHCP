@@ -11,4 +11,5 @@ router.register("dhcpfile", views.DHCPFileViewSet)
 router.register("dnsserver", views.DNSServerViewSet)
 router.register("pluginsettings", views.PluginSettingsViewSet)
 router.register("subnetconfig", views.SubnetConfigViewSet)
+router.register("pooltemplate", views.PoolTemplateViewSet)
 urlpatterns = router.urls

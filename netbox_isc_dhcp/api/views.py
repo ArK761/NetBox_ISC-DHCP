@@ -38,3 +38,8 @@ class PluginSettingsViewSet(NetBoxModelViewSet):
 class SubnetConfigViewSet(NetBoxModelViewSet):
     queryset = models.SubnetConfig.objects.all()
     serializer_class = serializers.SubnetConfigSerializer
+
+
+class PoolTemplateViewSet(NetBoxModelViewSet):
+    queryset = models.PoolTemplate.objects.all()
+    serializer_class = serializers.PoolTemplateSerializer

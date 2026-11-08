@@ -98,6 +98,32 @@ def label_for(model, key) -> str:
     return next((o["label"] for o in field_options(model) if o["key"] == key), key)
 
 
+def distinct_values(model, key, limit=5000) -> list[tuple[str, str]]:
+    """Every value the field has (fixed choices, or the values found in the database), naturally sorted."""
+    from .dhcp_tables import natural_key
+
+    fixed = value_choices(model, key)
+    if fixed is not None:
+        return fixed
+    if model is None or not key:
+        return []
+    if key.startswith("cf_"):
+        lookup = f"custom_field_data__{key[3:]}"
+        raw = model.objects.exclude(**{f"{lookup}__isnull": True}).values_list(lookup, flat=True).distinct()[:limit]
+    else:
+        raw = model.objects.exclude(**{f"{key}__isnull": True}).values_list(key, flat=True).distinct()[:limit]
+    vals = sorted({str(v) for v in raw if v not in (None, "")}, key=natural_key)
+    return [(v, v) for v in vals]
+
+
+def cond_values(c) -> list[str]:
+    """Selected values of a condition (old format had a single 'value')."""
+    if "values" in c:
+        return [str(v) for v in c.get("values") or []]
+    v = c.get("value", "")
+    return [str(v)] if v != "" else []
+
+
 def _convert(value, kind):
     if kind == "bool":
         return str(value).strip().lower() in ("1", "true", "yes", "ano", "áno")
@@ -109,23 +135,32 @@ def _convert(value, kind):
     return value
 
 
+def _field_q(model, key, values) -> Q:
+    if key.startswith("cf_"):
+        cf = _custom_field(model, key)
+        kind = "bool" if cf is not None and cf.type == "boolean" else "int" if cf is not None and cf.type == "integer" else "str"
+        return Q(**{f"custom_field_data__{key[3:]}__in": [_convert(v, kind) for v in values]})
+    f = model._meta.get_field(key)
+    if isinstance(f, models.BooleanField):
+        return Q(**{f"{key}__in": [_convert(v, "bool") for v in values]})
+    if f.is_relation:
+        ids = [int(v) for v in values if str(v).isdigit()]
+        names = [v for v in values if not str(v).isdigit()]
+        return Q(**{f"{key}_id__in": ids}) | Q(**{f"{key}__name__in": names}) if names else Q(**{f"{key}_id__in": ids})
+    return Q(**{f"{key}__in": list(values)})
+
+
+def is_active(c) -> bool:
+    return bool(c.get("field")) and bool(cond_values(c))
+
+
 def build_q(model, conditions) -> Q:
-    """All conditions must match (AND). Conditions without a value are ignored."""
+    """All conditions must match (AND). Within one field: any of the ticked values (mode include)
+    or none of them (mode exclude). A condition with nothing ticked does not filter."""
     q = Q()
     for c in conditions or []:
-        key, value = c.get("field"), c.get("value", "")
-        if not key or value == "":
+        if not is_active(c):
             continue
-        if key.startswith("cf_"):
-            cf = _custom_field(model, key)
-            kind = "bool" if cf is not None and cf.type == "boolean" else "int" if cf is not None and cf.type == "integer" else "str"
-            q &= Q(**{f"custom_field_data__{key[3:]}": _convert(value, kind)})
-            continue
-        f = model._meta.get_field(key)
-        if isinstance(f, models.BooleanField):
-            q &= Q(**{key: _convert(value, "bool")})
-        elif f.is_relation:
-            q &= Q(**{f"{key}_id": _convert(value, "int")}) if str(value).isdigit() else Q(**{f"{key}__name": value})
-        else:
-            q &= Q(**{key: value})
+        fq = _field_q(model, c["field"], cond_values(c))
+        q &= ~fq if c.get("mode") == "exclude" else fq
     return q

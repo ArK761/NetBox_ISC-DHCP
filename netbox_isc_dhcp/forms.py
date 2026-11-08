@@ -13,7 +13,7 @@ class NetBoxModelForm(_NetBoxModelForm):
 
 from tenancy.models import Tenant
 
-from .models import SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
+from .models import PoolTemplate, SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 
 
 class BaseConfigForm(NetBoxModelForm):
@@ -71,3 +71,10 @@ class SubnetConfigForm(NetBoxModelForm):
     class Meta:
         model = SubnetConfig
         fields = ("source_model",)
+
+
+class PoolTemplateForm(NetBoxModelForm):
+    class Meta:
+        model = PoolTemplate
+        fields = ("name", "enabled", "template")
+        widgets = {"template": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}

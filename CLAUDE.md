@@ -38,6 +38,10 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 - NEVER ship owner site data (dhcpd.conf text, domains, IPs, MACs, host names) in the repo. Static part default is EMPTY + note that the user must set it.
 - dhcpd.conf page: ONLY static part (click-to-edit) + dynamic part (read-only include lines + info that the plugin writes only INCLUDE paths).
   Object/conditions picker lives in SubnetConfig (singleton, page DHCP-CFG > Subnety, URL dhcp/subnets/): source_model + conditions, live 'Vybrané: N objektov'.
+  Condition = {field, values[], mode include|exclude, pool_key}. Row expands to a checkbox list of ALL values (search box, Select all / Untick all).
+  One row is marked 'určuje typ poolu' (owner: POOL_TYPE). Each pool type value -> PoolTemplate (name, Generate checkbox, Jinja code) at
+  dhcp/subnets/pools/<pk>/ with preview on a real prefix of that pool + validation (subnet_render.py: ip(n), first/last_usable, dns, obj, cf).
+  NEXT: store generated <network>_CFG files (sha256) + subnet includes in dhcpd.conf.
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
   click-to-add / click-to-set value (select for choices/bool/FK, text otherwise), all must match (source_fields.build_q).
 - Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
