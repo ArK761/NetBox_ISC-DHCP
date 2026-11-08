@@ -256,15 +256,29 @@ class SubnetConfigInlineView(View):
         elif action == "cond_add" and value in {o["key"] for o in field_options(model)}:
             conds.append({"field": value, "values": [], "mode": "include"})
         elif row is not None and action == "cond_set":
-            row["values"] = request.POST.getlist("values")
+            ticked = request.POST.getlist("values")
+            total = len(distinct_values(model, row["field"]))
             row["mode"] = "exclude" if request.POST.get("mode") == "exclude" else "include"
+            row["all"] = bool(total) and len(set(ticked)) >= total  # all ticked -> flag only, no long list
+            row["values"] = [] if row["all"] else ticked
             row.pop("value", None)
         elif row is not None and action == "cond_all":
-            row["values"] = [v for v, _ in distinct_values(model, row["field"])]
+            row["all"], row["values"] = True, []
             row.pop("value", None)
         elif row is not None and action == "cond_none":
-            row["values"] = []
+            row["all"], row["values"] = False, []
             row.pop("value", None)
+        elif action == "gateway_mode" and value in ("first", "last"):
+            obj.gateway_mode = value
+        elif action == "subnet_dir":
+            from .models import settings_obj
+
+            st = settings_obj() or PluginSettings.objects.create()
+            st.subnet_dir_id = int(value) if value.isdigit() and DHCPPath.objects.filter(pk=int(value)).exists() else None
+            st.save()
+        elif row is not None and action == "cond_poolkey" and len(distinct_values(model, row["field"])) > MAX_POOLS:
+            messages.error(request, t("err.pool_key_many", n=len(distinct_values(model, row["field"])), max=MAX_POOLS))
+            return redirect(obj.get_absolute_url())
         elif row is not None and action == "cond_poolkey":
             for c in conds:
                 c["pool_key"] = False
@@ -314,15 +328,26 @@ def _pool_info(instance):
     return model, qs, key
 
 
-def _pool_names(model, qs, key) -> list[str]:
-    from .dhcp_tables import natural_key
-    from .source_fields import cond_values
+MAX_POOLS = 100
 
-    if key.get("mode", "include") == "include" and cond_values(key):
-        return sorted(cond_values(key), key=natural_key)
+
+def _pool_names(model, qs, key) -> list[tuple[str, str]]:
+    """Pools = (value, name) of the pool type field. Names (e.g. WorkStation) are shown, values are used to filter."""
+    from .source_fields import cond_values, distinct_values
+
+    options = distinct_values(model, key["field"])
+    label = dict(options)
+    if key.get("mode", "include") == "include" and cond_values(key) and not key.get("all"):
+        chosen = set(cond_values(key))
+        return [(v, l) for v, l in options if v in chosen]
     f = key["field"]
     lookup = f"custom_field_data__{f[3:]}" if f.startswith("cf_") else f
-    return sorted({str(v) for v in qs.values_list(lookup, flat=True).distinct() if v not in (None, "")}, key=natural_key)
+    used = set()
+    for v in qs.values_list(lookup, flat=True).distinct()[: MAX_POOLS * 20]:
+        for i in (v if isinstance(v, list) else [v]):
+            if i not in (None, ""):
+                used.add(str(i))
+    return [(v, l) for v, l in options if v in used] or [(v, label.get(v, v)) for v in sorted(used)]
 
 
 def _subnetconfig_context(request, instance):
@@ -330,25 +355,39 @@ def _subnetconfig_context(request, instance):
                                 source_label, source_models)
 
     model, qs, key = _pool_info(instance)
+    editing = request.GET.get("edit", "")
     rows = []
     for i, c in enumerate(instance.conditions or []):
         vals = cond_values(c)
         mode = c.get("mode", "include")
-        summary = (t("lbl.all_except", n=len(vals)) if mode == "exclude" else t("lbl.n_selected", n=len(vals))) if vals else ""
-        rows.append({"index": i, "key": c.get("field"), "label": label_for(model, c.get("field")), "values": vals, "mode": mode,
-                     "pool_key": bool(c.get("pool_key")), "summary": summary, "options": distinct_values(model, c.get("field"))})
+        is_open = editing == str(i)
+        # the (possibly long) list of values is rendered only for the row that is being edited
+        options = distinct_values(model, c.get("field")) if (is_open or c.get("all")) else []
+        if c.get("all"):
+            vals = [v for v, _ in options]
+            summary = t("lbl.none_selected") if mode == "exclude" else t("lbl.all_values", n=len(options))
+        else:
+            summary = (t("lbl.all_except", n=len(vals)) if mode == "exclude" else t("lbl.n_selected", n=len(vals))) if vals else ""
+        rows.append({"index": i, "key": c.get("field"), "label": label_for(model, c.get("field")), "values": set(vals), "mode": mode,
+                     "pool_key": bool(c.get("pool_key")), "summary": summary, "options": options if is_open else [], "open": is_open})
     groups = {}
     for value, app, label in source_models():
         groups.setdefault(app, []).append((value, label))
     any_active = any(is_active(c) for c in instance.conditions or [])
     count = qs.count() if qs is not None and any_active else 0
-    pools = []
+    pools, pools_error = [], ""
     if key is not None and any_active:
-        for name in _pool_names(model, qs, key):
-            pt, _ = PoolTemplate.objects.get_or_create(name=name)
-            pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [name])).count()})
+        names = _pool_names(model, qs, key)
+        if len(names) > MAX_POOLS:
+            pools_error = t("err.pool_key_many", n=len(names), max=MAX_POOLS)
+        else:
+            for value, name in names:
+                pt, _ = PoolTemplate.objects.get_or_create(name=name[:100])
+                pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [value])).count()})
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
-            "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools,
+            "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
+            "gateway_label": t("lbl.gw_first") if instance.gateway_mode == "first" else t("lbl.gw_last"),
+            "subdirs": DHCPPath.objects.all(), "subnet_dir": getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "subnet_dir", None),
             "matched_text": t("lbl.matched", n=count) if any_active else t("lbl.matched_none")}
 
 
@@ -365,13 +404,17 @@ def _pooltemplate_context(request, instance):
 
     cfg = SubnetConfig.objects.first()
     model, qs, key = _pool_info(cfg) if cfg else (None, None, None)
-    prefixes = list(qs.filter(_field_q(model, key["field"], [instance.name]))[:2000]) if key is not None else []
+    value = None
+    if key is not None:
+        value = next((v for v, l in _pool_names(model, qs, key) if l == instance.name), None)
+    prefixes = list(qs.filter(_field_q(model, key["field"], [value]))[:2000]) if value is not None else []
     chosen = next((p for p in prefixes if str(p.pk) == request.GET.get("p")), prefixes[0] if prefixes else None)
     text, errors = "", []
     if chosen is not None:
         dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
         text, errors = render_subnet(instance.template, str(getattr(chosen, "prefix", "")), dns,
-                                     {"obj": chosen, "cf": getattr(chosen, "custom_field_data", {}) or {}})
+                                     {"obj": chosen, "cf": getattr(chosen, "custom_field_data", {}) or {}},
+                                     gateway_mode=cfg.gateway_mode if cfg else "first")
     return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors}
 
 

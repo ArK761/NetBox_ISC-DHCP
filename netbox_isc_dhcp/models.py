@@ -43,6 +43,8 @@ class SubnetConfig(NetBoxModel):
     name = models.CharField(max_length=100, unique=True, default="subnets")
     source_model = models.CharField(max_length=100, blank=True, default="", help_text="Object (any NetBox object type) the subnets are taken from.")
     conditions = models.JSONField(default=list, blank=True, help_text="Fields of the object and the accepted values (all must match).")
+    gateway_mode = models.CharField(max_length=10, default="first", choices=(("first", "First usable IP"), ("last", "Last usable IP")),
+                                    help_text="Gateway of every subnet (global).")
 
     class Meta:
         ordering = ("name",)

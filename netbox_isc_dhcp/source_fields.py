@@ -102,11 +102,22 @@ def distinct_values(model, key, limit=5000) -> list[tuple[str, str]]:
     """Every value the field has (fixed choices, or the values found in the database), naturally sorted."""
     from .dhcp_tables import natural_key
 
+    if model is None or not key:
+        return []
+    cf = _custom_field(model, key) if key.startswith("cf_") else None
+    if cf is not None and cf.type in ("object", "multiobject") and cf.related_object_type is not None:
+        # stored as object id(s): show the object names, keep the ids as values
+        ids = set()
+        for v in model.objects.exclude(**{f"custom_field_data__{key[3:]}__isnull": True}).values_list(f"custom_field_data__{key[3:]}", flat=True)[:limit]:
+            for i in (v if isinstance(v, list) else [v]):
+                if str(i).isdigit():
+                    ids.add(int(i))
+        related = cf.related_object_type.model_class()
+        objs = related.objects.filter(pk__in=ids) if related is not None else []
+        return sorted(((str(o.pk), str(o)) for o in objs), key=lambda p: natural_key(p[1]))
     fixed = value_choices(model, key)
     if fixed is not None:
         return fixed
-    if model is None or not key:
-        return []
     if key.startswith("cf_"):
         lookup = f"custom_field_data__{key[3:]}"
         raw = model.objects.exclude(**{f"{lookup}__isnull": True}).values_list(lookup, flat=True).distinct()[:limit]
@@ -138,6 +149,14 @@ def _convert(value, kind):
 def _field_q(model, key, values) -> Q:
     if key.startswith("cf_"):
         cf = _custom_field(model, key)
+        if cf is not None and cf.type == "object":
+            return Q(**{f"custom_field_data__{key[3:]}__in": [int(v) for v in values if str(v).isdigit()]})
+        if cf is not None and cf.type == "multiobject":
+            q = Q(pk__in=[])
+            for v in values:
+                if str(v).isdigit():
+                    q |= Q(**{f"custom_field_data__{key[3:]}__contains": [int(v)]})
+            return q
         kind = "bool" if cf is not None and cf.type == "boolean" else "int" if cf is not None and cf.type == "integer" else "str"
         return Q(**{f"custom_field_data__{key[3:]}__in": [_convert(v, kind) for v in values]})
     f = model._meta.get_field(key)
@@ -151,7 +170,8 @@ def _field_q(model, key, values) -> Q:
 
 
 def is_active(c) -> bool:
-    return bool(c.get("field")) and bool(cond_values(c))
+    """A condition filters when values are ticked, or when 'all' is ticked in exclude mode (= nothing)."""
+    return bool(c.get("field")) and (bool(cond_values(c)) or (c.get("all") and c.get("mode") == "exclude"))
 
 
 def build_q(model, conditions) -> Q:
@@ -160,6 +180,9 @@ def build_q(model, conditions) -> Q:
     q = Q()
     for c in conditions or []:
         if not is_active(c):
+            continue
+        if c.get("all"):  # every value, also ones added later
+            q &= Q(pk__in=[])  # exclude mode: nothing is left
             continue
         fq = _field_q(model, c["field"], cond_values(c))
         q &= ~fq if c.get("mode") == "exclude" else fq

@@ -106,6 +106,13 @@ TR = {
     "lbl.errors": ("Chyby – súbor by sa nepoužil", "Errors – the file would not be used"),
     "lbl.variables": ("Premenné", "Variables"),
     "lbl.no_prefix": ("Tento pool nemá žiadny rozsah.", "This pool has no prefix."),
+    "lbl.all_values": ("všetky ({n}) – aj neskôr pridané", "all ({n}) – also ones added later"),
+    "lbl.none_selected": ("nič (všetko vylúčené)", "nothing (all excluded)"),
+    "lbl.gateway": ("Brána (GW) pre všetky rozsahy", "Gateway (GW) for all prefixes"),
+    "lbl.gw_first": ("prvá voľná (použiteľná) IP", "first free (usable) IP"),
+    "lbl.gw_last": ("posledná voľná (použiteľná) IP", "last free (usable) IP"),
+    "err.pool_key_many": ("Pole má {n} rôznych hodnôt – typ poolu môže mať najviac {max}. Kliknite na kľúč pri správnom poli (napr. POOL_TYPE).",
+                          "The field has {n} different values – a pool type may have at most {max}. Click the key on the right field (e.g. POOL_TYPE)."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

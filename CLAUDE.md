@@ -41,6 +41,10 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   Condition = {field, values[], mode include|exclude, pool_key}. Row expands to a checkbox list of ALL values (search box, Select all / Untick all).
   One row is marked 'určuje typ poolu' (owner: POOL_TYPE). Each pool type value -> PoolTemplate (name, Generate checkbox, Jinja code) at
   dhcp/subnets/pools/<pk>/ with preview on a real prefix of that pool + validation (subnet_render.py: ip(n), first/last_usable, dns, obj, cf).
+  Value list is rendered ONLY for the row being edited (?edit=<i>), never all prefixes on the page. All ticked -> {all: true} (also future values).
+  Object-type custom fields (owner's POOL_TYPE -> object) store ids: show names, filter by id; pools are named by the object name.
+  Pool-type key refused on fields with > 100 values. Global gateway = SubnetConfig.gateway_mode (first/last usable) -> template var `gateway`.
+  Subnet directory chosen on the Subnety page (= PluginSettings.subnet_dir).
   NEXT: store generated <network>_CFG files (sha256) + subnet includes in dhcpd.conf.
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
   click-to-add / click-to-set value (select for choices/bool/FK, text otherwise), all must match (source_fields.build_q).

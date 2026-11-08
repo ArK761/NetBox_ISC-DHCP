@@ -7,7 +7,7 @@ import re
 from .renderer import RenderError, render
 
 DEFAULT_POOL_TEMPLATE = """subnet {{ network }} netmask {{ netmask }} {
-    option routers {{ first_usable }};
+    option routers {{ gateway }};
     option subnet-mask {{ netmask }};
 {% if dns %}
     option domain-name-servers {{ dns|join(", ") }};
@@ -37,7 +37,7 @@ def _net(prefix: str) -> ipaddress.IPv4Network:
     return net
 
 
-def context(prefix: str, dns=(), extra=None) -> dict:
+def context(prefix: str, dns=(), extra=None, gateway_mode: str = "first") -> dict:
     """Variables for the pool template. ip(n): n>0 from the network address, n<0 from the broadcast (-1 = last usable)."""
     net = _net(prefix)
     base, bc = int(net.network_address), int(net.broadcast_address)
@@ -54,12 +54,13 @@ def context(prefix: str, dns=(), extra=None) -> dict:
         "broadcast": str(net.broadcast_address), "first_usable": ip(1), "last_usable": ip(-1),
         "size": net.num_addresses, "three_octet": ".".join(str(net.network_address).split(".")[:3]),
         "ip": ip, "dns": list(dns),
+        "gateway": ip(-1) if gateway_mode == "last" else ip(1),  # global rule: first (or last) usable address
     }
     ctx.update(extra or {})
     return ctx
 
 
-_RANGE = re.compile(r"^\s*range\s+(\d+\.\d+\.\d+\.\d+)\s+(\d+\.\d+\.\d+\.\d+)\s*;", re.M)
+_RANGE = re.compile(r"\brange\s+(\d+\.\d+\.\d+\.\d+)\s+(\d+\.\d+\.\d+\.\d+)\s*;", re.M)
 
 
 def validate(text: str, prefix: str) -> list[str]:
@@ -81,15 +82,20 @@ def validate(text: str, prefix: str) -> list[str]:
                 if x <= d and c <= y:
                     errors.append(f"range {a} {b} overlaps range {c} {d}")
             ranges.append((x, y))
+    gw = re.search(r"option\s+routers\s+(\d+\.\d+\.\d+\.\d+)", text)
+    if gw:
+        for c, d in ranges:
+            if c <= ipaddress.IPv4Address(gw.group(1)) <= d:
+                errors.append(f"gateway {gw.group(1)} is inside range {c} {d}")
     if text.count("{") != text.count("}"):
         errors.append("unbalanced { } braces")
     return errors
 
 
-def render_subnet(template: str, prefix: str, dns=(), extra=None) -> tuple[str, list[str]]:
+def render_subnet(template: str, prefix: str, dns=(), extra=None, gateway_mode: str = "first") -> tuple[str, list[str]]:
     """Return (text, errors). Errors mean the file must NOT be used."""
     try:
-        text = render(template, context(prefix, dns, extra))
+        text = render(template, context(prefix, dns, extra, gateway_mode))
     except (RenderError, SubnetError) as exc:
         return "", [str(exc)]
     return text, validate(text, prefix)

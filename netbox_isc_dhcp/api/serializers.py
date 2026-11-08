@@ -64,7 +64,7 @@ class SubnetConfigSerializer(NetBoxModelSerializer):
 
     class Meta:
         model = SubnetConfig
-        fields = ('id', 'url', 'display', 'name', 'source_model', 'conditions', 'tags', 'custom_fields', 'created', 'last_updated')
+        fields = ('id', 'url', 'display', 'name', 'source_model', 'conditions', 'gateway_mode', 'tags', 'custom_fields', 'created', 'last_updated')
         brief_fields = ('id', 'url', 'display')
 
 

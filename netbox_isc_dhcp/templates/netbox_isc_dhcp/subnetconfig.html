@@ -11,6 +11,13 @@
             <select name="value" class="form-select form-select-sm"><option value="">{% tr "lbl.none" %}</option>
               {% for app, items in source_groups.items %}<optgroup label="{{ app }}">{% for v, l in items %}<option value="{{ v }}"{% if v == object.source_model %} selected{% endif %}>{{ l }}</option>{% endfor %}</optgroup>{% endfor %}</select>
             <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr>
+      <tr><th scope="row">{% tr "lbl.subnet_dir2" %}</th><td>
+        <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if subnet_dir %}<strong>{{ subnet_dir.name }}</strong> <code class="ms-2">{{ subnet_dir.path }}</code>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+          <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="subnet_dir">
+            <select name="value" class="form-select form-select-sm"><option value="">{% tr "lbl.none" %}</option>
+              {% for d in subdirs %}<option value="{{ d.pk }}"{% if subnet_dir and subnet_dir.pk == d.pk %} selected{% endif %}>{{ d.name }} ({{ d.path }})</option>{% endfor %}</select>
+            <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
+        <a class="ms-2 small" href="{% url 'plugins:netbox_isc_dhcp:pluginsettings_list' %}"><i class="mdi mdi-folder-plus-outline"></i> {% tr "lbl.add_subdir" %}</a></td></tr>
     </table>
     <div class="card-body border-top">
       <strong class="d-block mb-2">{% tr "lbl.conditions" %}</strong>
@@ -21,12 +28,12 @@
         {% for c in cond_rows %}
         <li class="list-group-item">
           <div class="d-flex justify-content-between align-items-start gap-2">
-            <details class="ie wide flex-grow-1"><summary title="{% tr 'lbl.click_edit' %}" class="d-flex align-items-center gap-3">
-                <i class="mdi mdi-chevron-down text-muted"></i>
+            <div class="flex-grow-1" id="c{{ c.index }}"><a href="{% if c.open %}?{% else %}?edit={{ c.index }}#c{{ c.index }}{% endif %}" class="d-flex align-items-center gap-3 text-reset text-decoration-none" title="{% tr 'lbl.click_edit' %}">
+                <i class="mdi {% if c.open %}mdi-chevron-up{% else %}mdi-chevron-down{% endif %} text-muted"></i>
                 <strong class="d-inline-block" style="min-width:14rem">{{ c.label }}</strong><span class="text-muted">=</span>
                 {% if c.summary %}<code>{{ c.summary }}</code>{% else %}<span class="text-muted fst-italic">{% tr "lbl.any_value" %}</span>{% endif %}
-                {% if c.pool_key %}<span class="badge text-bg-primary">{% tr "lbl.pool_key" %}</span>{% endif %}</summary>
-              <form method="post" action="{{ inline_url }}" class="mt-2">{% csrf_token %}<input type="hidden" name="index" value="{{ c.index }}">
+                {% if c.pool_key %}<span class="badge text-bg-primary">{% tr "lbl.pool_key" %}</span>{% endif %}</a>
+              {% if c.open %}<form method="post" action="{{ inline_url }}" class="mt-2">{% csrf_token %}<input type="hidden" name="index" value="{{ c.index }}">
                 <div class="d-flex flex-wrap gap-3 align-items-center">
                   <label><input type="radio" name="mode" value="include"{% if c.mode != "exclude" %} checked{% endif %}> {% tr "lbl.mode_include" %}</label>
                   <label><input type="radio" name="mode" value="exclude"{% if c.mode == "exclude" %} checked{% endif %}> {% tr "lbl.mode_exclude" %}</label>
@@ -42,7 +49,7 @@
                   <button class="btn btn-sm btn-outline-secondary" name="field" value="cond_all">{% tr "lbl.select_all" %}</button>
                   <button class="btn btn-sm btn-outline-secondary" name="field" value="cond_none">{% tr "lbl.select_none" %}</button>
                 </div>
-              </form></details>
+              </form>{% endif %}</div>
             <div class="d-flex gap-1 text-nowrap">
               {% if not c.pool_key %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_poolkey"><input type="hidden" name="index" value="{{ c.index }}">
                 <button class="btn btn-sm btn-outline-primary" title="{% tr 'lbl.set_pool_key' %}"><i class="mdi mdi-key-outline"></i></button></form>{% endif %}
@@ -66,7 +73,16 @@
   {% if object.source_model %}
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.pools" %}</h5>
-    {% if not has_pool_key %}<div class="card-body text-muted">{% tr "lbl.no_pool_key" %}</div>
+    {% if has_pool_key %}
+    <table class="table attr-table mb-0"><tr><th scope="row" style="width:30%">{% tr "lbl.gateway" %}</th><td>
+      <details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><code>{{ gateway_label }}</code> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="gateway_mode">
+          <select name="value" class="form-select form-select-sm"><option value="first"{% if object.gateway_mode == "first" %} selected{% endif %}>{% tr "lbl.gw_first" %}</option>
+            <option value="last"{% if object.gateway_mode == "last" %} selected{% endif %}>{% tr "lbl.gw_last" %}</option></select>
+          <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr></table>
+    {% endif %}
+    {% if pools_error %}<div class="card-body"><div class="alert alert-danger mb-0">{{ pools_error }}</div></div>
+    {% elif not has_pool_key %}<div class="card-body text-muted">{% tr "lbl.no_pool_key" %}</div>
     {% else %}
     <table class="table table-hover mb-0">
       <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.prefixes" %}</th><th>{% tr "lbl.generate" %}</th><th></th></tr></thead>

@@ -24,3 +24,15 @@ def test_fixed_ranges_outside_or_overlapping_are_reported():
     assert validate("range 10.0.0.9 10.0.0.5;", "10.0.0.0/24")
     assert validate("subnet x {", "10.0.0.0/24")
     assert validate("range 10.0.0.5 10.0.0.9;\nrange 10.0.0.10 10.0.0.20;", "10.0.0.0/24") == []
+
+
+def test_gateway_is_global_first_or_last_usable():
+    assert context("10.20.3.16/28")["gateway"] == "10.20.3.17"
+    assert context("10.20.3.16/28", gateway_mode="last")["gateway"] == "10.20.3.30"
+    text, errors = render_subnet(default_pool_template(), "10.20.0.0/24")
+    assert "option routers 10.20.0.1;" in text and errors == []
+
+
+def test_gateway_inside_a_range_is_an_error():
+    tpl = "subnet {{ network }} netmask {{ netmask }} {\n option routers {{ gateway }};\n pool { range {{ ip(1) }} {{ ip(20) }}; }\n}\n"
+    assert any("gateway" in e for e in render_subnet(tpl, "10.20.0.0/24")[1])
