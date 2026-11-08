@@ -368,8 +368,10 @@ def _subnetconfig_context(request, instance):
             summary = t("lbl.none_selected") if mode == "exclude" else t("lbl.all_values", n=len(options))
         else:
             summary = (t("lbl.all_except", n=len(vals)) if mode == "exclude" else t("lbl.n_selected", n=len(vals))) if vals else ""
+        can_key = not c.get("pool_key") and len(options or distinct_values(model, c.get("field"))) <= MAX_POOLS
         rows.append({"index": i, "key": c.get("field"), "label": label_for(model, c.get("field")), "values": set(vals), "mode": mode,
-                     "pool_key": bool(c.get("pool_key")), "summary": summary, "options": options if is_open else [], "open": is_open})
+                     "pool_key": bool(c.get("pool_key")), "summary": summary, "options": options if is_open else [], "open": is_open,
+                     "can_key": can_key})
     groups = {}
     for value, app, label in source_models():
         groups.setdefault(app, []).append((value, label))

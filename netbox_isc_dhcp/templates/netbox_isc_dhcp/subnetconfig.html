@@ -51,7 +51,7 @@
                 </div>
               </form>{% endif %}</div>
             <div class="d-flex gap-1 text-nowrap">
-              {% if not c.pool_key %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_poolkey"><input type="hidden" name="index" value="{{ c.index }}">
+              {% if c.can_key %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_poolkey"><input type="hidden" name="index" value="{{ c.index }}">
                 <button class="btn btn-sm btn-outline-primary" title="{% tr 'lbl.set_pool_key' %}"><i class="mdi mdi-key-outline"></i></button></form>{% endif %}
               <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_del"><input type="hidden" name="index" value="{{ c.index }}">
                 <button class="btn btn-sm btn-danger"><i class="mdi mdi-trash-can-outline"></i></button></form>
