@@ -31,13 +31,12 @@ def _open_item(model, key):
 menu = PluginMenu(
     label="ISC DHCP",
     groups=(
-        ("CFG plugin", (_open_item("pluginsettings", "menu.settings"),)),
         (
-            "DHCP-CFG",
+            "ISC DHCP",
             (
-                _open_item("baseconfig", "menu.base"),
-                _list_item("dnsserver", "menu.dns"),
-                _list_item("dhcpgroup", "menu.hosts"),
+                _open_item("pluginsettings", "menu.plugin"),
+                PluginMenuItem(link="plugins:netbox_isc_dhcp:dhcp_hub", link_text=t_lazy("menu.dhcp"),
+                               permissions=["netbox_isc_dhcp.view_baseconfig"]),
             ),
         ),
     ),

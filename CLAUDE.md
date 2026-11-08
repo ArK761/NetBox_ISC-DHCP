@@ -33,7 +33,8 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   changelog/journal tabs removed from registry in ready(); forms drop tags + changelog_message).
 - Values on settings / dhcpd.conf pages are click-to-edit inline (<details> + form, no JS). Layout single column, top to bottom.
 - Delete confirmations (single, htmx modal, bulk) use plugin templates without changelog message / background job.
-- MENU: group 'CFG plugin' (Nastavenia pluginu) + group 'DHCP-CFG' (dhcpd.conf, DNS servery, Hosty a MAC adresy = tenant groups). Later: subnet cfg link.
+- MENU: sidebar has ONLY two items: 'CFG pluginu' (settings) and 'DHCP-CFG' (hub page /plugins/isc-dhcp/dhcp/ with links: dhcpd.conf, DNS, Hosty a MAC adresy; later Subnety).
+  All DHCP pages live under dhcp/ (dhcp/base-config, dhcp/dns, dhcp/groups, dhcp/groups/files) so DHCP-CFG stays highlighted.
 - dhcpd.conf page: ONLY static part (click-to-edit) + dynamic part (read-only include lines + info that the plugin writes only INCLUDE paths).
   Object/conditions picker (source_model, conditions, source_fields.py) is hidden from dhcpd.conf; reuse it for the subnet cfg.
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
@@ -51,7 +52,7 @@ Testing: a real NetBox 4.7.4 is set up in the sandbox (/home/user/nb_ref + /home
 DONE v0.3.0: BaseConfig has config_path + base_path; DHCPPath = named directories below base_path (TABLE, SUBNET, ...); a DHCPGroup owns many DHCPFile
 (own name, directory, include checkbox, MAC fields, IP field, Jinja template). New group gets Name_Table + Name_StaticTable. Generated files are STORED
 (content, sha256, generated) and refreshed by signals (tenant/group/file changes) or the regenerate button; pages never generate (only once if never generated).
-Paths live in PluginSettings (config_path = dhcpd.conf dir, base_path) and the settings page lists/edits subdirectories (DHCPPath); no separate menu item. URLs: subdirectories under settings/paths/, files under groups/files/ so the menu link stays a substring.
+Paths live in PluginSettings (config_path = dhcpd.conf dir, base_path) and the settings page lists/edits subdirectories (DHCPPath); no separate menu item. URLs: subdirectories under settings/paths/, files under dhcp/groups/files/ so the menu link stays a substring.
 dhcpd.conf includes: enabled group files (own dir or settings.table_dir) + <table_dir>/Netbox_Devices-MAC. Subnet includes are OFF until pool templates exist (no file would exist). REST API serializers exist for all models (NetBox needs them for delete/changelog).
 Integration test: /home/user/it3.py (run with manage.py shell). Next: Pool templates (per POOL_TYPE, with export yes/no checkbox, Jinja, helpers first_usable/last_usable/ip(n), range validation), Netbox_Devices-MAC, generated files + hashes + manifest, signals, IP-restricted pages.
 Not tested inside NetBox by us: owner tests and reports back.

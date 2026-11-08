@@ -77,6 +77,11 @@ TR = {
     "lbl.dynamic_info": ("Plugin do tejto časti zapisuje výhradne cesty INCLUDE súborov, nie časti konfigurácie DHCP servera (žiadne statické IP, hosty ani subnety).",
                          "The plugin writes only INCLUDE file paths into this part, never parts of the DHCP server configuration (no static IPs, hosts or subnets)."),
     "lbl.no_includes": ("Zatiaľ žiadne INCLUDE súbory.", "No INCLUDE files yet."),
+    "menu.plugin": ("CFG pluginu", "Plugin CFG"),
+    "menu.dhcp": ("DHCP-CFG", "DHCP-CFG"),
+    "hub.base": ("Statická časť a INCLUDE súbory hlavného konfiguračného súboru.", "Static part and INCLUDE files of the main configuration file."),
+    "hub.dns": ("DNS servery pre subnety (najviac 2 v použití).", "DNS servers for subnets (at most 2 in use)."),
+    "hub.hosts": ("Tenanti: MAC adresy, statické IP a tabuľky tried.", "Tenants: MAC addresses, static IPs and class tables."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

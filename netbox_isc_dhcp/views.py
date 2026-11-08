@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views import View
 from netbox.object_actions import AddObject, BulkDelete
 from netbox.views import generic
@@ -268,3 +269,16 @@ def _baseconfig_context(request, instance):
     includes, warnings = table_includes()
     path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
     return {"file_path": path, "includes": includes, "include_warnings": warnings}
+
+
+# --- DHCP-CFG hub: the menu item that leads to all DHCP configuration parts ------
+class DHCPHubView(LoginRequiredMixin, View):
+    def get(self, request):
+        from django.shortcuts import render
+
+        items = [
+            ("plugins:netbox_isc_dhcp:baseconfig_list", "mdi-file-cog-outline", "menu.base", "hub.base"),
+            ("plugins:netbox_isc_dhcp:dnsserver_list", "mdi-dns-outline", "menu.dns", "hub.dns"),
+            ("plugins:netbox_isc_dhcp:dhcpgroup_list", "mdi-lan-connect", "menu.hosts", "hub.hosts"),
+        ]
+        return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
