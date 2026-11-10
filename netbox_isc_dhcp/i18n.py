@@ -132,6 +132,7 @@ TR = {
     "err.var_exists": ("Premenná {name} už existuje.", "Variable {name} already exists."),
     "err.var_used": ("Premenná {name} sa používa – popis sa nedá meniť ani zmazať.", "Variable {name} is in use – it cannot be renamed or deleted."),
     "err.var_factor": ("Násobok musí byť číslo od 1 do 10.", "Factor must be a number from 1 to 10."),
+    "lbl.no_dns_servers": ("Najprv pridajte DNS servery v sekcii DNS servery.", "Add DNS servers in the DNS servers section first."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }

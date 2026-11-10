@@ -472,12 +472,27 @@ class VariablesView(LoginRequiredMixin, View):
                          "used_by": usage.get(v.name, []), "dns_ids": set(v.dns_servers or [])})
         groups = {}
         for key, (label, group, kind, _) in CATALOG.items():
-            groups.setdefault(group, []).append((key, label))
+            groups.setdefault(group, []).append((key, label, kind))
         st = PluginSettings.objects.first()
         return render(request, "netbox_isc_dhcp/variables.html", {
             "rows": rows, "catalog_groups": groups, "dns_all": DNSServer.objects.all(),
             "lease_factor": st.lease_factor if st else 1.3,
         })
+
+
+def _apply_value(obj, post):
+    """Set the value of a variable from the form, by the kind of its ISC option."""
+    from .variables import kind_of
+
+    kind = kind_of(obj.option)
+    if kind == "dns":
+        obj.dns_servers = [int(x) for x in post.getlist("dns") if x.isdigit()]
+    elif kind == "raw":
+        obj.value = post.get("value_raw", post.get("value", ""))
+    elif kind in ("allowdeny", "truefalse", "onoff"):
+        obj.value = post.get(f"value_{kind}", post.get("value", "")).strip()
+    else:
+        obj.value = post.get("value_text", post.get("value", "")).strip()
 
 
 class VariablesInlineView(LoginRequiredMixin, View):
@@ -494,6 +509,8 @@ class VariablesInlineView(LoginRequiredMixin, View):
         used = obj is not None and obj.name in variable_usage()
         err = ""
         if action == "add":
+            from .variables import VariableError
+
             option = request.POST.get("option", "")
             if option not in CATALOG:
                 err = t("err.var_option")
@@ -502,7 +519,13 @@ class VariablesInlineView(LoginRequiredMixin, View):
             elif ConfigVariable.objects.filter(name=value).exists():
                 err = t("err.var_exists", name=value)
             else:
-                ConfigVariable.objects.create(name=value, option=option)
+                new = ConfigVariable(name=value, option=option)
+                _apply_value(new, request.POST)
+                try:
+                    new.lines()  # value is set right at creation and must be valid
+                    new.save()
+                except VariableError as exc:
+                    err = str(exc)
         elif obj is not None and action == "rename":
             if used:
                 err = t("err.var_used", name=obj.name)
@@ -514,12 +537,9 @@ class VariablesInlineView(LoginRequiredMixin, View):
                 obj.name = value
                 obj.save()
         elif obj is not None and action == "set_value":
-            from .variables import VariableError, kind_of
+            from .variables import VariableError
 
-            if kind_of(obj.option) == "dns":
-                obj.dns_servers = [int(x) for x in request.POST.getlist("dns") if x.isdigit()]
-            else:
-                obj.value = request.POST.get("value", "") if kind_of(obj.option) == "raw" else value
+            _apply_value(obj, request.POST)
             try:
                 obj.lines()
             except VariableError as exc:

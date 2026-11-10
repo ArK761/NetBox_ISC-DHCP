@@ -27,11 +27,11 @@
               <i class="mdi mdi-pencil-outline text-muted"></i></summary>
             <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="set_value"><input type="hidden" name="pk" value="{{ r.obj.pk }}">
               {% if r.kind == "dns" %}<div class="d-flex flex-column">{% for d in dns_all %}<label class="text-nowrap"><input type="checkbox" name="dns" value="{{ d.pk }}"{% if d.pk in r.dns_ids %} checked{% endif %}> {{ d.name }} <code>{{ d.ip }}</code></label>{% endfor %}</div>
-              {% elif r.kind == "allowdeny" %}<select name="value" class="form-select form-select-sm"><option value="allow"{% if r.obj.value == "allow" %} selected{% endif %}>allow</option><option value="deny"{% if r.obj.value == "deny" %} selected{% endif %}>deny</option></select>
-              {% elif r.kind == "truefalse" %}<select name="value" class="form-select form-select-sm"><option value="true"{% if r.obj.value == "true" %} selected{% endif %}>true</option><option value="false"{% if r.obj.value == "false" %} selected{% endif %}>false</option></select>
-              {% elif r.kind == "onoff" %}<select name="value" class="form-select form-select-sm"><option value="on"{% if r.obj.value == "on" %} selected{% endif %}>on</option><option value="off"{% if r.obj.value == "off" %} selected{% endif %}>off</option></select>
-              {% elif r.kind == "raw" %}<textarea name="value" rows="4" class="form-control font-monospace code-editor" style="min-width:24rem">{{ r.obj.value }}</textarea>
-              {% else %}<input name="value" value="{{ r.obj.value }}" class="form-control form-control-sm font-monospace" placeholder="{% if r.kind == 'lease' or r.kind == 'number' %}600{% elif r.kind == 'ip' %}10.0.0.1{% elif r.kind == 'iplist' %}10.0.0.1, 10.0.0.2{% else %}text{% endif %}">{% endif %}
+              {% elif r.kind == "allowdeny" %}<select name="value_allowdeny" class="form-select form-select-sm"><option value="allow"{% if r.obj.value == "allow" %} selected{% endif %}>allow</option><option value="deny"{% if r.obj.value == "deny" %} selected{% endif %}>deny</option></select>
+              {% elif r.kind == "truefalse" %}<select name="value_truefalse" class="form-select form-select-sm"><option value="true"{% if r.obj.value == "true" %} selected{% endif %}>true</option><option value="false"{% if r.obj.value == "false" %} selected{% endif %}>false</option></select>
+              {% elif r.kind == "onoff" %}<select name="value_onoff" class="form-select form-select-sm"><option value="on"{% if r.obj.value == "on" %} selected{% endif %}>on</option><option value="off"{% if r.obj.value == "off" %} selected{% endif %}>off</option></select>
+              {% elif r.kind == "raw" %}<textarea name="value_raw" rows="4" class="form-control font-monospace code-editor" style="min-width:24rem">{{ r.obj.value }}</textarea>
+              {% else %}<input name="value_text" value="{{ r.obj.value }}" class="form-control form-control-sm font-monospace" placeholder="{% if r.kind == 'lease' or r.kind == 'number' %}600{% elif r.kind == 'ip' %}10.0.0.1{% elif r.kind == 'iplist' %}10.0.0.1, 10.0.0.2{% else %}text{% endif %}">{% endif %}
               <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td>
         <td>{% if r.lines %}<pre class="m-0 small">{{ r.lines }}</pre>{% else %}<span class="text-muted small">{{ r.error }}</span>{% endif %}</td>
         <td class="text-end">{% if not r.used_by %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="delete"><input type="hidden" name="pk" value="{{ r.obj.pk }}">
@@ -40,13 +40,36 @@
       {% empty %}<tr><td colspan="5" class="text-muted">{% tr "lbl.var_none" %}</td></tr>{% endfor %}
     </table>
     <div class="card-body border-top">
-      <form method="post" action="{{ inline_url }}" class="d-flex flex-wrap gap-2 align-items-center">{% csrf_token %}<input type="hidden" name="field" value="add">
-        <input type="search" placeholder="{% tr 'lbl.search' %}" class="form-control form-control-sm" style="max-width:12rem"
-          oninput="var q=this.value.toLowerCase(),s=this.form.option;Array.prototype.forEach.call(s.options,function(o){if(o.value)o.hidden=o.textContent.toLowerCase().indexOf(q)<0});">
-        <select name="option" class="form-select form-select-sm" style="max-width:22rem" required><option value="">{% tr "lbl.var_pick" %}</option>
-          {% for g, items in catalog_groups.items %}<optgroup label="{{ g }}">{% for k, l in items %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</optgroup>{% endfor %}</select>
-        <input name="value" placeholder="{% tr 'lbl.var_desc' %}" class="form-control form-control-sm font-monospace" style="max-width:18rem" required>
-        <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.var_add" %}</button></form>
+      <form method="post" action="{{ inline_url }}" id="var-add">{% csrf_token %}<input type="hidden" name="field" value="add">
+        <div class="d-flex flex-wrap gap-2 align-items-start">
+          <input type="search" placeholder="{% tr 'lbl.search' %}" class="form-control form-control-sm" style="max-width:12rem"
+            oninput="var q=this.value.toLowerCase(),s=this.form.option;Array.prototype.forEach.call(s.options,function(o){if(o.value)o.hidden=o.textContent.toLowerCase().indexOf(q)<0});">
+          <select name="option" class="form-select form-select-sm" style="max-width:22rem" required onchange="iscVarKind(this)"><option value="">{% tr "lbl.var_pick" %}</option>
+            {% for g, items in catalog_groups.items %}<optgroup label="{{ g }}">{% for k, l, kind in items %}<option value="{{ k }}" data-kind="{{ kind }}">{{ l }}</option>{% endfor %}</optgroup>{% endfor %}</select>
+          <input name="value" placeholder="{% tr 'lbl.var_desc' %}" class="form-control form-control-sm font-monospace" style="max-width:18rem" required>
+        </div>
+        <div class="my-2" id="var-add-value">
+          <div data-kinds="dns" hidden><strong class="d-block small mb-1">{% tr "lbl.var_value" %}:</strong>
+            {% for d in dns_all %}<label class="d-block text-nowrap"><input type="checkbox" name="dns" value="{{ d.pk }}"> {{ d.name }} <code>{{ d.ip }}</code></label>{% empty %}<span class="text-warning">{% tr "lbl.no_dns_servers" %}</span>{% endfor %}</div>
+          <input data-kinds="lease number ip iplist quoted quotedlist" hidden name="value_text" class="form-control form-control-sm font-monospace" style="max-width:24rem" placeholder="{% tr 'lbl.var_value' %}">
+          <select data-kinds="allowdeny" hidden name="value_allowdeny" class="form-select form-select-sm" style="max-width:10rem"><option>allow</option><option>deny</option></select>
+          <select data-kinds="truefalse" hidden name="value_truefalse" class="form-select form-select-sm" style="max-width:10rem"><option>true</option><option>false</option></select>
+          <select data-kinds="onoff" hidden name="value_onoff" class="form-select form-select-sm" style="max-width:10rem"><option>on</option><option>off</option></select>
+          <textarea data-kinds="raw" hidden name="value_raw" rows="4" class="form-control font-monospace code-editor" style="max-width:40rem" placeholder="deny duplicates;"></textarea>
+        </div>
+        <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.var_add" %}</button>
+      </form>
+      <script>
+        function iscVarKind(sel) {
+          var o = sel.options[sel.selectedIndex], kind = o ? o.getAttribute("data-kind") : "";
+          var ph = {lease: "600 (sekundy)", number: "600", ip: "10.0.0.1", iplist: "10.0.0.1, 10.0.0.2", quoted: "firma.local", quotedlist: "a.local, b.local"};
+          document.querySelectorAll("#var-add-value [data-kinds]").forEach(function (el) {
+            var on = (" " + el.getAttribute("data-kinds") + " ").indexOf(" " + kind + " ") > -1;
+            el.hidden = !on;
+            if (on && el.name === "value_text") el.placeholder = ph[kind] || "";
+          });
+        }
+      </script>
     </div>
   </div>
 </div></div>
