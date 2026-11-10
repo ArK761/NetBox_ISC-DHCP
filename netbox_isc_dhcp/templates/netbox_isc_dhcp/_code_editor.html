@@ -2,10 +2,16 @@
 {{ editor_vars|json_script:"isc-vars" }}
 <style>
   textarea.code-editor { white-space: pre; overflow-x: auto; font-family: monospace; }
-  #isc-ac { position: absolute; z-index: 3000; max-height: 16rem; overflow: auto; min-width: 22rem; display: none; }
-  #isc-ac .active { background: var(--tblr-primary, #0d6efd); color: #fff; }
+  #isc-ac { position: absolute; z-index: 3000; max-height: 16rem; overflow: auto; min-width: 24rem; display: none;
+            background: #111827; border: 1px solid #9ca3af; border-radius: .375rem; box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.5); }
+  #isc-ac button { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #374151;
+                   background: #111827; color: #f9fafb; padding: .35rem .6rem; font-size: .85rem; }
+  #isc-ac button strong { color: #fde68a; }
+  #isc-ac button code { color: #d1d5db; background: transparent; font-size: .8rem; }
+  #isc-ac button.active { background: #fbbf24; color: #111827; }
+  #isc-ac button.active strong, #isc-ac button.active code { color: #111827; }
 </style>
-<div id="isc-ac" class="list-group shadow"></div>
+<div id="isc-ac"></div>
 <script>
 (function () {
   var vars = JSON.parse(document.getElementById("isc-vars").textContent || "[]");
@@ -22,11 +28,22 @@
     if (!items.length) { hide(); return; }
     idx = Math.min(idx, items.length - 1);
     box.innerHTML = items.map(function (v, i) {
-      return '<button type="button" class="list-group-item list-group-item-action py-1' + (i === idx ? ' active' : '') + '" data-i="' + i + '">' +
+      return '<button type="button" class="' + (i === idx ? 'active' : '') + '" data-i="' + i + '">' +
         '<strong>' + v.name + '</strong><br><code class="small">' + v.lines.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ⏎ ") + '</code></button>';
     }).join("");
-    var r = t.getBoundingClientRect();
-    box.style.left = (window.scrollX + r.left) + "px"; box.style.top = (window.scrollY + r.bottom + 2) + "px"; box.style.display = "block";
+    var r = t.getBoundingClientRect(), c = caret(t);
+    var left = Math.min(r.left + c.left, r.right - 260), top = r.top + c.top + c.height + 4;
+    box.style.left = (window.scrollX + Math.max(r.left, left)) + "px"; box.style.top = (window.scrollY + top) + "px"; box.style.display = "block";
+  }
+  // position of the text cursor inside the textarea (mirror div technique)
+  function caret(t) {
+    var cs = getComputedStyle(t), d = document.createElement("div"), sp = document.createElement("span");
+    ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingLeft", "paddingRight",
+     "borderTopWidth", "borderLeftWidth", "tabSize"].forEach(function (k) { d.style[k] = cs[k]; });
+    d.style.position = "absolute"; d.style.visibility = "hidden"; d.style.whiteSpace = "pre"; d.style.top = "0"; d.style.left = "-9999px";
+    d.textContent = t.value.slice(0, t.selectionStart); sp.textContent = "."; d.appendChild(sp); document.body.appendChild(d);
+    var res = {left: sp.offsetLeft - t.scrollLeft, top: sp.offsetTop - t.scrollTop, height: parseFloat(cs.lineHeight) || 18};
+    document.body.removeChild(d); return res;
   }
   function pick(i) {
     var m = token(ta); if (!m || !items[i]) return;
