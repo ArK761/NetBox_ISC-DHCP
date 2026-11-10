@@ -1,4 +1,5 @@
-from netbox_isc_dhcp.subnet_render import context, default_pool_template, render_subnet, validate
+import pytest
+from netbox_isc_dhcp.subnet_render import context, default_pool_template, render_subnet, structure_errors, validate
 
 
 def test_helpers_never_return_network_or_broadcast():
@@ -22,7 +23,7 @@ def test_fixed_ranges_outside_or_overlapping_are_reported():
     assert validate("range 10.0.1.5 10.0.1.9;", "10.0.0.0/24")
     assert validate("range 10.0.0.5 10.0.0.9;\nrange 10.0.0.8 10.0.0.20;", "10.0.0.0/24")
     assert validate("range 10.0.0.9 10.0.0.5;", "10.0.0.0/24")
-    assert validate("subnet x {", "10.0.0.0/24")
+    assert structure_errors("subnet 10.0.0.0 netmask 255.255.255.0 {", "10.0.0.0/24")
     assert validate("range 10.0.0.5 10.0.0.9;\nrange 10.0.0.10 10.0.0.20;", "10.0.0.0/24") == []
 
 
@@ -36,3 +37,78 @@ def test_gateway_is_global_first_or_last_usable():
 def test_gateway_inside_a_range_is_an_error():
     tpl = "subnet {{ network }} netmask {{ netmask }} {\n option routers {{ gateway }};\n pool { range {{ ip(1) }} {{ ip(20) }}; }\n}\n"
     assert any("gateway" in e for e in render_subnet(tpl, "10.20.0.0/24")[1])
+
+
+from netbox_isc_dhcp.subnet_render import structure_errors
+
+GOOD = """## comment { not a block }
+subnet 10.20.0.0 netmask 255.255.255.0 {
+    default-lease-time 600;
+    option routers 10.20.0.1;
+    option domain-name-servers 10.0.0.1,10.0.0.2;
+    deny duplicates;
+    pool {
+        range 10.20.0.10 10.20.0.100;
+        default-lease-time 300;
+        deny members of "A";
+        deny members of "B";
+        log (info, concat ("X ## ", host-decl-name, " ## ", binary-to-ascii (10, 8, ".", leased-address)));
+    }
+}
+"""
+
+
+def test_good_file_has_no_errors():
+    assert structure_errors(GOOD, "10.20.0.0/24") == []
+
+
+def test_owner_case_option_outside_subnet_and_twice():
+    bad = "option domain-name-servers 1.1.1.1;\n" + GOOD.replace("    deny duplicates;", "    deny duplicates;\n    option domain-name-servers 8.8.8.8;") + "option domain-name-servers 1.1.1.1;\n"
+    e = structure_errors(bad, "10.20.0.0/24")
+    assert sum("outside the subnet block" in x for x in e) == 2 and any("set twice" in x for x in e)
+
+
+def test_missing_semicolon_quote_paren_brace_and_wrong_subnet():
+    assert any("missing ';'" in x for x in structure_errors(GOOD.replace("deny duplicates;", "deny duplicates"), "10.20.0.0/24"))
+    assert any("quote" in x for x in structure_errors(GOOD.replace('"A";', '"A;'), "10.20.0.0/24"))
+    assert any("parenthes" in x for x in structure_errors(GOOD.replace("leased-address)));", "leased-address));"), "10.20.0.0/24"))
+    assert any("closing brace" in x for x in structure_errors(GOOD.rstrip().rstrip("}"), "10.20.0.0/24"))
+    assert any("subnet must be" in x for x in structure_errors(GOOD, "10.30.0.0/24"))
+
+
+SITE = {"options": {"wpad"}, "vars": {"foo"}, "classes": set()}
+CLASSES = {"A", "B"}
+
+
+def errs(snippet, prefix="10.20.0.0/24"):
+    return structure_errors(GOOD.replace("    deny duplicates;", "    deny duplicates;\n" + snippet), prefix, SITE, CLASSES)
+
+
+def test_good_file_with_site_context():
+    assert structure_errors(GOOD, "10.20.0.0/24", SITE, CLASSES) == []
+
+
+@pytest.mark.parametrize("line,expect", [
+    ("    optin routers 10.20.0.1;", "unknown statement 'optin'"),
+    ("    default-lease-tim 600;", "unknown statement 'default-lease-tim'"),
+    ("    option dns-servers 1.1.1.1;", "unknown option 'dns-servers'"),
+    ("    option ntp-servers 1.1.1.999;", "not an IPv4 address or host name"),
+    ("    option interface-mtu big;", "not a number"),
+    ("    option domain-name firma.local;", "text in quotes"),
+    ("    option subnet-mask 255.255.0.0;", "differs from the subnet mask"),
+    ("    max-lease-time 100;", "greater than max-lease-time"),
+    ('    allow members of "Nope";', 'class "Nope" is not defined'),
+    ('    log (info, concat("X ", fooo, binary-to-asci(10, 8, ".", leased-address)));', "unknown word(s) binary-to-asci, fooo"),
+    ("    filename pxelinux.0;", "text in quotes"),
+])
+def test_deep_checks(line, expect):
+    assert any(expect in e for e in errs(line)), errs(line)
+
+
+def test_custom_option_and_set_variable_from_static_part_are_accepted():
+    assert errs('    option wpad "http://x/wpad.dat";\n    log (info, concat("MAC ", foo));') == []
+
+
+def test_routers_outside_subnet():
+    bad = GOOD.replace("option routers 10.20.0.1;", "option routers 10.30.0.1;")
+    assert any("not a usable address" in e for e in structure_errors(bad, "10.20.0.0/24", SITE, CLASSES))

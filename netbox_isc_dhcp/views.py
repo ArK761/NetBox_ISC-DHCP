@@ -418,8 +418,37 @@ def _pooltemplate_context(request, instance):
         dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
         text, errors = render_subnet(instance.template, str(getattr(chosen, "prefix", "")), dns,
                                      {"obj": chosen, "cf": getattr(chosen, "custom_field_data", {}) or {}},
-                                     gateway_mode=cfg.gateway_mode if cfg else "first", snippets=variable_snippets())
-    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars()}
+                                     gateway_mode=cfg.gateway_mode if cfg else "first", snippets=variable_snippets(),
+                                     **__import__("netbox_isc_dhcp.services", fromlist=["x"]).check_context())
+    errors = [tmsg(e) for e in errors]
+    draft = request.session.pop(f"isc_pool_draft_{instance.pk}", None)
+    if draft:
+        draft["problems"] = [(tmsg(e), n, pfx) for e, n, pfx in draft["problems"]]
+    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars(), "draft": draft}
+
+
+def _check_pool_code(instance, code):
+    """Render the code on EVERY prefix of the pool. Returns (checked prefixes, [(prefix, error), ...])."""
+    from .models import DNSServer
+    from .services import variable_snippets
+    from .source_fields import _field_q
+    from .subnet_render import render_subnet
+
+    cfg = SubnetConfig.objects.first()
+    model, qs, key = _pool_info(cfg) if cfg else (None, None, None)
+    value = next((v for v, l in _pool_names(model, qs, key) if l == instance.name), None) if key is not None else None
+    if value is None:
+        return 0, []
+    from .services import check_context
+
+    dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
+    snippets, problems, n, ctx = variable_snippets(), [], 0, check_context()
+    for obj in qs.filter(_field_q(model, key["field"], [value]))[:5000]:
+        n += 1
+        _, errs = render_subnet(code, str(getattr(obj, "prefix", "")), dns, {"obj": obj, "cf": getattr(obj, "custom_field_data", {}) or {}},
+                                gateway_mode=cfg.gateway_mode, snippets=snippets, **ctx)
+        problems += [(str(obj.prefix), e) for e in errs]
+    return n, problems
 
 
 class PoolTemplateInlineView(View):
@@ -428,8 +457,31 @@ class PoolTemplateInlineView(View):
             raise PermissionDenied
         obj = get_object_or_404(PoolTemplate, pk=pk)
         field = request.POST.get("field")
+        draft_key = f"isc_pool_draft_{obj.pk}"
         if field == "template":
-            obj.template = request.POST.get("value", "")
+            from .variables import normalize
+
+            code = normalize(request.POST.get("value", ""))
+            checked, problems = _check_pool_code(obj, code)
+            if problems:
+                # refuse: the working code stays, the edited text is kept for fixing
+                grouped = {}
+                for pfx, e in problems:  # same error on many prefixes -> one line
+                    g = grouped.setdefault(e, [0, pfx])
+                    g[0] += 1
+                request.session[draft_key] = {"code": code, "problems": [(e, n, pfx) for e, (n, pfx) in list(grouped.items())[:20]],
+                                              "count": len(grouped), "prefixes": len({p for p, _ in problems}), "checked": checked}
+                messages.error(request, t("err.code_refused", n=len({p for p, _ in problems}), total=checked))
+                url = obj.get_absolute_url()
+                p = request.POST.get("p", "")
+                return redirect(f"{url}?p={p}" if p.isdigit() else url)
+            request.session.pop(draft_key, None)
+            obj.template = code
+            obj.save()
+            messages.success(request, t("msg.code_saved", n=checked))
+            url = obj.get_absolute_url()
+            p = request.POST.get("p", "")
+            return redirect(f"{url}?p={p}" if p.isdigit() else url)
         elif field == "enabled":
             obj.enabled = request.POST.get("value") == "1"
         obj.save()

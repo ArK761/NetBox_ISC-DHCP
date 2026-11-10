@@ -78,4 +78,16 @@
 <tr><td>Pools have number names</td><td>The key is on the wrong field – put it on the pool type field.</td></tr>
 <tr><td>"Selected: 0 objects"</td><td>Check the conditions; nothing ticked means the field does not filter.</td></tr>
 <tr><td>Error in pool preview</td><td>The code cannot be used for that prefix – adjust ranges (use <code>ip(n)</code>, <code>last_usable</code>).</td></tr></table>
+<h2>11. Pool code check</h2>
+<p>On every save the plugin tries the code on <b>all prefixes of the pool</b>. If it finds an error, the code is <b>not saved</b> (the last working code stays), the errors are listed with the number of prefixes and an example, and your text stays in the editor. Checked:</p>
+<ul><li>everything is inside one <code>subnet &lt;network&gt; netmask &lt;mask&gt; { }</code> block, network and mask match the prefix,</li>
+<li><code>;</code> at the end of statements, closed quotes, parentheses and <code>{ }</code>,</li>
+<li>unknown or misspelled statements and options (standard ISC options + own options from the static part <code>option X code N</code>),</li>
+<li>the same option twice in one block,</li>
+<li>values: IP addresses (routers, DNS, NTP…), numbers (lease times), quoted text (domain-name, filename…),</li>
+<li><code>option routers</code> on subnet level must be a usable address, <code>option subnet-mask</code> must match the mask, <code>default-lease-time</code> must not exceed <code>max-lease-time</code>,</li>
+<li>classes in <code>allow/deny members of "X"</code> must exist (tenant tables or static part),</li>
+<li>words in <code>log (...)</code> expressions – e.g. <code>foo</code> must be defined with <code>set foo = …</code> in the static part,</li>
+<li><code>range</code> inside the network, not overlapping, gateway outside ranges, <code>ip(n)</code> within usable addresses, unknown <code>USE</code>.</li></ul>
+<div class="note">The check does not replace <code>dhcpd -t</code> on the DHCP server, but it catches the common errors that would stop the DHCP server from starting.</div>
 </body></html>

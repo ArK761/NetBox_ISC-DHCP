@@ -50,8 +50,10 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   Used variables (any USE in pool/file code) are locked: no rename/delete. Code editors: no spellcheck, no wrap, `..` autocomplete (_code_editor.html).
   All text/code fields are stored with LF (browsers send CRLF) - pre_save signal.
   NEXT: store generated <network>_CFG files (sha256) + subnet includes in dhcpd.conf.
-  TODO AT THE END (owner): save-time protection of pool code: render on ALL prefixes of the pool, refuse save on errors (Jinja, ip(n) out of range,
-  ranges, gateway in range, braces, quotes, parentheses, missing ";", commas in concat). NO dhcpd on the NetBox server (never), so no dhcpd -t.
+  DONE v0.9.0: save-time protection of pool code (owner: "kontrola musí prebiehať poriadne"): code is rendered on ALL prefixes of the pool,
+  save refused on any error, draft kept in session + shown in editor, errors grouped (count + example prefix), Slovak via tmsg patterns.
+  Checks: subnet_render.structure_errors + isc_rules.py (statement/option whitelist, value types, routers/subnet-mask/lease rules,
+  classes from tenant tables + static part, log() words incl. `set` vars from the static part, custom `option X code N`). NO dhcpd on NetBox (never).
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
   click-to-add / click-to-set value (select for choices/bool/FK, text otherwise), all must match (source_fields.build_q).
 - ENGLISH: every UI text through i18n.py (SK + EN); validation messages of pure code are English, translated by tmsg(). Check with /home/user/en.py (EN crawl, 0 Slovak text).

@@ -78,4 +78,16 @@
 <tr><td>Pool má číselné názvy</td><td>Kľúč je na nesprávnom poli – dajte ho na pole s typom poolu.</td></tr>
 <tr><td>„Vybrané: 0 objektov"</td><td>Skontrolujte podmienky; nič nezaškrtnuté znamená, že pole nefiltruje.</td></tr>
 <tr><td>Chyba v náhľade poolu</td><td>Kód sa nedá použiť na daný rozsah – upravte rozsahy (použite <code>ip(n)</code>, <code>last_usable</code>).</td></tr></table>
+<h2>11. Kontrola kódu poolu</h2>
+<p>Pri každom uložení plugin kód vyskúša na <b>všetkých rozsahoch poolu</b>. Ak nájde chybu, kód <b>neuloží</b> (platí posledný funkčný), zobrazí zoznam chýb s počtom rozsahov a príkladom a váš text nechá v editore. Kontroluje sa:</p>
+<ul><li>všetko je vnútri jedného bloku <code>subnet &lt;sieť&gt; netmask &lt;maska&gt; { }</code>, sieť a maska sedia s rozsahom,</li>
+<li><code>;</code> na konci príkazov, uzavreté úvodzovky, zátvorky a <code>{ }</code>,</li>
+<li>neznáme alebo preklepnuté príkazy a voľby (zoznam štandardných volieb ISC + vlastné voľby zo statickej časti <code>option X code N</code>),</li>
+<li>tá istá voľba dvakrát v tom istom bloku,</li>
+<li>hodnoty: IP adresy (routers, DNS, NTP…), čísla (lease časy), text v úvodzovkách (domain-name, filename…),</li>
+<li><code>option routers</code> na úrovni subnetu musí byť použiteľná adresa siete, <code>option subnet-mask</code> sa musí zhodovať s maskou, <code>default-lease-time</code> nesmie byť väčší ako <code>max-lease-time</code>,</li>
+<li>triedy v <code>allow/deny members of "X"</code> musia existovať (tabuľky tenantov alebo statická časť),</li>
+<li>slová vo výrazoch <code>log (...)</code> – napr. <code>foo</code> musí byť definované cez <code>set foo = …</code> v statickej časti,</li>
+<li>rozsahy <code>range</code> vnútri siete, neprekrývajúce sa, brána mimo rozsahov, <code>ip(n)</code> v použiteľných adresách, neznáme <code>USE</code>.</li></ul>
+<div class="note">Kontrola nenahrádza <code>dhcpd -t</code> na DHCP serveri, ale zachytí bežné chyby, pre ktoré by DHCP server nenaštartoval.</div>
 </body></html>

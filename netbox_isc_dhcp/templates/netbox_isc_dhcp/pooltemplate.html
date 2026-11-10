@@ -15,9 +15,11 @@
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.template_code" %}</h5>
     <div class="card-body">
-      <details class="ie wide"><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.template }}</pre></summary>
+      {% if draft %}<div class="alert alert-danger d-block"><strong class="d-block mb-1">{% tr "lbl.code_refused" %}</strong>
+        <ul class="mb-0">{% for e, n, pfx in draft.problems %}<li>{{ e }} <span class="small opacity-75">– {% tr "lbl.in_prefixes" %} {{ n }}, {% tr "lbl.e_g" %} <code>{{ pfx }}</code></span></li>{% endfor %}</ul></div>{% endif %}
+      <details class="ie wide"{% if draft %} open{% endif %}><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.template }}</pre></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="template"><input type="hidden" name="p" value="{{ chosen.pk }}">
-          <textarea name="value" rows="24" class="form-control font-monospace code-editor">{{ object.template }}</textarea>
+          <textarea name="value" rows="24" class="form-control font-monospace code-editor">{% if draft %}{{ draft.code }}{% else %}{{ object.template }}{% endif %}</textarea>
           <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details>
       <div class="small text-muted mt-3"><strong>{% tr "lbl.variables" %}:</strong>
         <code>gateway</code> ({% tr "hint.gateway" %}) <code>network</code> <code>netmask</code> <code>prefix</code> <code>prefixlen</code> <code>broadcast</code> <code>first_usable</code> <code>last_usable</code>

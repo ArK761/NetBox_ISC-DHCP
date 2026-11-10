@@ -144,6 +144,11 @@ TR = {
     "hint.gateway": ("globálne, Subnety", "global, Subnets"),
     "hint.ip": ("n>0 od siete, n<0 od broadcastu, -1 = posledná použiteľná", "n>0 from the network, n<0 from the broadcast, -1 = last usable"),
     "ph.lease": ("600 (sekundy)", "600 (seconds)"),
+    "err.code_refused": ("Kód sa NEUložil: chyba v {n} z {total} rozsahov poolu. Platí posledný funkčný kód.", "Code NOT saved: errors in {n} of {total} prefixes of the pool. The last working code stays."),
+    "msg.code_saved": ("Kód uložený – skontrolovaný na {n} rozsahoch.", "Code saved – checked on {n} prefixes."),
+    "lbl.code_refused": ("Opravte chyby a uložte znova (váš text je v editore):", "Fix the errors and save again (your text is in the editor):"),
+    "lbl.in_prefixes": ("počet rozsahov:", "prefixes:"),
+    "lbl.e_g": ("napr.", "e.g."),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }
@@ -177,11 +182,39 @@ _MSG_SK = {
     "choose on or off": "vyberte on alebo off",
     "enter the text": "zadajte text",
 }
+_MSG_SK_PATTERNS = [
+    (r"line (\d+): '(.*)' is outside the subnet block", r"riadok \1: '\2' je mimo bloku subnet"),
+    (r"line (\d+): '(.*)' is set twice in the same block", r"riadok \1: '\2' je v tom istom bloku dvakrát"),
+    (r"line (\d+): missing ';' at the end of '(.*)'", r"riadok \1: chýba ';' na konci '\2'"),
+    (r"line (\d+): unclosed quote", r"riadok \1: neuzavretá úvodzovka"),
+    (r"line (\d+): unclosed parenthesis", r"riadok \1: neuzavretá zátvorka"),
+    (r"line (\d+): too many closing parentheses", r"riadok \1: priveľa zatváracích zátvoriek"),
+    (r"line (\d+): closing brace without an open block", r"riadok \1: '}' bez otvoreného bloku"),
+    (r"line (\d+): subnet must be '(.*)'", r"riadok \1: subnet musí byť '\2'"),
+    (r"missing closing brace '}'", r"chýba zatváracia '}'"),
+    (r"no 'subnet \.\.\. netmask \.\.\. \{' block", r"chýba blok 'subnet ... netmask ... {'"),
+    (r"more than one subnet block", r"viac ako jeden blok subnet"),
+    (r"ip\((-?\d+)\) is outside the usable addresses of (.*)", r"ip(\1) je mimo použiteľných adries \2"),
+    (r"range (\S+) (\S+) is not inside the usable addresses of (.*)", r"range \1 \2 nie je v použiteľných adresách \3"),
+    (r"range (\S+) (\S+) overlaps range (\S+) (\S+)", r"range \1 \2 sa prekrýva s range \3 \4"),
+    (r"range (\S+) (\S+): start is after end", r"range \1 \2: začiatok je za koncom"),
+    (r"gateway (\S+) is inside range (\S+) (\S+)", r"brána \1 je vnútri range \2 \3"),
+    (r"USE (\S+): unknown variable", r"USE \1: neznáma premenná"),
+]
 
 
 def tmsg(text: str) -> str:
     """Translate a validation message of the pure code (English) to the current language."""
-    return _MSG_SK.get(text, text) if current_language() == "sk" else text
+    if current_language() != "sk":
+        return text
+    if text in _MSG_SK:
+        return _MSG_SK[text]
+    import re
+
+    for pat, rep in _MSG_SK_PATTERNS:
+        if re.fullmatch(pat, text):
+            return re.sub(pat, rep, text)
+    return text
 
 
 def t(key: str, **kw) -> str:

@@ -121,3 +121,17 @@ def variable_usage() -> dict[str, list[str]]:
         for n in used_names(f.template):
             usage.setdefault(n, []).append(f"file {f.name}")
     return usage
+
+
+def check_context() -> dict:
+    """Site knowledge for code checks: custom options, set variables and classes (static part + tenant tables)."""
+    import re as _re
+
+    from .isc_rules import site_definitions
+
+    cfg = BaseConfig.objects.first()
+    site = site_definitions(cfg.static_text if cfg else "")
+    classes = set(site["classes"])
+    for content in DHCPFile.objects.values_list("content", flat=True):
+        classes |= set(_re.findall(r'\bclass\s+"([^"]+)"', content or ""))
+    return {"site": site, "known_classes": classes}
