@@ -54,6 +54,9 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   ranges, gateway in range, braces, quotes, parentheses, missing ";", commas in concat). NO dhcpd on the NetBox server (never), so no dhcpd -t.
 - (old) dhcpd.conf source: object = any public NetBox object type except core/extras/users/plugin (empty by default) + conditions list [{field, value}] on ANY field of the object (standard + cf_<name>),
   click-to-add / click-to-set value (select for choices/bool/FK, text otherwise), all must match (source_fields.build_q).
+- ENGLISH: every UI text through i18n.py (SK + EN); validation messages of pure code are English, translated by tmsg(). Check with /home/user/en.py (EN crawl, 0 Slovak text).
+- MANUAL (PDF, owner wants it updated continuously): sources docs/src/manual_sk.html + manual_en.html, build `node docs/src/build_pdf.js v<version>` -> docs/NAVOD_SK.pdf + docs/MANUAL_EN.pdf. Update both on every feature. No site data in it.
+- NetBox turns every <select> into a TomSelect widget (ignores `hidden`): add class `no-ts` to selects that must hide/show.
 - Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
 
 ## Status

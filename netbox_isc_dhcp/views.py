@@ -8,7 +8,7 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import forms, tables
-from .i18n import t, t_lazy
+from .i18n import t, t_lazy, tmsg
 from .models import MAX_ACTIVE_DNS, PoolTemplate, SubnetConfig, BaseConfig, DHCPFile, DHCPGroup, DHCPPath, DNSServer, PluginSettings
 from .services import build_base_config
 
@@ -464,15 +464,16 @@ class VariablesView(LoginRequiredMixin, View):
         rows = []
         for v in ConfigVariable.objects.all():
             label, group, kind, _ = CATALOG.get(v.option, (v.option, "", "raw", ""))
+            label = t("opt.raw") if v.option == "raw" else label
             try:
                 lines, err = v.lines(), ""
             except VariableError as exc:
-                lines, err = "", str(exc)
+                lines, err = "", tmsg(str(exc))
             rows.append({"obj": v, "label": label, "kind": kind, "lines": lines, "error": err,
                          "used_by": usage.get(v.name, []), "dns_ids": set(v.dns_servers or [])})
         groups = {}
         for key, (label, group, kind, _) in CATALOG.items():
-            groups.setdefault(group, []).append((key, label, kind))
+            groups.setdefault(t(f"grp.{group}"), []).append((key, t("opt.raw") if key == "raw" else label, kind))
         st = PluginSettings.objects.first()
         return render(request, "netbox_isc_dhcp/variables.html", {
             "rows": rows, "catalog_groups": groups, "dns_all": DNSServer.objects.all(),
@@ -525,7 +526,7 @@ class VariablesInlineView(LoginRequiredMixin, View):
                     new.lines()  # value is set right at creation and must be valid
                     new.save()
                 except VariableError as exc:
-                    err = str(exc)
+                    err = tmsg(str(exc))
         elif obj is not None and action == "rename":
             if used:
                 err = t("err.var_used", name=obj.name)
@@ -543,7 +544,7 @@ class VariablesInlineView(LoginRequiredMixin, View):
             try:
                 obj.lines()
             except VariableError as exc:
-                err = str(exc)
+                err = tmsg(str(exc))
             if not err:
                 obj.save()
         elif obj is not None and action == "delete":

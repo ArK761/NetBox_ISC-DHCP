@@ -40,11 +40,12 @@
       {% empty %}<tr><td colspan="5" class="text-muted">{% tr "lbl.var_none" %}</td></tr>{% endfor %}
     </table>
     <div class="card-body border-top">
+      <style>#var-add-value [hidden] { display: none !important; }</style>
       <form method="post" action="{{ inline_url }}" id="var-add">{% csrf_token %}<input type="hidden" name="field" value="add">
         <div class="d-flex flex-wrap gap-2 align-items-start">
           <input type="search" placeholder="{% tr 'lbl.search' %}" class="form-control form-control-sm" style="max-width:12rem"
             oninput="var q=this.value.toLowerCase(),s=this.form.option;Array.prototype.forEach.call(s.options,function(o){if(o.value)o.hidden=o.textContent.toLowerCase().indexOf(q)<0});">
-          <select name="option" class="form-select form-select-sm" style="max-width:22rem" required onchange="iscVarKind(this)"><option value="">{% tr "lbl.var_pick" %}</option>
+          <select name="option" class="form-select form-select-sm no-ts" style="max-width:22rem" required onchange="iscVarKind(this)"><option value="">{% tr "lbl.var_pick" %}</option>
             {% for g, items in catalog_groups.items %}<optgroup label="{{ g }}">{% for k, l, kind in items %}<option value="{{ k }}" data-kind="{{ kind }}">{{ l }}</option>{% endfor %}</optgroup>{% endfor %}</select>
           <input name="value" placeholder="{% tr 'lbl.var_desc' %}" class="form-control form-control-sm font-monospace" style="max-width:18rem" required>
         </div>
@@ -52,9 +53,9 @@
           <div data-kinds="dns" hidden><strong class="d-block small mb-1">{% tr "lbl.var_value" %}:</strong>
             {% for d in dns_all %}<label class="d-block text-nowrap"><input type="checkbox" name="dns" value="{{ d.pk }}"> {{ d.name }} <code>{{ d.ip }}</code></label>{% empty %}<span class="text-warning">{% tr "lbl.no_dns_servers" %}</span>{% endfor %}</div>
           <input data-kinds="lease number ip iplist quoted quotedlist" hidden name="value_text" class="form-control form-control-sm font-monospace" style="max-width:24rem" placeholder="{% tr 'lbl.var_value' %}">
-          <select data-kinds="allowdeny" hidden name="value_allowdeny" class="form-select form-select-sm" style="max-width:10rem"><option>allow</option><option>deny</option></select>
-          <select data-kinds="truefalse" hidden name="value_truefalse" class="form-select form-select-sm" style="max-width:10rem"><option>true</option><option>false</option></select>
-          <select data-kinds="onoff" hidden name="value_onoff" class="form-select form-select-sm" style="max-width:10rem"><option>on</option><option>off</option></select>
+          <select data-kinds="allowdeny" hidden name="value_allowdeny" class="form-select form-select-sm no-ts" style="max-width:10rem"><option>allow</option><option>deny</option></select>
+          <select data-kinds="truefalse" hidden name="value_truefalse" class="form-select form-select-sm no-ts" style="max-width:10rem"><option>true</option><option>false</option></select>
+          <select data-kinds="onoff" hidden name="value_onoff" class="form-select form-select-sm no-ts" style="max-width:10rem"><option>on</option><option>off</option></select>
           <textarea data-kinds="raw" hidden name="value_raw" rows="4" class="form-control font-monospace code-editor" style="max-width:40rem" placeholder="deny duplicates;"></textarea>
         </div>
         <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus-thick"></i> {% tr "lbl.var_add" %}</button>
@@ -62,7 +63,7 @@
       <script>
         function iscVarKind(sel) {
           var o = sel.options[sel.selectedIndex], kind = o ? o.getAttribute("data-kind") : "";
-          var ph = {lease: "600 (sekundy)", number: "600", ip: "10.0.0.1", iplist: "10.0.0.1, 10.0.0.2", quoted: "firma.local", quotedlist: "a.local, b.local"};
+          var ph = {lease: "{% tr "ph.lease" %}", number: "600", ip: "10.0.0.1", iplist: "10.0.0.1, 10.0.0.2", quoted: "firma.local", quotedlist: "a.local, b.local"};
           document.querySelectorAll("#var-add-value [data-kinds]").forEach(function (el) {
             var on = (" " + el.getAttribute("data-kinds") + " ").indexOf(" " + kind + " ") > -1;
             el.hidden = !on;

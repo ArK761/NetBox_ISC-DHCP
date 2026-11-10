@@ -133,6 +133,17 @@ TR = {
     "err.var_used": ("Premenná {name} sa používa – popis sa nedá meniť ani zmazať.", "Variable {name} is in use – it cannot be renamed or deleted."),
     "err.var_factor": ("Násobok musí byť číslo od 1 do 10.", "Factor must be a number from 1 to 10."),
     "lbl.no_dns_servers": ("Najprv pridajte DNS servery v sekcii DNS servery.", "Add DNS servers in the DNS servers section first."),
+    "grp.lease": ("Lease", "Lease"),
+    "grp.dns": ("DNS", "DNS"),
+    "grp.net": ("Sieť", "Network"),
+    "grp.access": ("Prístup", "Access"),
+    "grp.pxe": ("PXE / boot", "PXE / boot"),
+    "grp.ddns": ("DDNS", "DDNS"),
+    "grp.own": ("Vlastné", "Own"),
+    "opt.raw": ("Vlastný text (ľubovoľné riadky)", "Own text (any lines)"),
+    "hint.gateway": ("globálne, Subnety", "global, Subnets"),
+    "hint.ip": ("n>0 od siete, n<0 od broadcastu, -1 = posledná použiteľná", "n>0 from the network, n<0 from the broadcast, -1 = last usable"),
+    "ph.lease": ("600 (sekundy)", "600 (seconds)"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }
@@ -149,6 +160,28 @@ def current_language() -> str:
     except Exception:  # DB not ready (e.g. before migrate)
         pass
     return "sk"
+
+
+# Validation messages come from pure code in English; Slovak versions:
+_MSG_SK = {
+    "lease must be a positive number of seconds": "lease musí byť kladné číslo (sekundy)",
+    "pick at least one DNS server": "zvoľte aspoň jeden DNS server",
+    "value must be a whole number": "hodnota musí byť celé číslo",
+    "value must be an IPv4 address": "hodnota musí byť IPv4 adresa",
+    "value must be IPv4 addresses separated by commas": "hodnota musia byť IPv4 adresy oddelené čiarkou",
+    "enter at least one address": "zadajte aspoň jednu adresu",
+    "enter a text without quotes (they are added automatically)": "zadajte text bez úvodzoviek (doplnia sa samé)",
+    "enter texts separated by commas, without quotes": "zadajte texty oddelené čiarkou, bez úvodzoviek",
+    "choose allow or deny": "vyberte allow alebo deny",
+    "choose true or false": "vyberte true alebo false",
+    "choose on or off": "vyberte on alebo off",
+    "enter the text": "zadajte text",
+}
+
+
+def tmsg(text: str) -> str:
+    """Translate a validation message of the pure code (English) to the current language."""
+    return _MSG_SK.get(text, text) if current_language() == "sk" else text
 
 
 def t(key: str, **kw) -> str:

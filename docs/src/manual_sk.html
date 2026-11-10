@@ -1,0 +1,81 @@
+<!doctype html><html lang="sk"><head><meta charset="utf-8"><title>NetBox ISC DHCP – návod</title><link rel="stylesheet" href="style.css"></head><body>
+<h1>NetBox ISC DHCP – návod</h1>
+<div class="meta">Plugin pre NetBox 4.7+, ktorý z dát NetBoxu skladá konfiguráciu ISC DHCP servera. Verzia návodu: {{VERSION}}</div>
+
+<h2>1. Čo plugin robí</h2>
+<p>Plugin z objektov NetBoxu (tenanti, prefixy, DNS servery) vytvára súbory pre ISC DHCP server: hlavný <code>dhcpd.conf</code>, tabuľky tried a statických hostov pre skupiny tenantov a súbory subnetov podľa typu poolu. Súbory sa ukladajú hotové (s hashom SHA256) a prepočítajú sa pri zmene dát. DHCP server si ich sťahuje vlastným skriptom.</p>
+
+<h2>2. Inštalácia a aktualizácia</h2>
+<pre>sudo bash -c 'source /opt/netbox/venv/bin/activate &amp;&amp; pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@&lt;COMMIT&gt;" &amp;&amp; cd /opt/netbox/netbox &amp;&amp; python manage.py migrate netbox_isc_dhcp &amp;&amp; systemctl restart netbox netbox-rq'</pre>
+<p>V <code>configuration.py</code> musí byť plugin zapnutý: <code>PLUGINS = [..., "netbox_isc_dhcp"]</code>. Verzia a commit sa zobrazujú vpravo hore na každej stránke pluginu.</p>
+
+<h2>3. Menu</h2>
+<table><tr><th>Položka</th><th>Obsah</th></tr>
+<tr><td><b>CFG pluginu</b></td><td>Jazyk (slovenčina / angličtina), cesta k <code>dhcpd.conf</code>, základná cesta súborov, podadresáre.</td></tr>
+<tr><td><b>DHCP-CFG</b></td><td>Rozcestník: Základný dhcpd.conf, DNS servery, Subnety, Hosty a MAC adresy, Vlastné premenné.</td></tr></table>
+<p>Hodnoty sa upravujú kliknutím priamo na ne (objaví sa pole a tlačidlo Uložiť).</p>
+
+<h2>4. Nastavenia pluginu (CFG pluginu)</h2>
+<ul><li><b>Cesta k dhcpd.conf</b> – adresár na DHCP serveri, napr. <code>/etc/dhcp</code>.</li>
+<li><b>Základná cesta súborov</b> – napr. <code>/opt/dhcp</code>; pod ňou sú podadresáre.</li>
+<li><b>Podadresáre</b> – napr. <code>TABLE</code>, <code>SUBNET</code>; vznikne cesta <code>/opt/dhcp/TABLE</code>.</li>
+<li><b>Predvolený podadresár pre tabuľky</b> a <b>podadresár pre subnety</b>.</li></ul>
+<p>Všetko je predvolene prázdne – nastavuje si to používateľ.</p>
+
+<h2>5. Základný dhcpd.conf</h2>
+<ul><li><b>Statická časť</b> – globálne nastavenia DHCP servera (authoritative, lease časy, logovanie, primárny subnet). <b>Musí ju napísať používateľ sám</b>; plugin ju nemení.</li>
+<li><b>Dynamická časť</b> – plugin do nej zapisuje <b>výhradne riadky INCLUDE</b> (cesty k súborom tabuliek a subnetov), nikdy časti konfigurácie.</li>
+<li>Záložka <b>Náhľad</b> ukáže celý výsledný súbor.</li></ul>
+
+<h2>6. DNS servery</h2>
+<p>Tabuľka Názov + IP + <b>Používa sa</b> (zaškrtávacie políčko). Naraz môžu byť v použití najviac 2. Ak nie je zvolený žiadny, plugin zobrazuje upozornenie. Zapnuté DNS sú v kóde poolov dostupné ako <code>{{ dns }}</code>. Všetky DNS servery (aj nezapnuté) sa dajú použiť vo Vlastných premenných.</p>
+
+<h2>7. Subnety a pooly</h2>
+<h3>Zdroj subnetov</h3>
+<ol><li>Zvoľte <b>objekt</b> (napr. IPAM › Prefix) a <b>podadresár pre subnety</b>.</li>
+<li><b>Pridať pole</b> – ľubovoľné pole objektu (štandardné aj custom field).</li>
+<li>Kliknite na riadok – rozbalí sa zoznam všetkých hodnôt s vyhľadávaním, tlačidlami <b>Vybrať všetky / Odškrtnúť všetky</b> a prepínačom <b>iba zaškrtnuté / všetko okrem zaškrtnutých</b>. Nič nezaškrtnuté = <i>ľubovoľná (nefiltruje)</i>.</li>
+<li>Pri poli, ktoré určuje typ poolu (napr. <code>POOL_TYPE</code>), kliknite na ikonu <b>kľúča</b>. Pole s viac ako 100 hodnotami sa nedá zvoliť.</li></ol>
+<p>Pod podmienkami je počet vybraných objektov a <b>brána (GW)</b> pre všetky rozsahy: prvá alebo posledná použiteľná IP.</p>
+<h3>Pooly a ich kód</h3>
+<p>Každý typ poolu má vlastný <b>kód (šablónu)</b>, prepínač <b>Generovať</b> a <b>náhľad</b> na konkrétnom rozsahu. Premenné v kóde:</p>
+<table><tr><th>Premenná</th><th>Význam</th></tr>
+<tr><td><code>{{ network }}</code>, <code>{{ netmask }}</code>, <code>{{ prefix }}</code></td><td>adresa siete, maska, prefix (napr. 10.0.0.0/24)</td></tr>
+<tr><td><code>{{ gateway }}</code></td><td>brána podľa globálneho nastavenia</td></tr>
+<tr><td><code>{{ first_usable }}</code>, <code>{{ last_usable }}</code></td><td>prvá / posledná použiteľná adresa (nikdy sieť ani broadcast)</td></tr>
+<tr><td><code>{{ ip(n) }}</code></td><td>n&gt;0 od adresy siete, n&lt;0 od broadcastu (−1 = posledná použiteľná)</td></tr>
+<tr><td><code>{{ dns|join(",") }}</code></td><td>zapnuté DNS servery</td></tr>
+<tr><td><code>{{ cf.POLE }}</code>, <code>{{ obj }}</code></td><td>custom fieldy a samotný objekt</td></tr></table>
+<p>Príklad:</p>
+<pre>subnet {{ network }} netmask {{ netmask }} {
+    USE LEASE_600
+    option routers {{ gateway }};
+    option subnet-mask {{ netmask }};
+    pool {
+        range {{ ip(2) }} {{ last_usable }};
+    }
+}</pre>
+<div class="note">Ak kód na niektorom rozsahu nesedí (napr. rozsahy pre /24 použité na /28), náhľad ukáže červenú chybu a taký súbor sa nepoužije.</div>
+
+<h2>8. Vlastné premenné</h2>
+<p>Pomenované kúsky konfigurácie ISC. Pri pridaní vyberiete voľbu ISC (lease, DNS, sieť, prístup, PXE, DDNS, vlastný text), napíšete popis a hneď nastavíte hodnotu:</p>
+<table><tr><th>Voľba</th><th>Hodnota</th><th>Vloží</th></tr>
+<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (násobok 1,3 – nastaviteľný)</td></tr>
+<tr><td>domain-name-servers</td><td>zaškrtnuté DNS servery</td><td><code>option domain-name-servers …;</code></td></tr>
+<tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
+<p>V kóde poolu napíšte <code>..</code> – pri kurzore sa ukáže zoznam premenných; vyberte šípkami a Enterom. Vloží sa riadok <code>USE &lt;popis&gt;</code>, ktorý sa vo výsledku nahradí skutočnými riadkami. Používaná premenná má zámok – popis sa nedá zmeniť ani zmazať.</p>
+
+<h2>9. Hosty a MAC adresy (tenanti)</h2>
+<ul><li>Skupina tenantov = trieda DHCP; meno tenanta = host-name.</li>
+<li>Každá skupina má súbory (napr. <code>Skupina_Table</code>, <code>Skupina_StaticTable</code>) – dajú sa premenovať, pridávať, zahrnúť / vynechať z configu a priradiť podadresár.</li>
+<li>Pri súbore zaškrtnete custom fieldy tenanta s MAC adresami (1–3) a pole so statickou IP.</li>
+<li>Tenant bez MAC sa preskočí; so statickou IP ide do statickej tabuľky (pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…).</li>
+<li>Súbory sa ukladajú hotové a pri zmene tenanta sa prepočítajú; ikona kruhovej šípky ich prepočíta ručne.</li></ul>
+
+<h2>10. Riešenie problémov</h2>
+<table><tr><th>Príznak</th><th>Príčina / riešenie</th></tr>
+<tr><td>Červené upozornenie o DNS</td><td>V DNS serveroch zapnite aspoň jeden.</td></tr>
+<tr><td>Pool má číselné názvy</td><td>Kľúč je na nesprávnom poli – dajte ho na pole s typom poolu.</td></tr>
+<tr><td>„Vybrané: 0 objektov"</td><td>Skontrolujte podmienky; nič nezaškrtnuté znamená, že pole nefiltruje.</td></tr>
+<tr><td>Chyba v náhľade poolu</td><td>Kód sa nedá použiť na daný rozsah – upravte rozsahy (použite <code>ip(n)</code>, <code>last_usable</code>).</td></tr></table>
+</body></html>

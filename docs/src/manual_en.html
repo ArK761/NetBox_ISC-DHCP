@@ -1,0 +1,81 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>NetBox ISC DHCP – manual</title><link rel="stylesheet" href="style.css"></head><body>
+<h1>NetBox ISC DHCP – manual</h1>
+<div class="meta">Plugin for NetBox 4.7+ that builds the ISC DHCP server configuration from NetBox data. Manual version: {{VERSION}}</div>
+
+<h2>1. What the plugin does</h2>
+<p>From NetBox objects (tenants, prefixes, DNS servers) the plugin builds ISC DHCP files: the main <code>dhcpd.conf</code>, class and static host tables for tenant groups, and subnet files per pool type. Files are stored ready-made (with a SHA256 hash) and recomputed when the data changes. The DHCP server downloads them with its own script.</p>
+
+<h2>2. Installation and update</h2>
+<pre>sudo bash -c 'source /opt/netbox/venv/bin/activate &amp;&amp; pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@&lt;COMMIT&gt;" &amp;&amp; cd /opt/netbox/netbox &amp;&amp; python manage.py migrate netbox_isc_dhcp &amp;&amp; systemctl restart netbox netbox-rq'</pre>
+<p>Enable the plugin in <code>configuration.py</code>: <code>PLUGINS = [..., "netbox_isc_dhcp"]</code>. Version and commit are shown top right on every plugin page.</p>
+
+<h2>3. Menu</h2>
+<table><tr><th>Item</th><th>Content</th></tr>
+<tr><td><b>Plugin CFG</b></td><td>Language (Slovak / English), path of <code>dhcpd.conf</code>, base path of files, subdirectories.</td></tr>
+<tr><td><b>DHCP-CFG</b></td><td>Hub: Base dhcpd.conf, DNS servers, Subnets, Hosts and MAC addresses, Own variables.</td></tr></table>
+<p>Values are edited by clicking on them (a field and a Save button appear).</p>
+
+<h2>4. Plugin settings (Plugin CFG)</h2>
+<ul><li><b>dhcpd.conf path</b> – directory on the DHCP server, e.g. <code>/etc/dhcp</code>.</li>
+<li><b>Base path of files</b> – e.g. <code>/opt/dhcp</code>; subdirectories live below it.</li>
+<li><b>Subdirectories</b> – e.g. <code>TABLE</code>, <code>SUBNET</code>; giving <code>/opt/dhcp/TABLE</code>.</li>
+<li><b>Default subdirectory for tables</b> and <b>subdirectory for subnets</b>.</li></ul>
+<p>Everything is empty by default – the user sets it.</p>
+
+<h2>5. Base dhcpd.conf</h2>
+<ul><li><b>Static part</b> – global DHCP server settings (authoritative, lease times, logging, primary subnet). <b>It must be written by the user</b>; the plugin never changes it.</li>
+<li><b>Dynamic part</b> – the plugin writes <b>only INCLUDE lines</b> into it (paths of table and subnet files), never configuration.</li>
+<li>The <b>Preview</b> tab shows the whole resulting file.</li></ul>
+
+<h2>6. DNS servers</h2>
+<p>Table Name + IP + <b>In use</b> (checkbox). At most 2 can be in use at once. If none is in use, the plugin shows a warning. DNS servers in use are available in pool code as <code>{{ dns }}</code>. All DNS servers (also unused) can be used in Own variables.</p>
+
+<h2>7. Subnets and pools</h2>
+<h3>Subnet source</h3>
+<ol><li>Choose the <b>object</b> (e.g. IPAM › Prefix) and the <b>subdirectory for subnets</b>.</li>
+<li><b>Add field</b> – any field of the object (standard or custom field).</li>
+<li>Click a row – the list of all values opens with search, <b>Select all / Untick all</b> and the switch <b>only ticked / all except ticked</b>. Nothing ticked = <i>any (no filter)</i>.</li>
+<li>On the field that defines the pool type (e.g. <code>POOL_TYPE</code>) click the <b>key</b> icon. A field with more than 100 values cannot be chosen.</li></ol>
+<p>Below the conditions you see the number of selected objects and the <b>gateway (GW)</b> for all prefixes: first or last usable IP.</p>
+<h3>Pools and their code</h3>
+<p>Every pool type has its own <b>code (template)</b>, a <b>Generate</b> switch and a <b>preview</b> on a real prefix. Variables in the code:</p>
+<table><tr><th>Variable</th><th>Meaning</th></tr>
+<tr><td><code>{{ network }}</code>, <code>{{ netmask }}</code>, <code>{{ prefix }}</code></td><td>network address, mask, prefix (e.g. 10.0.0.0/24)</td></tr>
+<tr><td><code>{{ gateway }}</code></td><td>gateway by the global setting</td></tr>
+<tr><td><code>{{ first_usable }}</code>, <code>{{ last_usable }}</code></td><td>first / last usable address (never network or broadcast)</td></tr>
+<tr><td><code>{{ ip(n) }}</code></td><td>n&gt;0 from the network address, n&lt;0 from the broadcast (−1 = last usable)</td></tr>
+<tr><td><code>{{ dns|join(",") }}</code></td><td>DNS servers in use</td></tr>
+<tr><td><code>{{ cf.FIELD }}</code>, <code>{{ obj }}</code></td><td>custom fields and the object itself</td></tr></table>
+<p>Example:</p>
+<pre>subnet {{ network }} netmask {{ netmask }} {
+    USE LEASE_600
+    option routers {{ gateway }};
+    option subnet-mask {{ netmask }};
+    pool {
+        range {{ ip(2) }} {{ last_usable }};
+    }
+}</pre>
+<div class="note">If the code does not fit a prefix (e.g. ranges for /24 used on /28), the preview shows a red error and such a file is not used.</div>
+
+<h2>8. Own variables</h2>
+<p>Named pieces of ISC configuration. When adding one, pick an ISC option (lease, DNS, network, access, PXE, DDNS, own text), write a description and set the value right away:</p>
+<table><tr><th>Option</th><th>Value</th><th>Inserts</th></tr>
+<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (factor 1.3 – configurable)</td></tr>
+<tr><td>domain-name-servers</td><td>ticked DNS servers</td><td><code>option domain-name-servers …;</code></td></tr>
+<tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
+<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. A variable in use is locked – it cannot be renamed or deleted.</p>
+
+<h2>9. Hosts and MAC addresses (tenants)</h2>
+<ul><li>Tenant group = DHCP class; tenant name = host-name.</li>
+<li>Every group has files (e.g. <code>Group_Table</code>, <code>Group_StaticTable</code>) – they can be renamed, added, included / left out of the config and assigned a subdirectory.</li>
+<li>For a file, tick the tenant custom fields holding MAC addresses (1–3) and the field with the static IP.</li>
+<li>A tenant without MAC is skipped; with a static IP it goes to the static table (with several MACs <code>NAME_1</code>, <code>NAME_2</code>…).</li>
+<li>Files are stored ready-made and recomputed when a tenant changes; the circular arrow icon recomputes them manually.</li></ul>
+
+<h2>10. Troubleshooting</h2>
+<table><tr><th>Symptom</th><th>Cause / fix</th></tr>
+<tr><td>Red DNS warning</td><td>Switch on at least one DNS server.</td></tr>
+<tr><td>Pools have number names</td><td>The key is on the wrong field – put it on the pool type field.</td></tr>
+<tr><td>"Selected: 0 objects"</td><td>Check the conditions; nothing ticked means the field does not filter.</td></tr>
+<tr><td>Error in pool preview</td><td>The code cannot be used for that prefix – adjust ranges (use <code>ip(n)</code>, <code>last_usable</code>).</td></tr></table>
+</body></html>
