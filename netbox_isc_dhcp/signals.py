@@ -52,3 +52,11 @@ def tenant_saved(sender, instance, raw=False, **kwargs):
 def tenant_deleted(sender, instance, **kwargs):
     if instance.group_id:
         transaction.on_commit(lambda: _regenerate(group__group_id=instance.group_id))
+
+
+@receiver(pre_save, dispatch_uid="isc_dhcp_normalize_text")
+def normalize_text(sender, instance, **kwargs):
+    if sender._meta.app_label == "netbox_isc_dhcp":
+        from .models import _normalize_text_fields
+
+        _normalize_text_fields(instance)

@@ -45,6 +45,10 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   Object-type custom fields (owner's POOL_TYPE -> object) store ids: show names, filter by id; pools are named by the object name.
   Pool-type key refused on fields with > 100 values. Global gateway = SubnetConfig.gateway_mode (first/last usable) -> template var `gateway`.
   Subnet directory chosen on the Subnety page (= PluginSettings.subnet_dir).
+  OWN VARIABLES (DHCP-CFG > Vlastné premenné, dhcp/variables/): ConfigVariable(name=description, option from CATALOG in variables.py, value, dns_servers).
+  Pool code line `USE <name>` is replaced by the variable's ISC lines (indent kept); lease -> default + max (PluginSettings.lease_factor, 1.3).
+  Used variables (any USE in pool/file code) are locked: no rename/delete. Code editors: no spellcheck, no wrap, `..` autocomplete (_code_editor.html).
+  All text/code fields are stored with LF (browsers send CRLF) - pre_save signal.
   NEXT: store generated <network>_CFG files (sha256) + subnet includes in dhcpd.conf.
   TODO AT THE END (owner): save-time protection of pool code: render on ALL prefixes of the pool, refuse save on errors (Jinja, ip(n) out of range,
   ranges, gateway in range, braces, quotes, parentheses, missing ";", commas in concat). NO dhcpd on the NetBox server (never), so no dhcpd -t.

@@ -17,13 +17,15 @@
     <div class="card-body">
       <details class="ie wide"><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.template }}</pre></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="template"><input type="hidden" name="p" value="{{ chosen.pk }}">
-          <textarea name="value" rows="24" class="form-control font-monospace">{{ object.template }}</textarea>
+          <textarea name="value" rows="24" class="form-control font-monospace code-editor">{{ object.template }}</textarea>
           <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details>
       <div class="small text-muted mt-3"><strong>{% tr "lbl.variables" %}:</strong>
         <code>gateway</code> (globálne, Subnety) <code>network</code> <code>netmask</code> <code>prefix</code> <code>prefixlen</code> <code>broadcast</code> <code>first_usable</code> <code>last_usable</code>
         <code>ip(n)</code> (n&gt;0 od siete, n&lt;0 od broadcastu, -1 = posledná použiteľná) <code>three_octet</code> <code>size</code> <code>dns</code> <code>obj</code> <code>cf.POLE</code></div>
     </div>
   </div>
+  {% if editor_vars %}<div class="card mb-3"><h5 class="card-header">{% tr "menu.vars" %} <span class="small text-muted fw-normal">– {% tr "lbl.var_hint" %}</span></h5>
+    <table class="table table-sm mb-0">{% for v in editor_vars %}<tr><td style="width:30%"><code>USE {{ v.name }}</code></td><td><pre class="m-0 small">{{ v.lines }}</pre></td></tr>{% endfor %}</table></div>{% endif %}
   <div class="card mb-3">
     <h5 class="card-header d-flex justify-content-between align-items-center">{% tr "lbl.preview_for" %}
       {% if prefixes %}<form method="get" class="m-0"><select name="p" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:16rem">
@@ -35,4 +37,5 @@
     </div>
   </div>
 </div></div>
+{% include "netbox_isc_dhcp/_code_editor.html" %}
 {% endblock %}

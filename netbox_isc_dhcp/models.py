@@ -9,6 +9,16 @@ from .renderer import RenderError
 from .subnet_render import default_pool_template
 
 MAX_ACTIVE_DNS = 2
+_TEXT_FIELDS = ("static_text", "template", "value")
+
+
+def _normalize_text_fields(obj):
+    """Store code/text with LF line ends (browsers send CRLF)."""
+    from .variables import normalize
+
+    for f in _TEXT_FIELDS:
+        if isinstance(getattr(obj, f, None), str):
+            setattr(obj, f, normalize(getattr(obj, f)))
 DEFAULT_BASE_PATH = "/opt/dhcp"
 
 
@@ -67,6 +77,31 @@ class PoolTemplate(NetBoxModel):
 
     def __str__(self):
         return self.name
+
+
+class ConfigVariable(NetBoxModel):
+    """Own variable: a named piece of ISC config (from the option catalog). Used in pool code as `USE <name>`."""
+
+    name = models.CharField(max_length=60, unique=True, help_text="Description used in pool code: USE <name>.")
+    option = models.CharField(max_length=40, help_text="ISC option from the catalog.")
+    value = models.TextField(blank=True)
+    dns_servers = models.JSONField(default=list, blank=True, help_text="DNS servers (ids) for DNS options.")
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "variable"
+
+    def __str__(self):
+        return self.name
+
+    def lines(self) -> str:
+        """ISC lines of this variable (raises VariableError when the value is not valid yet)."""
+        from .variables import build_lines
+
+        order = {pk: i for i, pk in enumerate(self.dns_servers or [])}
+        ips = [ip for _, ip in sorted(DNSServer.objects.filter(pk__in=self.dns_servers or []).values_list("pk", "ip"), key=lambda r: order.get(r[0], 0))]
+        st = PluginSettings.objects.first()
+        return build_lines(self.option, self.value, ips, st.lease_factor if st else 1.3)
 
 
 class DHCPPath(NetBoxModel):
@@ -169,6 +204,7 @@ class PluginSettings(NetBoxModel):
     """Global plugin settings (single row)."""
 
     language = models.CharField(max_length=2, default="sk", choices=(("sk", "Slovenčina"), ("en", "English")))
+    lease_factor = models.FloatField(default=1.3, help_text="max-lease-time = lease x this factor.")
     config_path = models.CharField(max_length=255, blank=True, default="", help_text="Directory of dhcpd.conf on the DHCP server.")
     base_path = models.CharField(max_length=255, blank=True, default="", help_text="Base directory of all other DHCP files; subdirectories (TABLE, SUBNET...) live below it.")
     table_dir = models.ForeignKey("DHCPPath", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",

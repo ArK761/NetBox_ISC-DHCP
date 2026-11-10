@@ -1,7 +1,7 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from ..models import PoolTemplate, SubnetConfig, BaseConfig, DHCPPath, DHCPGroup, DHCPFile, DNSServer, PluginSettings
+from ..models import ConfigVariable, PoolTemplate, SubnetConfig, BaseConfig, DHCPPath, DHCPGroup, DHCPFile, DNSServer, PluginSettings
 
 
 class BaseConfigSerializer(NetBoxModelSerializer):
@@ -74,4 +74,13 @@ class PoolTemplateSerializer(NetBoxModelSerializer):
     class Meta:
         model = PoolTemplate
         fields = ('id', 'url', 'display', 'name', 'enabled', 'template', 'tags', 'custom_fields', 'created', 'last_updated')
+        brief_fields = ('id', 'url', 'display')
+
+
+class ConfigVariableSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_isc_dhcp-api:configvariable-detail")
+
+    class Meta:
+        model = ConfigVariable
+        fields = ('id', 'url', 'display', 'name', 'option', 'value', 'dns_servers', 'tags', 'custom_fields', 'created', 'last_updated')
         brief_fields = ('id', 'url', 'display')

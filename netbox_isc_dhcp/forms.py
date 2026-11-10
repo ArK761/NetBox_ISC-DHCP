@@ -20,7 +20,7 @@ class BaseConfigForm(NetBoxModelForm):
     class Meta:
         model = BaseConfig
         fields = ("name", "static_text")
-        widgets = {"static_text": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
+        widgets = {"static_text": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace;white-space:pre", "spellcheck": "false", "wrap": "off"})}
 
 
 class DHCPPathForm(NetBoxModelForm):
@@ -45,7 +45,7 @@ class DHCPFileForm(NetBoxModelForm):
     class Meta:
         model = DHCPFile
         fields = ("group", "name", "directory", "enabled", "order", "mac_fields", "ip_field", "template")
-        widgets = {"template": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
+        widgets = {"template": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace;white-space:pre", "spellcheck": "false", "wrap": "off"})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -77,4 +77,4 @@ class PoolTemplateForm(NetBoxModelForm):
     class Meta:
         model = PoolTemplate
         fields = ("name", "enabled", "template")
-        widgets = {"template": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace"})}
+        widgets = {"template": forms.Textarea(attrs={"rows": 24, "style": "font-family:monospace;white-space:pre", "spellcheck": "false", "wrap": "off"})}

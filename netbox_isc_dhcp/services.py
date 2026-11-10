@@ -92,3 +92,32 @@ def regenerate_file(f: DHCPFile) -> bool:
     for k, v in values.items():
         setattr(f, k, v)
     return changed
+
+
+def variable_snippets() -> dict[str, str]:
+    """name -> ISC lines of every variable that has a valid value."""
+    from .models import ConfigVariable
+    from .variables import VariableError
+
+    out = {}
+    for v in ConfigVariable.objects.all():
+        try:
+            out[v.name] = v.lines()
+        except VariableError:
+            pass
+    return out
+
+
+def variable_usage() -> dict[str, list[str]]:
+    """name -> where it is used (pool code and group files with a `USE <name>` line)."""
+    from .models import PoolTemplate
+    from .variables import used_names
+
+    usage: dict[str, list[str]] = {}
+    for pt in PoolTemplate.objects.only("name", "template"):
+        for n in used_names(pt.template):
+            usage.setdefault(n, []).append(f"pool {pt.name}")
+    for f in DHCPFile.objects.only("name", "template"):
+        for n in used_names(f.template):
+            usage.setdefault(n, []).append(f"file {f.name}")
+    return usage

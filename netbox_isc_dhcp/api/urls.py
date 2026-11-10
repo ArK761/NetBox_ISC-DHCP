@@ -12,4 +12,5 @@ router.register("dnsserver", views.DNSServerViewSet)
 router.register("pluginsettings", views.PluginSettingsViewSet)
 router.register("subnetconfig", views.SubnetConfigViewSet)
 router.register("pooltemplate", views.PoolTemplateViewSet)
+router.register("configvariable", views.ConfigVariableViewSet)
 urlpatterns = router.urls

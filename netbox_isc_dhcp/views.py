@@ -311,6 +311,7 @@ class DHCPHubView(LoginRequiredMixin, View):
             ("plugins:netbox_isc_dhcp:dnsserver_list", "mdi-dns-outline", "menu.dns", "hub.dns"),
             ("plugins:netbox_isc_dhcp:subnetconfig_list", "mdi-ip-network-outline", "menu.subnets", "hub.subnets"),
             ("plugins:netbox_isc_dhcp:dhcpgroup_list", "mdi-lan-connect", "menu.hosts", "hub.hosts"),
+            ("plugins:netbox_isc_dhcp:variables", "mdi-variable", "menu.vars", "hub.vars"),
         ]
         return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
 
@@ -402,6 +403,7 @@ _crud(SubnetConfig, forms.SubnetConfigForm, tables.SubnetConfigTable, singleton=
 def _pooltemplate_context(request, instance):
     from .models import DNSServer
     from .source_fields import _field_q
+    from .services import variable_snippets
     from .subnet_render import render_subnet
 
     cfg = SubnetConfig.objects.first()
@@ -416,8 +418,8 @@ def _pooltemplate_context(request, instance):
         dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
         text, errors = render_subnet(instance.template, str(getattr(chosen, "prefix", "")), dns,
                                      {"obj": chosen, "cf": getattr(chosen, "custom_field_data", {}) or {}},
-                                     gateway_mode=cfg.gateway_mode if cfg else "first")
-    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors}
+                                     gateway_mode=cfg.gateway_mode if cfg else "first", snippets=variable_snippets())
+    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars()}
 
 
 class PoolTemplateInlineView(View):
@@ -439,3 +441,108 @@ class PoolTemplateInlineView(View):
 
 _crud(PoolTemplate, forms.PoolTemplateForm, tables.PoolTemplateTable,
       extra_context=lambda request, instance: _pooltemplate_context(request, instance))
+
+
+
+# --- Own variables (ISC options catalog) --------------------------------------------
+def _editor_vars():
+    """Variables for the `..` autocomplete in code editors: [{name, lines}]."""
+    from .services import variable_snippets
+
+    return [{"name": n, "lines": l} for n, l in sorted(variable_snippets().items())]
+
+
+class VariablesView(LoginRequiredMixin, View):
+    def get(self, request):
+        from django.shortcuts import render
+
+        from .models import ConfigVariable, DNSServer
+        from .services import variable_usage
+        from .variables import CATALOG, VariableError
+
+        usage = variable_usage()
+        rows = []
+        for v in ConfigVariable.objects.all():
+            label, group, kind, _ = CATALOG.get(v.option, (v.option, "", "raw", ""))
+            try:
+                lines, err = v.lines(), ""
+            except VariableError as exc:
+                lines, err = "", str(exc)
+            rows.append({"obj": v, "label": label, "kind": kind, "lines": lines, "error": err,
+                         "used_by": usage.get(v.name, []), "dns_ids": set(v.dns_servers or [])})
+        groups = {}
+        for key, (label, group, kind, _) in CATALOG.items():
+            groups.setdefault(group, []).append((key, label))
+        st = PluginSettings.objects.first()
+        return render(request, "netbox_isc_dhcp/variables.html", {
+            "rows": rows, "catalog_groups": groups, "dns_all": DNSServer.objects.all(),
+            "lease_factor": st.lease_factor if st else 1.3,
+        })
+
+
+class VariablesInlineView(LoginRequiredMixin, View):
+    def post(self, request):
+        from .models import ConfigVariable
+        from .services import variable_usage
+        from .variables import CATALOG, NAME_RE
+
+        if not request.user.has_perm("netbox_isc_dhcp.change_configvariable"):
+            raise PermissionDenied
+        action, value = request.POST.get("field"), request.POST.get("value", "").strip()
+        pk = request.POST.get("pk", "")
+        obj = ConfigVariable.objects.filter(pk=int(pk)).first() if pk.isdigit() else None
+        used = obj is not None and obj.name in variable_usage()
+        err = ""
+        if action == "add":
+            option = request.POST.get("option", "")
+            if option not in CATALOG:
+                err = t("err.var_option")
+            elif not NAME_RE.match(value):
+                err = t("err.var_name")
+            elif ConfigVariable.objects.filter(name=value).exists():
+                err = t("err.var_exists", name=value)
+            else:
+                ConfigVariable.objects.create(name=value, option=option)
+        elif obj is not None and action == "rename":
+            if used:
+                err = t("err.var_used", name=obj.name)
+            elif not NAME_RE.match(value):
+                err = t("err.var_name")
+            elif ConfigVariable.objects.filter(name=value).exclude(pk=obj.pk).exists():
+                err = t("err.var_exists", name=value)
+            else:
+                obj.name = value
+                obj.save()
+        elif obj is not None and action == "set_value":
+            from .variables import VariableError, kind_of
+
+            if kind_of(obj.option) == "dns":
+                obj.dns_servers = [int(x) for x in request.POST.getlist("dns") if x.isdigit()]
+            else:
+                obj.value = request.POST.get("value", "") if kind_of(obj.option) == "raw" else value
+            try:
+                obj.lines()
+            except VariableError as exc:
+                err = str(exc)
+            if not err:
+                obj.save()
+        elif obj is not None and action == "delete":
+            if used:
+                err = t("err.var_used", name=obj.name)
+            else:
+                obj.delete()
+        elif action == "factor":
+            try:
+                f = float(value.replace(",", "."))
+                if not 1 <= f <= 10:
+                    raise ValueError
+                st = PluginSettings.objects.first() or PluginSettings.objects.create()
+                st.lease_factor = f
+                st.save()
+            except ValueError:
+                err = t("err.var_factor")
+        if err:
+            messages.error(request, err)
+        else:
+            messages.success(request, t("msg.saved"))
+        return redirect("plugins:netbox_isc_dhcp:variables")
