@@ -13,6 +13,7 @@ CATALOG = {
     "domain-name-servers": ("option domain-name-servers", "dns", "dns", "option domain-name-servers {v};"),
     "domain-name": ("option domain-name", "dns", "quoted", 'option domain-name {v};'),
     "domain-search": ("option domain-search", "dns", "quotedlist", "option domain-search {v};"),
+    "range": ("range (start end)", "net", "range", "range {v};"),
     "broadcast-address": ("option broadcast-address", "net", "ip", "option broadcast-address {v};"),
     "interface-mtu": ("option interface-mtu", "net", "number", "option interface-mtu {v};"),
     "time-offset": ("option time-offset", "net", "number", "option time-offset {v};"),
@@ -29,7 +30,7 @@ CATALOG = {
     "ddns-domainname": ("ddns-domainname", "ddns", "quoted", "ddns-domainname {v};"),
     "raw": ("raw", "own", "raw", "{v}"),
 }
-NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,60}$")
+NAME_RE = re.compile(r"^[A-Za-z0-9_./-]{1,60}$")
 USE_RE = re.compile(r"^(?P<indent>[ \t]*)USE[ \t]+(?P<name>\S+)[ \t]*$", re.M)
 
 
@@ -64,6 +65,17 @@ def build_lines(option: str, value: str, dns_ips=(), lease_factor: float = 1.3) 
             v = str(ipaddress.IPv4Address(value))
         except ValueError as exc:
             raise VariableError("value must be an IPv4 address") from exc
+    elif kind == "range":
+        parts = [x for x in re.split(r"[\s,;-]+", value) if x]
+        try:
+            a, b = (ipaddress.IPv4Address(x) for x in parts) if len(parts) == 2 else (None, None)
+        except ValueError:
+            a = b = None
+        if a is None:
+            raise VariableError("range needs two IPv4 addresses: start end")
+        if a > b:
+            raise VariableError("range: start is after end")
+        v = f"{a} {b}"
     elif kind == "iplist":
         try:
             v = ", ".join(str(ipaddress.IPv4Address(x.strip())) for x in value.split(",") if x.strip())

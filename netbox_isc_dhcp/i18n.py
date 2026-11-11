@@ -128,7 +128,7 @@ TR = {
     "lbl.var_hint": ("V kóde poolu napíšte .. a vyberte premennú, alebo napíšte riadok USE popis.", "In pool code type .. and pick a variable, or write a line USE name."),
     "lbl.var_locked": ("Používa sa – nedá sa zmazať.", "In use – cannot be deleted."),
     "err.var_option": ("Vyberte voľbu ISC.", "Pick an ISC option."),
-    "err.var_name": ("Popis môže obsahovať len písmená, číslice, _ . - (bez medzier).", "Description may contain only letters, digits, _ . - (no spaces)."),
+    "err.var_name": ("Popis môže obsahovať len písmená, číslice, _ . - / (bez medzier).", "Description may contain only letters, digits, _ . - / (no spaces)."),
     "err.var_exists": ("Premenná {name} už existuje.", "Variable {name} already exists."),
     "err.var_used": ("Premenná {name} sa používa – nedá sa zmazať.", "Variable {name} is in use – it cannot be deleted."),
     "err.var_factor": ("Násobok musí byť číslo od 1 do 10.", "Factor must be a number from 1 to 10."),
@@ -215,6 +215,8 @@ _MSG_SK = {
     "choose true or false": "vyberte true alebo false",
     "choose on or off": "vyberte on alebo off",
     "enter the text": "zadajte text",
+    "range needs two IPv4 addresses: start end": "range potrebuje dve IPv4 adresy: začiatok koniec",
+    "range: start is after end": "range: začiatok je za koncom",
 }
 _MSG_SK_PATTERNS = [
     (r"line (\d+): '(.*)' is outside the subnet block", r"riadok \1: '\2' je mimo bloku subnet"),

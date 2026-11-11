@@ -41,3 +41,16 @@ def test_rename_use_lines_only_exact_name():
 
     tpl = "subnet x {\n    USE TIME_600\n    USE TIME_6000\n  USE TIME_600  \n}\n"
     assert rename_use(tpl, "TIME_600", "LEASE_10MIN") == "subnet x {\n    USE LEASE_10MIN\n    USE TIME_6000\n  USE LEASE_10MIN\n}\n"
+
+
+def test_range_option_and_slash_in_name():
+    from netbox_isc_dhcp.variables import NAME_RE
+
+    assert build_lines("range", "10.17.0.10 10.17.3.254") == "range 10.17.0.10 10.17.3.254;"
+    assert build_lines("range", "10.17.0.10-10.17.3.254") == "range 10.17.0.10 10.17.3.254;"
+    for bad in ("10.17.0.10", "10.17.3.254 10.17.0.10", "a b"):
+        with pytest.raises(VariableError):
+            build_lines("range", bad)
+    assert NAME_RE.match("RANGE_10.17.0.0/22") and not NAME_RE.match("A B")
+    out, err = expand_use("  USE RANGE_10.17.0.0/22\n", {"RANGE_10.17.0.0/22": "range 10.17.0.10 10.17.3.254;"})
+    assert out == "  range 10.17.0.10 10.17.3.254;\n" and err == []
