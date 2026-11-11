@@ -130,6 +130,11 @@ class SubnetOverride(NetBoxModel):
     def __str__(self):
         return f"{self.pool.name} / {self.prefix_text}"
 
+    def get_absolute_url(self):
+        from django.urls import reverse
+
+        return reverse("plugins:netbox_isc_dhcp:subnet_override", kwargs={"pk": self.pool_id, "prefix_pk": self.prefix_id})
+
 
 class DHCPPath(NetBoxModel):
     """A directory below the base path (TABLE, SUBNET...). Files choose one."""

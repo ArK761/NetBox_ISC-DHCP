@@ -67,6 +67,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
 - MANUAL (PDF, owner wants it updated continuously): sources docs/src/manual_sk.html + manual_en.html, build `node docs/src/build_pdf.js v<version>` -> docs/NAVOD_SK.pdf + docs/MANUAL_EN.pdf. Update both on every feature. No site data in it.
 - NetBox turns every <select> into a TomSelect widget (ignores `hidden`): add class `no-ts` to selects that must hide/show.
 - Every change: run /home/user/links.py (crawls every plugin link/button, bulk delete, forbidden UI words) and /home/user/it3.py before pushing.
+  ALWAYS write links.py output to a file and grep it (a piped grep once hid a crash). Every NetBoxModel needs get_absolute_url (delete pages link dependent objects).
 
 ## Status
 Done: base config generator (pure), BaseConfig/DHCPGroup/DNSServer/PluginSettings models + UI.
