@@ -16,6 +16,12 @@ _BADGE = '<div id="isc-dhcp-version" class="text-end mb-2">' + _PILL + "</div>"
 _MARKER = '<div class="container-fluid tab-content py-3">'
 
 
+_TREE_CSS = (
+    "<style>details.isc-notice>summary{list-style:none;cursor:pointer}details.isc-notice>summary::-webkit-details-marker{display:none}"
+    "details.isc-notice[open] .isc-chev{transform:rotate(180deg)}details.isc-notice .isc-tree{margin:.4rem 0 .1rem 2rem;max-height:22rem;overflow:auto}"
+    "details.isc-notice .isc-tree ul{list-style:none;padding-left:1.2rem;margin:.1rem 0 .4rem;border-left:1px solid currentColor}"
+    "details.isc-notice a{color:inherit}details.isc-notice .isc-tree li{margin:.1rem 0}</style>"
+)
 _NOTICE = ('<div class="alert text-bg-{level} border-0 d-flex align-items-center gap-2 py-2 mb-2 fw-semibold"><i class="mdi {icon} fs-4"></i>'
            '<span>{text}</span>{link}</div>')
 
@@ -31,9 +37,28 @@ def inject_badge(response, notices=()):
     if 'id="isc-dhcp-version"' in body:
         return response
     badge = _BADGE % escape(label())
-    for level, icon, text, url, link_text in notices:  # plugin warnings at the top of the page (never cover buttons)
+    if notices:
+        badge += _TREE_CSS
+    for level, icon, text, url, link_text, *rest in notices:  # plugin warnings at the top of the page (never cover buttons)
+        tree = rest[0] if rest else None
         link = f' <a class="ms-auto fw-bold text-reset" href="{escape(url)}">{escape(link_text)} &rarr;</a>' if url else ""
-        badge += _NOTICE.format(level=level, icon=icon, text=escape(text), link=link)
+        if not tree:
+            badge += _NOTICE.format(level=level, icon=icon, text=escape(text), link=link)
+            continue
+        # tree: pool -> its subnets; every item opens in a new window
+        nodes = ""
+        for (pool, pool_url), items in tree.items():
+            leaves = "".join(
+                f'<li><a href="{escape(u)}" target="_blank" rel="noopener"><code class="text-reset">{escape(lbl)}</code></a>'
+                + (f' <span class="opacity-75">– {escape(note)}</span>' if note else "") + "</li>"
+                for lbl, u, note in items[:200])
+            more = f"<li>… +{len(items) - 200}</li>" if len(items) > 200 else ""
+            nodes += (f'<li><a href="{escape(pool_url)}" target="_blank" rel="noopener"><i class="mdi mdi-folder-outline"></i> <b>{escape(pool)}</b></a>'
+                      f' <span class="opacity-75">({len(items)})</span><ul>{leaves}{more}</ul></li>')
+        badge += (f'<details class="isc-notice alert text-bg-{level} border-0 py-2 mb-2 fw-semibold">'
+                  f'<summary class="d-flex align-items-center gap-2"><i class="mdi {icon} fs-4"></i><span>{escape(text)}</span>'
+                  f'<i class="mdi mdi-chevron-down fs-4 isc-chev ms-1"></i>{link}</summary>'
+                  f'<div class="isc-tree fw-normal"><ul class="border-0 ps-0">{nodes}</ul></div></details>')
     i = body.find(_MARKER)
     if i != -1:
         i += len(_MARKER)
@@ -75,12 +100,23 @@ class DNSWarningMiddleware:
         if not DNSServer.objects.filter(active=True).exists():
             out.append(("danger", "mdi-dns-outline", t("warn.no_dns"), reverse("plugins:netbox_isc_dhcp:dnsserver_list"), t("menu.dns")))
         subnets = reverse("plugins:netbox_isc_dhcp:subnetconfig_list")
+        from .i18n import tmsg
+
         bad = incompatible()
         if bad:
-            out.append(("danger", "mdi-alert-octagon-outline", t("warn.incompat", n=len(bad)), subnets, t("menu.subnets")))
-        n = SubnetOverride.objects.count()
-        if n:
-            out.append(("warning", "mdi-pencil-outline", t("warn.overrides", n=n), subnets, t("menu.subnets")))
+            tree = {}
+            for x in bad:
+                pool_url = reverse("plugins:netbox_isc_dhcp:pooltemplate", kwargs={"pk": x["pool_pk"]})
+                tree.setdefault((x["pool"], pool_url), []).append((x["prefix"], f"{pool_url}?p={x.get('prefix_pk', '')}", tmsg(x["reason"])))
+            out.append(("danger", "mdi-alert-octagon-outline", t("warn.incompat", n=len(bad)), subnets, t("menu.subnets"), tree))
+        ovr = list(SubnetOverride.objects.select_related("pool"))
+        if ovr:
+            tree = {}
+            for o in ovr:
+                pool_url = reverse("plugins:netbox_isc_dhcp:pooltemplate", kwargs={"pk": o.pool_id})
+                url = reverse("plugins:netbox_isc_dhcp:subnet_override", kwargs={"pk": o.pool_id, "prefix_pk": o.prefix_id})
+                tree.setdefault((o.pool.name, pool_url), []).append((o.prefix_text, url, ""))
+            out.append(("warning", "mdi-pencil-outline", t("warn.overrides", n=len(ovr)), subnets, t("menu.subnets"), tree))
         return out
 
     def __call__(self, request):
