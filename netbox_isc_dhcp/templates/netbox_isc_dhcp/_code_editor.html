@@ -14,7 +14,14 @@
 <div id="isc-ac"></div>
 <script>
 (function () {
-  var vars = JSON.parse(document.getElementById("isc-vars").textContent || "[]");
+  var vars = JSON.parse(document.getElementById("isc-vars").textContent || "[]"), fetched = 0;
+  var url = "{% url 'plugins:netbox_isc_dhcp:variables_json' %}";
+  function refresh(t) {  // load the current list (new variables appear without reloading the page)
+    if (Date.now() - fetched < 3000) return;
+    fetched = Date.now();
+    fetch(url, {credentials: "same-origin"}).then(function (r) { return r.json(); })
+      .then(function (d) { vars = d.vars || vars; if (ta === t) show(t); }).catch(function () {});
+  }
   var box = document.getElementById("isc-ac"), ta = null, items = [], idx = 0;
   function hide() { box.style.display = "none"; items = []; }
   function token(t) {
@@ -52,7 +59,7 @@
   }
   document.querySelectorAll("textarea.code-editor").forEach(function (t) {
     t.setAttribute("spellcheck", "false"); t.setAttribute("wrap", "off");
-    t.addEventListener("input", function () { ta = t; idx = 0; show(t); });
+    t.addEventListener("input", function () { ta = t; idx = 0; if (token(t)) refresh(t); show(t); });
     t.addEventListener("keydown", function (e) {
       if (box.style.display !== "block" || ta !== t) return;
       if (e.key === "ArrowDown") { idx = (idx + 1) % items.length; show(t); e.preventDefault(); }

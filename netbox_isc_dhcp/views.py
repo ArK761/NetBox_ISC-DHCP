@@ -754,3 +754,13 @@ class SubnetOverrideView(LoginRequiredMixin, View):
         SubnetOverride.objects.update_or_create(pool=pool, prefix_id=prefix.pk, defaults={"prefix_text": str(prefix.prefix), "code": code})
         messages.success(request, t("msg.override_saved", prefix=str(prefix.prefix)))
         return redirect(here)
+
+
+
+class VariablesJSONView(LoginRequiredMixin, View):
+    """Current variables for the `..` autocomplete (fetched each time, so new ones appear without reload)."""
+
+    def get(self, request):
+        from django.http import JsonResponse
+
+        return JsonResponse({"vars": _editor_vars()})
