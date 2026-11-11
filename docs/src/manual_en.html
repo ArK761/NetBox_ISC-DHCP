@@ -94,6 +94,14 @@
 <ul><li><b>Code is suitable for</b> – on save the plugin tries the code on sizes /16 to /30 and shows which work (e.g. /16 – /27).</li>
 <li><b>Use for</b> – narrow where the code is used (e.g. only /24). It cannot exceed the suitable range; "auto" = the whole suitable range.</li>
 <li>A subnet whose size is outside the range (e.g. changed from /24 to /28 in NetBox) or that the code does not fit is <b>incompatible</b>: it is not exported and the DHCP server keeps running without it.</li>
-<li>A red warning is then shown on every plugin page; the list with reasons is on the Subnets page and on the pool, and the pools table shows a red count.</li>
+<li>A red bar is then shown at the top of every plugin page; the list with reasons is on the Subnets page and on the pool, and the pools table shows a red count.</li>
 <li>Incompatible subnets do not block saving the code – only subnets within the range are checked.</li></ul>
+<h2>13. Individual change of a subnet</h2>
+<ul><li>On the pool, switch on <b>Allow individual changes of subnets</b>.</li>
+<li>At an incompatible subnet (or in the preview for the chosen prefix) click <b>Individual change</b>. The editor opens with the pool code as a start; you change it for this subnet only.</li>
+<li>On save the same check applies, but only to this subnet. The pool's size range is not checked for a subnet with its own code.</li>
+<li>Changes of the pool code do not affect individual subnets – on save the plugin lists which subnets are not affected.</li>
+<li>A yellow bar at the top of the plugin pages shows the number of subnets with an individual configuration; the list (pool, subnet, state, changed) is on the Subnets page and on the pool.</li>
+<li>If the pool does not allow individual changes or the subnet is no longer in the pool, the individual code is not used (the state says so).</li>
+<li><b>Remove individual change</b> returns the subnet to the pool code.</li></ul>
 </body></html>

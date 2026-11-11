@@ -48,3 +48,8 @@ class PoolTemplateViewSet(NetBoxModelViewSet):
 class ConfigVariableViewSet(NetBoxModelViewSet):
     queryset = models.ConfigVariable.objects.all()
     serializer_class = serializers.ConfigVariableSerializer
+
+
+class SubnetOverrideViewSet(NetBoxModelViewSet):
+    queryset = models.SubnetOverride.objects.all()
+    serializer_class = serializers.SubnetOverrideSerializer

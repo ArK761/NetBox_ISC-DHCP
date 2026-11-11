@@ -94,6 +94,14 @@
 <ul><li><b>Kód je vhodný pre</b> – plugin pri uložení vyskúša kód na veľkostiach /16 až /30 a ukáže, pre ktoré funguje (napr. /16 – /27).</li>
 <li><b>Používať pre</b> – zúžite, kde sa kód použije (napr. len /24). Viac ako vhodný rozsah sa nastaviť nedá; „auto" = celý vhodný rozsah.</li>
 <li>Subnet, ktorého veľkosť je mimo nastaveného rozsahu (napr. ste v NetBoxe zmenili /24 na /28) alebo na ktorý kód nevyjde, je <b>nekompatibilný</b>: nejde do exportu a DHCP server beží ďalej bez neho.</li>
-<li>Na každej stránke pluginu sa vtedy zobrazí červené upozornenie; zoznam s dôvodmi je na stránke Subnety a pri poole, v tabuľke poolov je červený počet.</li>
+<li>Hore na každej stránke pluginu sa vtedy zobrazí červený pruh; zoznam s dôvodmi je na stránke Subnety a pri poole, v tabuľke poolov je červený počet.</li>
 <li>Nekompatibilné subnety neblokujú uloženie kódu – kontroluje sa len na subnetoch v nastavenom rozsahu.</li></ul>
+<h2>13. Individuálna úprava subnetu</h2>
+<ul><li>Pri poole zapnite <b>Povoliť individuálnu úpravu subnetov</b>.</li>
+<li>Pri nekompatibilnom subnete (alebo v náhľade pri vybranom rozsahu) kliknite na <b>Individuálna úprava</b>. Otvorí sa editor s kódom poolu ako východiskom; upravíte ho len pre tento subnet.</li>
+<li>Pri uložení platí rovnaká kontrola, ale len na tento subnet. Pre subnet s individuálnym kódom sa nekontroluje rozsah veľkostí poolu.</li>
+<li>Zmeny kódu poolu sa individuálnych subnetov netýkajú – plugin pri uložení vypíše, ktorých subnetov sa zmena netýka.</li>
+<li>Žltý pruh hore na stránkach pluginu ukazuje počet subnetov s individuálnou konfiguráciou; zoznam (pool, subnet, stav, kedy zmenené) je na stránke Subnety a pri poole.</li>
+<li>Ak pool individuálne úpravy nepovoľuje alebo subnet už v poole nie je, individuálny kód sa nepoužíva (stav je to uvedený).</li>
+<li><b>Zrušiť individuálnu úpravu</b> vráti subnet na kód poolu.</li></ul>
 </body></html>

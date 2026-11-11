@@ -9,6 +9,10 @@
         <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="enabled"><input type="hidden" name="p" value="{{ chosen.pk }}">
           <input type="hidden" name="value" value="{% if object.enabled %}0{% else %}1{% endif %}">
           <button class="btn btn-link p-0 border-0"><i class="mdi {% if object.enabled %}mdi-checkbox-marked text-success{% else %}mdi-checkbox-blank-outline text-muted{% endif %} fs-3"></i></button></form></td></tr>
+      <tr><th scope="row">{% tr "lbl.allow_override" %}</th><td>
+        <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="allow_override"><input type="hidden" name="p" value="{{ chosen.pk }}">
+          <input type="hidden" name="value" value="{% if object.allow_override %}0{% else %}1{% endif %}">
+          <button class="btn btn-link p-0 border-0"><i class="mdi {% if object.allow_override %}mdi-checkbox-marked text-success{% else %}mdi-checkbox-blank-outline text-muted{% endif %} fs-3"></i></button></form></td></tr>
       <tr><th scope="row">{% tr "lbl.prefixes" %}</th><td>{{ prefixes|length }}</td></tr>
       <tr><th scope="row">{% tr "lbl.suitable" %}</th><td><code>{{ suitable_text }}</code></td></tr>
       <tr><th scope="row">{% tr "lbl.use_for" %}</th><td>
@@ -23,7 +27,12 @@
     </table>
   </div>
   {% if incompatible %}<div class="card mb-3 border-danger"><h5 class="card-header text-danger">{% tr "lbl.incompat" %} ({{ incompatible|length }})</h5>
-    <table class="table table-sm mb-0">{% for x in incompatible|slice:":50" %}<tr><td style="width:25%"><code>{{ x.prefix }}</code></td><td class="text-danger">{{ x.reason }}</td></tr>{% endfor %}</table></div>{% endif %}
+    <table class="table table-sm mb-0">{% for x in incompatible|slice:":50" %}<tr><td style="width:25%"><code>{{ x.prefix }}</code></td><td class="text-danger">{{ x.reason }}</td>
+      <td class="text-end">{% if object.allow_override %}<a class="btn btn-sm btn-outline-warning" href="{% url 'plugins:netbox_isc_dhcp:subnet_override' pk=object.pk prefix_pk=x.prefix_pk %}"><i class="mdi mdi-pencil"></i> {% tr "lbl.override" %}</a>{% endif %}</td></tr>{% endfor %}</table></div>{% endif %}
+  {% if overrides %}<div class="card mb-3 border-warning"><h5 class="card-header text-warning">{% tr "lbl.overrides" %} ({{ overrides|length }})</h5>
+    <table class="table table-sm mb-0"><thead><tr><th>Subnet</th><th>{% tr "lbl.state" %}</th><th>{% tr "lbl.changed" %}</th><th></th></tr></thead>
+    {% for o in overrides %}<tr><td><code>{{ o.obj.prefix_text }}</code></td><td>{% if o.state == "active" %}<span class="text-success">{% tr "st.active" %}</span>{% elif o.state == "disabled" %}<span class="text-warning">{% tr "st.disabled" %}</span>{% else %}<span class="text-warning">{% tr "st.orphan" %}</span>{% endif %}</td>
+      <td class="small">{{ o.obj.last_updated }}</td><td class="text-end"><a class="btn btn-sm btn-outline-warning" href="{% url 'plugins:netbox_isc_dhcp:subnet_override' pk=object.pk prefix_pk=o.obj.prefix_id %}"><i class="mdi mdi-pencil"></i></a></td></tr>{% endfor %}</table></div>{% endif %}
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.template_code" %}</h5>
     <div class="card-body">
@@ -41,7 +50,8 @@
   {% if editor_vars %}<div class="card mb-3"><h5 class="card-header">{% tr "menu.vars" %} <span class="small text-muted fw-normal">– {% tr "lbl.var_hint" %}</span></h5>
     <table class="table table-sm mb-0">{% for v in editor_vars %}<tr><td style="width:30%"><code>USE {{ v.name }}</code></td><td><pre class="m-0 small">{{ v.lines }}</pre></td></tr>{% endfor %}</table></div>{% endif %}
   <div class="card mb-3">
-    <h5 class="card-header d-flex justify-content-between align-items-center">{% tr "lbl.preview_for" %}
+    <h5 class="card-header d-flex justify-content-between align-items-center"><span>{% if chosen_override %}<span class="text-warning">{% tr "lbl.override_preview" %}</span>{% else %}{% tr "lbl.preview_for" %}{% endif %}
+      {% if chosen and object.allow_override %}<a class="btn btn-sm btn-outline-warning ms-2" href="{% url 'plugins:netbox_isc_dhcp:subnet_override' pk=object.pk prefix_pk=chosen.pk %}"><i class="mdi mdi-pencil"></i> {% tr "lbl.override" %}</a>{% endif %}</span>
       {% if prefixes %}<form method="get" class="m-0"><select name="p" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:16rem">
         {% for p in prefixes %}<option value="{{ p.pk }}"{% if p.pk == chosen.pk %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></form>{% endif %}</h5>
     <div class="card-body">

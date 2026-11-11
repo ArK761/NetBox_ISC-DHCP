@@ -71,6 +71,7 @@ class PoolTemplate(NetBoxModel):
     enabled = models.BooleanField(default=True, verbose_name="Generate")
     template = models.TextField(blank=True, default=default_pool_template, help_text="Jinja template of the subnet file.")
     suitable = models.JSONField(default=list, blank=True, help_text="Prefix lengths the code works for (computed).")
+    allow_override = models.BooleanField(default=False, verbose_name="Allow individual changes")
     min_prefixlen = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Use only for prefixes from /min ...")
     max_prefixlen = models.PositiveSmallIntegerField(null=True, blank=True, help_text="... to /max.")
 
@@ -111,6 +112,23 @@ class ConfigVariable(NetBoxModel):
         ips = [ip for _, ip in sorted(DNSServer.objects.filter(pk__in=self.dns_servers or []).values_list("pk", "ip"), key=lambda r: order.get(r[0], 0))]
         st = PluginSettings.objects.first()
         return build_lines(self.option, self.value, ips, st.lease_factor if st else 1.3)
+
+
+class SubnetOverride(NetBoxModel):
+    """Individual code of ONE subnet, used instead of its pool's code (an exception)."""
+
+    pool = models.ForeignKey(PoolTemplate, on_delete=models.CASCADE, related_name="overrides")
+    prefix_id = models.PositiveBigIntegerField(help_text="ipam.Prefix id")
+    prefix_text = models.CharField(max_length=64)
+    code = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("pool__name", "prefix_text")
+        verbose_name = "individual subnet code"
+        constraints = [models.UniqueConstraint(fields=("pool", "prefix_id"), name="netbox_isc_dhcp_override_unique")]
+
+    def __str__(self):
+        return f"{self.pool.name} / {self.prefix_text}"
 
 
 class DHCPPath(NetBoxModel):

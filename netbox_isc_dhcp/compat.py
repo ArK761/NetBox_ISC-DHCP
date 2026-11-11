@@ -61,8 +61,11 @@ def compute() -> list[dict]:
     model, qs, key = _pool_info(cfg)
     if key is None or not any(c.get("field") for c in cfg.conditions or []):
         return []
+    from .models import SubnetOverride
+
     args, out = _render_args(), []
     pools = {p.name: p for p in PoolTemplate.objects.all()}
+    ovr = {(o.pool_id, o.prefix_id): o for o in SubnetOverride.objects.all()}
     for value, name in _pool_names(model, qs, key):
         pt = pools.get(name)
         if pt is None or not pt.enabled:
@@ -74,15 +77,23 @@ def compute() -> list[dict]:
         for obj in qs.filter(_field_q(model, key["field"], [value]))[:5000]:
             pfx = str(getattr(obj, "prefix", ""))
             plen = getattr(getattr(obj, "prefix", None), "prefixlen", None)
+            o = ovr.get((pt.pk, obj.pk)) if pt.allow_override else None
+            if o is not None:  # individual code: its own check, no size range
+                _, errs = render_subnet(o.code, pfx, args["dns"], {"obj": obj, "cf": getattr(obj, "custom_field_data", {}) or {}},
+                                        gateway_mode=args["gateway_mode"], snippets=args["snippets"],
+                                        site=args["site"], known_classes=args["known_classes"])
+                if errs:
+                    out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx, "prefix_pk": obj.pk, "reason": "individual code: " + errs[0]})
+                continue
             if lo is None or plen is None or not lo <= plen <= hi:
-                out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx,
+                out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx, "prefix_pk": obj.pk,
                             "reason": f"size /{plen} is outside the range /{lo}-/{hi} of the pool" if lo else "the pool code has errors"})
                 continue
             _, errs = render_subnet(pt.template, pfx, args["dns"], {"obj": obj, "cf": getattr(obj, "custom_field_data", {}) or {}},
                                     gateway_mode=args["gateway_mode"], snippets=args["snippets"],
                                     site=args["site"], known_classes=args["known_classes"])
             if errs:
-                out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx, "reason": errs[0]})
+                out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx, "prefix_pk": obj.pk, "reason": errs[0]})
     return out
 
 
@@ -107,3 +118,26 @@ def ranges_text(lengths) -> str:
         if n is not None:
             start = prev = n
     return ", ".join(parts)
+
+
+def overrides() -> list[dict]:
+    """Every individual subnet code with its state: active, or not used (pool disallows it / prefix gone / other pool)."""
+    from .models import SubnetConfig, SubnetOverride
+    from .source_fields import _field_q
+    from .views import _pool_info, _pool_names
+
+    cfg = SubnetConfig.objects.first()
+    model, qs, key = _pool_info(cfg) if cfg else (None, None, None)
+    in_pool = {}
+    if key is not None:
+        for value, name in _pool_names(model, qs, key):
+            in_pool[name] = set(qs.filter(_field_q(model, key["field"], [value])).values_list("pk", flat=True))
+    out = []
+    for o in SubnetOverride.objects.select_related("pool"):
+        state = "active"
+        if not o.pool.allow_override:
+            state = "disabled"
+        elif o.prefix_id not in in_pool.get(o.pool.name, set()):
+            state = "orphan"
+        out.append({"obj": o, "state": state})
+    return out

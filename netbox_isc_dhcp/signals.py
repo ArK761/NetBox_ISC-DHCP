@@ -67,9 +67,9 @@ def _connect_invalidation():
     from ipam.models import Prefix
 
     from . import compat
-    from .models import BaseConfig, ConfigVariable, DHCPFile, DNSServer, PoolTemplate, SubnetConfig
+    from .models import BaseConfig, ConfigVariable, DHCPFile, DNSServer, PoolTemplate, SubnetConfig, SubnetOverride
 
-    for m in (Prefix, PoolTemplate, SubnetConfig, DNSServer, ConfigVariable, BaseConfig, DHCPFile):
+    for m in (Prefix, PoolTemplate, SubnetConfig, DNSServer, ConfigVariable, BaseConfig, DHCPFile, SubnetOverride):
         post_save.connect(compat.invalidate, sender=m, dispatch_uid=f"isc_dhcp_compat_save_{m.__name__}")
         post_delete.connect(compat.invalidate, sender=m, dispatch_uid=f"isc_dhcp_compat_del_{m.__name__}")
 

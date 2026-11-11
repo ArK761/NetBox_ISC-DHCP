@@ -52,7 +52,11 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   DONE v0.10.0: PoolTemplate.suitable (sizes /16-/30 the code renders on, lenient = size errors only), min/max_prefixlen ("Používať pre").
   compat.py: incompatible subnets (size outside range or render error) cached (django cache, invalidated by signals on Prefix/pool/config/DNS/vars/files);
   red banner once per page (middleware _error_once), lists on Subnety + pool page. Incompatible subnets must NEVER be exported (use compat in the export step).
-  NEXT: store generated <network>_CFG files (sha256) for compatible subnets only + subnet includes in dhcpd.conf.
+  DONE v0.11.0: SubnetOverride (pool, prefix_id, code) = individual code of one subnet, only when PoolTemplate.allow_override; editor at
+  dhcp/subnets/pools/<pk>/override/<prefix_pk>/ (check on that subnet only, draft kept); pool code save skips overridden subnets + lists them;
+  states active/disabled/orphan. Plugin warnings (no DNS, incompatible, overrides) are a solid bar at the TOP of plugin pages (middleware), not toasts
+  (toasts covered buttons). Export must use the override code for overridden subnets.
+  NEXT: store generated <network>_CFG files (sha256) for compatible subnets only (override code where active) + subnet includes in dhcpd.conf.
   DONE v0.9.0: save-time protection of pool code (owner: "kontrola musí prebiehať poriadne"): code is rendered on ALL prefixes of the pool,
   save refused on any error, draft kept in session + shown in editor, errors grouped (count + example prefix), Slovak via tmsg patterns.
   Checks: subnet_render.structure_errors + isc_rules.py (statement/option whitelist, value types, routers/subnet-mask/lease rules,

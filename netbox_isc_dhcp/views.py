@@ -395,6 +395,7 @@ def _subnetconfig_context(request, instance):
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
+            "overrides": __import__("netbox_isc_dhcp.compat", fromlist=["x"]).overrides(),
             "gateway_label": t("lbl.gw_first") if instance.gateway_mode == "first" else t("lbl.gw_last"),
             "subdirs": DHCPPath.objects.all(), "subnet_dir": getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "subnet_dir", None),
             "matched_text": t("lbl.matched", n=count) if any_active else t("lbl.matched_none")}
@@ -437,7 +438,19 @@ def _pooltemplate_context(request, instance):
     draft = request.session.pop(f"isc_pool_draft_{instance.pk}", None)
     if draft:
         draft["problems"] = [(tmsg(e), n, pfx) for e, n, pfx in draft["problems"]]
+    from .compat import overrides as _ovr
+
+    own = [o for o in _ovr() if o["obj"].pool_id == instance.pk]
+    chosen_override = next((o["obj"] for o in own if chosen is not None and o["obj"].prefix_id == chosen.pk and o["state"] == "active"), None)
+    if chosen_override is not None:
+        from .compat import _render_args
+
+        a = _render_args()
+        text, errors = render_subnet(chosen_override.code, str(chosen.prefix), a["dns"], {"obj": chosen, "cf": chosen.custom_field_data or {}},
+                                     gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"])
+        errors = [tmsg(e) for e in errors]
     return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars(), "draft": draft,
+            "overrides": own, "chosen_override": chosen_override,
             "suitable_text": ranges_text(instance.suitable), "allowed": (lo, hi), "incompatible": bad,
             "lengths": instance.suitable}
 
@@ -458,7 +471,10 @@ def _check_pool_code(instance, code, lo=None, hi=None):
 
     dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
     snippets, problems, n, ctx = variable_snippets(), [], 0, check_context()
+    own = set(instance.overrides.values_list("prefix_id", flat=True)) if instance.allow_override else set()
     for obj in qs.filter(_field_q(model, key["field"], [value]))[:5000]:
+        if obj.pk in own:
+            continue  # individual code: not affected by the pool code
         plen = getattr(getattr(obj, "prefix", None), "prefixlen", None)
         if lo is not None and (plen is None or not lo <= plen <= hi):
             continue  # outside the pool's range: not exported, shown as incompatible
@@ -507,11 +523,16 @@ class PoolTemplateInlineView(View):
                 obj.max_prefixlen = None
             obj.save()
             messages.success(request, t("msg.code_saved", n=checked))
+            own = list(obj.overrides.values_list("prefix_text", flat=True)) if obj.allow_override else []
+            if own:
+                messages.warning(request, t("msg.override_kept", list=", ".join(own[:10]) + (" …" if len(own) > 10 else "")))
             url = obj.get_absolute_url()
             p = request.POST.get("p", "")
             return redirect(f"{url}?p={p}" if p.isdigit() else url)
         elif field == "enabled":
             obj.enabled = request.POST.get("value") == "1"
+        elif field == "allow_override":
+            obj.allow_override = request.POST.get("value") == "1"
         elif field == "range":
             lo, hi = request.POST.get("min", ""), request.POST.get("max", "")
             lo, hi = (int(lo) if lo.isdigit() else None), (int(hi) if hi.isdigit() else None)
@@ -672,3 +693,64 @@ class VariablesInlineView(LoginRequiredMixin, View):
         else:
             messages.success(request, t("msg.saved"))
         return redirect("plugins:netbox_isc_dhcp:variables")
+
+
+
+# --- Individual code of one subnet (exception from its pool's code) -----------------
+class SubnetOverrideView(LoginRequiredMixin, View):
+    template = "netbox_isc_dhcp/override.html"
+
+    def _objs(self, pk, prefix_pk):
+        from ipam.models import Prefix
+
+        from .models import SubnetOverride
+
+        pool = get_object_or_404(PoolTemplate, pk=pk)
+        prefix = get_object_or_404(Prefix, pk=prefix_pk)
+        return pool, prefix, SubnetOverride.objects.filter(pool=pool, prefix_id=prefix.pk).first()
+
+    def _check(self, code, prefix):
+        from .compat import _render_args
+        from .subnet_render import render_subnet
+
+        a = _render_args()
+        return render_subnet(code, str(prefix.prefix), a["dns"], {"obj": prefix, "cf": prefix.custom_field_data or {}},
+                             gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"])
+
+    def get(self, request, pk, prefix_pk):
+        from django.shortcuts import render
+
+        pool, prefix, ovr = self._objs(pk, prefix_pk)
+        draft = request.session.pop(f"isc_ovr_draft_{pool.pk}_{prefix.pk}", None)
+        code = draft if draft is not None else (ovr.code if ovr else pool.template)
+        text, errors = self._check(code, prefix)
+        return render(request, self.template, {
+            "pool": pool, "prefix": prefix, "override": ovr, "code": code, "rendered": text,
+            "errors": [tmsg(e) for e in errors], "editor_vars": _editor_vars(), "draft": draft is not None,
+        })
+
+    def post(self, request, pk, prefix_pk):
+        from .models import SubnetOverride
+        from .variables import normalize
+
+        if not request.user.has_perm("netbox_isc_dhcp.change_pooltemplate"):
+            raise PermissionDenied
+        pool, prefix, ovr = self._objs(pk, prefix_pk)
+        here = request.path
+        if request.POST.get("field") == "delete":
+            if ovr:
+                ovr.delete()
+            messages.success(request, t("msg.override_removed", prefix=str(prefix.prefix)))
+            return redirect(f"{pool.get_absolute_url()}?p={prefix.pk}")
+        if not pool.allow_override:
+            messages.error(request, t("err.override_off"))
+            return redirect(here)
+        code = normalize(request.POST.get("value", ""))
+        _, errors = self._check(code, prefix)
+        if errors:
+            request.session[f"isc_ovr_draft_{pool.pk}_{prefix.pk}"] = code
+            messages.error(request, t("err.override_refused"))
+            return redirect(here)
+        SubnetOverride.objects.update_or_create(pool=pool, prefix_id=prefix.pk, defaults={"prefix_text": str(prefix.prefix), "code": code})
+        messages.success(request, t("msg.override_saved", prefix=str(prefix.prefix)))
+        return redirect(here)

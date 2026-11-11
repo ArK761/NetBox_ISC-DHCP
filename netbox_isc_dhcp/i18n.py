@@ -151,8 +151,8 @@ TR = {
     "lbl.e_g": ("napr.", "e.g."),
     "lbl.var_rename_note": ("Premenuje sa aj vo všetkých kódoch, kde sa používa (USE).", "It is also renamed in every code that uses it (USE)."),
     "msg.var_renamed": ("Premenované {old} → {new}; upravené aj: {where}.", "Renamed {old} → {new}; also updated: {where}."),
-    "warn.incompat": ("{n} subnetov nie je kompatibilných s nastavením svojho poolu – nie sú v exporte. Zoznam: DHCP-CFG › Subnety.",
-                      "{n} subnets are not compatible with their pool – they are not exported. List: DHCP-CFG › Subnets."),
+    "warn.incompat": ("{n} subnetov nie je kompatibilných s nastavením svojho poolu – nie sú v exporte.",
+                      "{n} subnets are not compatible with their pool – they are not exported."),
     "lbl.suitable": ("Kód je vhodný pre", "Code is suitable for"),
     "lbl.use_for": ("Používať pre", "Use for"),
     "lbl.from": ("od", "from"),
@@ -163,6 +163,26 @@ TR = {
     "lbl.reason": ("Dôvod", "Reason"),
     "lbl.pool": ("Pool", "Pool"),
     "err.range_bad": ("Rozsah musí byť v rámci vhodných veľkostí a „od“ nesmie byť väčšie ako „do“.", "The range must be within the suitable sizes and “from” must not exceed “to”."),
+    "warn.overrides": ("{n} subnetov má individuálnu konfiguráciu (výnimka z kódu poolu).",
+                       "{n} subnets have an individual configuration (exception from the pool code)."),
+    "lbl.allow_override": ("Povoliť individuálnu úpravu subnetov", "Allow individual changes of subnets"),
+    "lbl.override": ("Individuálna úprava", "Individual change"),
+    "lbl.overrides": ("Individuálne úpravy subnetov", "Individual subnet changes"),
+    "lbl.override_remove": ("Zrušiť individuálnu úpravu", "Remove individual change"),
+    "lbl.override_info": ("Tento kód platí len pre tento subnet a nahrádza kód poolu. Zmeny kódu poolu sa ho netýkajú.",
+                          "This code applies only to this subnet and replaces the pool code. Changes of the pool code do not affect it."),
+    "lbl.override_preview": ("Náhľad – individuálny kód tohto subnetu", "Preview – individual code of this subnet"),
+    "lbl.back_to_pool": ("Späť na pool", "Back to the pool"),
+    "lbl.state": ("Stav", "State"),
+    "st.active": ("platí", "active"),
+    "st.disabled": ("nepoužíva sa – pool nepovoľuje individuálne úpravy", "not used – the pool does not allow individual changes"),
+    "st.orphan": ("nepoužíva sa – subnet už nie je v tomto poole", "not used – the subnet is no longer in this pool"),
+    "lbl.changed": ("Zmenené", "Changed"),
+    "err.override_off": ("Pool nepovoľuje individuálne úpravy – zapnite to pri poole.", "The pool does not allow individual changes – enable it on the pool."),
+    "err.override_refused": ("Individuálny kód sa NEUložil – opravte chyby (text je v editore).", "Individual code NOT saved – fix the errors (your text is in the editor)."),
+    "msg.override_saved": ("Individuálny kód pre {prefix} uložený.", "Individual code for {prefix} saved."),
+    "msg.override_removed": ("Individuálna úprava {prefix} zrušená – platí kód poolu.", "Individual change of {prefix} removed – the pool code applies."),
+    "msg.override_kept": ("Zmena sa netýka subnetov s individuálnou konfiguráciou: {list}", "The change does not affect subnets with an individual configuration: {list}"),
     "lbl.yes": ("áno", "yes"),
     "lbl.no": ("nie", "no"),
 }
@@ -240,6 +260,8 @@ def tmsg(text: str) -> str:
     """Translate a validation message of the pure code (English) to the current language."""
     if current_language() != "sk":
         return text
+    if text.startswith("individual code: "):
+        return "individuálny kód: " + tmsg(text[len("individual code: "):])
     if text in _MSG_SK:
         return _MSG_SK[text]
     import re

@@ -1,7 +1,7 @@
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
-from ..models import ConfigVariable, PoolTemplate, SubnetConfig, BaseConfig, DHCPPath, DHCPGroup, DHCPFile, DNSServer, PluginSettings
+from ..models import SubnetOverride, ConfigVariable, PoolTemplate, SubnetConfig, BaseConfig, DHCPPath, DHCPGroup, DHCPFile, DNSServer, PluginSettings
 
 
 class BaseConfigSerializer(NetBoxModelSerializer):
@@ -83,4 +83,13 @@ class ConfigVariableSerializer(NetBoxModelSerializer):
     class Meta:
         model = ConfigVariable
         fields = ('id', 'url', 'display', 'name', 'option', 'value', 'dns_servers', 'tags', 'custom_fields', 'created', 'last_updated')
+        brief_fields = ('id', 'url', 'display')
+
+
+class SubnetOverrideSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="plugins-api:netbox_isc_dhcp-api:subnetoverride-detail")
+
+    class Meta:
+        model = SubnetOverride
+        fields = ('id', 'url', 'display', 'pool', 'prefix_id', 'prefix_text', 'code', 'tags', 'custom_fields', 'created', 'last_updated')
         brief_fields = ('id', 'url', 'display')

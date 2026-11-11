@@ -10,6 +10,7 @@ urlpatterns = [
     path("dhcp/variables/", views.VariablesView.as_view(), name="variables"),
     path("dhcp/variables/inline/", views.VariablesInlineView.as_view(), name="variables_inline"),
     path("settings/<int:pk>/inline/", views.PluginSettingsInlineView.as_view(), name="pluginsettings_inline"),
+    path("dhcp/subnets/pools/<int:pk>/override/<int:prefix_pk>/", views.SubnetOverrideView.as_view(), name="subnet_override"),
     path("dhcp/subnets/pools/<int:pk>/inline/", views.PoolTemplateInlineView.as_view(), name="pooltemplate_inline"),
     path("dhcp/subnets/<int:pk>/inline/", views.SubnetConfigInlineView.as_view(), name="subnetconfig_inline"),
     path("dhcp/base-config/<int:pk>/inline/", views.BaseConfigInlineView.as_view(), name="baseconfig_inline"),

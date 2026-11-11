@@ -98,5 +98,11 @@
     <table class="table table-sm mb-0"><thead><tr><th>{% tr "lbl.pool" %}</th><th>Subnet</th><th>{% tr "lbl.reason" %}</th></tr></thead>
     {% for x in incompatible|slice:":100" %}<tr><td><a href="{% url 'plugins:netbox_isc_dhcp:pooltemplate' pk=x.pool_pk %}">{{ x.pool }}</a></td><td><code>{{ x.prefix }}</code></td><td class="text-danger">{{ x.reason }}</td></tr>{% endfor %}</table></div>{% endif %}
   {% endif %}
+  {% if overrides %}<div class="card mb-3 border-warning"><h5 class="card-header text-warning">{% tr "lbl.overrides" %} ({{ overrides|length }})</h5>
+    <table class="table table-sm mb-0"><thead><tr><th>{% tr "lbl.pool" %}</th><th>Subnet</th><th>{% tr "lbl.state" %}</th><th>{% tr "lbl.changed" %}</th></tr></thead>
+    {% for o in overrides %}<tr><td><a href="{{ o.obj.pool.get_absolute_url }}">{{ o.obj.pool.name }}</a></td>
+      <td><a href="{% url 'plugins:netbox_isc_dhcp:subnet_override' pk=o.obj.pool_id prefix_pk=o.obj.prefix_id %}"><code>{{ o.obj.prefix_text }}</code></a></td>
+      <td>{% if o.state == "active" %}<span class="text-success">{% tr "st.active" %}</span>{% elif o.state == "disabled" %}<span class="text-warning">{% tr "st.disabled" %}</span>{% else %}<span class="text-warning">{% tr "st.orphan" %}</span>{% endif %}</td>
+      <td class="small">{{ o.obj.last_updated }}</td></tr>{% endfor %}</table></div>{% endif %}
 </div></div>
 {% endblock %}
