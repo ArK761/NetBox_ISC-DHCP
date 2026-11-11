@@ -10,6 +10,17 @@
         <input name="value" value="{{ lease_factor }}" class="form-control form-control-sm" style="max-width:8rem"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
   </td></tr></table></div>
 
+  {% if unknown %}<div class="card mb-3 border-danger">
+    <h5 class="card-header text-bg-danger"><i class="mdi mdi-alert-octagon-outline"></i> {% tr "lbl.var_unknown" %}</h5>
+    <div class="card-body pb-1"><p class="text-muted">{% tr "lbl.var_unknown_hint" %}</p>
+    <table class="table mb-0 align-middle"><tbody>{% for name, where in unknown %}<tr>
+      <td><code class="isc-unknown-name">USE {{ name }}</code><div class="small text-muted">{{ where|join:", " }}</div></td>
+      <td class="text-end"><form method="post" action="{{ inline_url }}" class="d-flex gap-2 justify-content-end m-0">{% csrf_token %}
+        <input type="hidden" name="field" value="remap"><input type="hidden" name="old" value="{{ name }}">
+        <select name="value" class="form-select form-select-sm no-ts" style="max-width:18rem" required><option value="">{% tr "lbl.var_pick" %}</option>
+          {% for r in rows %}<option value="{{ r.obj.name }}">{{ r.obj.name }}</option>{% endfor %}</select>
+        <button class="btn btn-sm btn-danger text-nowrap">{% tr "lbl.var_replace" %}</button></form></td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+
   <div class="card mb-3">
     <h5 class="card-header">{% tr "menu.vars" %}</h5>
     <table class="table table-hover mb-0 align-middle">

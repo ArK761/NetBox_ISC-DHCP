@@ -64,7 +64,7 @@
 <tr><td>domain-name-servers</td><td>zaškrtnuté DNS servery</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
-<p>V kóde poolu napíšte <code>..</code> – pri kurzore sa ukáže zoznam premenných; vyberte šípkami a Enterom. Vloží sa riadok <code>USE &lt;popis&gt;</code>, ktorý sa vo výsledku nahradí skutočnými riadkami. Pri vložení cez <code>..</code> sa nad riadok pridá komentár <code>## VARIABLE ADDED VIA OWN VARIABLES</code>. Riadky s premennými svietia v editore aj v náhľade na žlto a vo vygenerovanom súbore má každý riadok z premennej na konci komentár <code>## added via own variable &lt;popis&gt; ##</code>. Používanú premennú nemožno zmazať; pri premenovaní sa nový názov automaticky prepíše vo všetkých kódoch (pooly, súbory skupín aj individuálne úpravy subnetov).</p>
+<p>V kóde poolu napíšte <code>..</code> – pri kurzore sa ukáže zoznam premenných; vyberte šípkami a Enterom. Vloží sa riadok <code>USE &lt;popis&gt;</code>, ktorý sa vo výsledku nahradí skutočnými riadkami. Pri vložení cez <code>..</code> sa nad riadok pridá komentár <code>## VARIABLE ADDED VIA OWN VARIABLES</code>. Riadky s premennými svietia v editore aj v náhľade na žlto a vo vygenerovanom súbore má každý riadok z premennej na konci komentár <code>## added via own variable &lt;popis&gt; ##</code>. Používanú premennú nemožno zmazať; pri premenovaní sa nový názov automaticky prepíše vo všetkých kódoch (pooly, súbory skupín aj individuálne úpravy subnetov). Ak kód obsahuje <code>USE</code> s názvom, ku ktorému neexistuje premenná (napr. premenovanou v staršej verzii), hore svieti červený pruh a na stránke Vlastné premenné je karta „Kód používa neexistujúce premenné“: vyberte existujúcu premennú a kliknite <b>Prepísať</b> – riadky sa prepíšu vo všetkých kódoch.</p>
 
 <h2>9. Hosty a MAC adresy (tenanti)</h2>
 <ul><li>Skupina tenantov = trieda DHCP; meno tenanta = host-name.</li>
@@ -103,6 +103,7 @@
 <li>Pri uložení platí rovnaká kontrola, ale len na tento subnet. Pre subnet s individuálnym kódom sa nekontroluje rozsah veľkostí poolu.</li>
 <li>Zmeny kódu poolu sa individuálnych subnetov netýkajú – plugin pri uložení vypíše, ktorých subnetov sa zmena netýka.</li>
 <li>Žltý pruh hore na stránkach pluginu ukazuje počet subnetov s individuálnou konfiguráciou; zoznam (pool, subnet, stav, kedy zmenené) je na stránke Subnety a pri poole.</li>
+<li>Tlačidlo <b>Zobraziť strom ▾</b> v pruhu rozbalí strom pool → subnety; kliknutie na položku ju otvorí v novom okne.</li>
 <li>Ak pool individuálne úpravy nepovoľuje alebo subnet už v poole nie je, individuálny kód sa nepoužíva (stav je to uvedený).</li>
 <li><b>Zrušiť individuálnu úpravu</b> vráti subnet na kód poolu.</li></ul>
 </body></html>

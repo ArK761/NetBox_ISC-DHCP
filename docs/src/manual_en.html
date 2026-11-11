@@ -64,7 +64,7 @@
 <tr><td>domain-name-servers</td><td>ticked DNS servers</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
-<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. When inserted with <code>..</code>, the comment <code>## VARIABLE ADDED VIA OWN VARIABLES</code> is added above the line. Variable lines are yellow in the editor and in the preview, and in the generated file every line coming from a variable ends with <code>## added via own variable &lt;name&gt; ##</code>. A variable in use cannot be deleted; when renamed, the new name is written automatically into every code (pools, group files and individual subnet codes).</p>
+<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. When inserted with <code>..</code>, the comment <code>## VARIABLE ADDED VIA OWN VARIABLES</code> is added above the line. Variable lines are yellow in the editor and in the preview, and in the generated file every line coming from a variable ends with <code>## added via own variable &lt;name&gt; ##</code>. A variable in use cannot be deleted; when renamed, the new name is written automatically into every code (pools, group files and individual subnet codes). If a code contains <code>USE</code> with a name that has no variable (e.g. renamed in an older version), a red bar is shown at the top and the Own variables page has a card “Code uses variables that do not exist”: pick an existing variable and click <b>Rewrite</b> – the lines are rewritten in every code.</p>
 
 <h2>9. Hosts and MAC addresses (tenants)</h2>
 <ul><li>Tenant group = DHCP class; tenant name = host-name.</li>
@@ -103,6 +103,7 @@
 <li>On save the same check applies, but only to this subnet. The pool's size range is not checked for a subnet with its own code.</li>
 <li>Changes of the pool code do not affect individual subnets – on save the plugin lists which subnets are not affected.</li>
 <li>A yellow bar at the top of the plugin pages shows the number of subnets with an individual configuration; the list (pool, subnet, state, changed) is on the Subnets page and on the pool.</li>
+<li>The <b>Show tree ▾</b> button in the bar expands the tree pool → subnets; clicking an item opens it in a new window.</li>
 <li>If the pool does not allow individual changes or the subnet is no longer in the pool, the individual code is not used (the state says so).</li>
 <li><b>Remove individual change</b> returns the subnet to the pool code.</li></ul>
 </body></html>

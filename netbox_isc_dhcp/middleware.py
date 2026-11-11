@@ -17,8 +17,9 @@ _MARKER = '<div class="container-fluid tab-content py-3">'
 
 
 _TREE_CSS = (
-    "<style>details.isc-notice>summary{list-style:none;cursor:pointer}details.isc-notice>summary::-webkit-details-marker{display:none}"
-    "details.isc-notice[open] .isc-chev{transform:rotate(180deg)}details.isc-notice .isc-tree{margin:.4rem 0 .1rem 2rem;max-height:22rem;overflow:auto}"
+    "<style>details.isc-notice{display:block!important}details.isc-notice>summary{list-style:none;cursor:pointer}details.isc-notice>summary::-webkit-details-marker{display:none}"
+    "details.isc-notice .isc-hide,details.isc-notice[open] .isc-show{display:none}details.isc-notice[open] .isc-hide{display:inline}"
+    "details.isc-notice .isc-tog{border:1px solid currentColor;border-radius:.3rem;padding:0 .5rem}details.isc-notice .isc-tree{margin:.4rem 0 .1rem 2rem;max-height:22rem;overflow:auto}"
     "details.isc-notice .isc-tree ul{list-style:none;padding-left:1.2rem;margin:.1rem 0 .4rem;border-left:1px solid currentColor}"
     "details.isc-notice a{color:inherit}details.isc-notice .isc-tree li{margin:.1rem 0}</style>"
 )
@@ -26,7 +27,7 @@ _NOTICE = ('<div class="alert text-bg-{level} border-0 d-flex align-items-center
            '<span>{text}</span>{link}</div>')
 
 
-def inject_badge(response, notices=()):
+def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
     """Insert the version badge before </body> of an HTML response (no JavaScript involved)."""
     if response.status_code != 200 or getattr(response, "streaming", False):
         return response
@@ -41,7 +42,7 @@ def inject_badge(response, notices=()):
         badge += _TREE_CSS
     for level, icon, text, url, link_text, *rest in notices:  # plugin warnings at the top of the page (never cover buttons)
         tree = rest[0] if rest else None
-        link = f' <a class="ms-auto fw-bold text-reset" href="{escape(url)}">{escape(link_text)} &rarr;</a>' if url else ""
+        link = "" if tree else f' <a class="ms-auto fw-bold text-reset" href="{escape(url)}">{escape(link_text)} &rarr;</a>' if url else ""
         if not tree:
             badge += _NOTICE.format(level=level, icon=icon, text=escape(text), link=link)
             continue
@@ -57,7 +58,8 @@ def inject_badge(response, notices=()):
                       f' <span class="opacity-75">({len(items)})</span><ul>{leaves}{more}</ul></li>')
         badge += (f'<details class="isc-notice alert text-bg-{level} border-0 py-2 mb-2 fw-semibold">'
                   f'<summary class="d-flex align-items-center gap-2"><i class="mdi {icon} fs-4"></i><span>{escape(text)}</span>'
-                  f'<i class="mdi mdi-chevron-down fs-4 isc-chev ms-1"></i>{link}</summary>'
+                  f'<span class="isc-tog ms-auto text-nowrap"><i class="mdi mdi-file-tree"></i> '
+                  f'<span class="isc-show">{escape(toggle[0])} &#9662;</span><span class="isc-hide">{escape(toggle[1])} &#9652;</span></span></summary>'
                   f'<div class="isc-tree fw-normal"><ul class="border-0 ps-0">{nodes}</ul></div></details>')
     i = body.find(_MARKER)
     if i != -1:
@@ -99,6 +101,13 @@ class DNSWarningMiddleware:
         out = []
         if not DNSServer.objects.filter(active=True).exists():
             out.append(("danger", "mdi-dns-outline", t("warn.no_dns"), reverse("plugins:netbox_isc_dhcp:dnsserver_list"), t("menu.dns")))
+        from .models import ConfigVariable
+        from .services import variable_usage
+
+        missing = sorted(set(variable_usage()) - set(ConfigVariable.objects.values_list("name", flat=True)))
+        if missing:
+            out.append(("danger", "mdi-variable", t("warn.var_unknown", n=len(missing), names=", ".join(missing[:5])),
+                        reverse("plugins:netbox_isc_dhcp:variables"), t("menu.vars")))
         subnets = reverse("plugins:netbox_isc_dhcp:subnetconfig_list")
         from .i18n import tmsg
 
@@ -130,7 +139,7 @@ class DNSWarningMiddleware:
         response = self.get_response(request)
         if on_plugin:
             try:
-                response = inject_badge(response, notices)
+                response = inject_badge(response, notices, (t("lbl.tree_show"), t("lbl.tree_hide")))
             except Exception:
                 pass
         return response

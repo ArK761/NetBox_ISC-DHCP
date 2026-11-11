@@ -586,6 +586,7 @@ class VariablesView(LoginRequiredMixin, View):
         return render(request, "netbox_isc_dhcp/variables.html", {
             "rows": rows, "catalog_groups": groups, "dns_all": DNSServer.objects.all(),
             "lease_factor": st.lease_factor if st else 1.3,
+            "unknown": sorted((n, w) for n, w in usage.items() if n not in {r["obj"].name for r in rows}),
         })
 
 
@@ -602,6 +603,30 @@ def _apply_value(obj, post):
         obj.value = post.get(f"value_{kind}", post.get("value", "")).strip()
     else:
         obj.value = post.get("value_text", post.get("value", "")).strip()
+
+
+def _rewrite_use(old, new):
+    """Rewrite every `USE old` line to `USE new` in pools, group files and subnet overrides; returns where."""
+    from .models import DHCPFile, PoolTemplate, SubnetOverride
+    from .variables import rename_use, used_names
+
+    changed = []
+    for pt in PoolTemplate.objects.all():
+        if old in used_names(pt.template):
+            pt.template = rename_use(pt.template, old, new)
+            pt.save()
+            changed.append(f"pool {pt.name}")
+    for f in DHCPFile.objects.all():
+        if old in used_names(f.template):
+            f.template = rename_use(f.template, old, new)
+            f.save()  # regenerates the stored file
+            changed.append(f"file {f.name}")
+    for o in SubnetOverride.objects.select_related("pool"):
+        if old in used_names(o.code):
+            o.code = rename_use(o.code, old, new)
+            o.save()
+            changed.append(f"subnet {o.prefix_text} ({o.pool.name})")
+    return changed
 
 
 class VariablesInlineView(LoginRequiredMixin, View):
@@ -643,33 +668,25 @@ class VariablesInlineView(LoginRequiredMixin, View):
             elif value != obj.name:
                 from django.db import transaction
 
-                from .models import DHCPFile, PoolTemplate
-                from .variables import rename_use, used_names
-
-                old, changed = obj.name, []
+                old = obj.name
                 with transaction.atomic():  # name and every USE line change together
                     obj.name = value
                     obj.save()
-                    for pt in PoolTemplate.objects.all():
-                        if old in used_names(pt.template):
-                            pt.template = rename_use(pt.template, old, value)
-                            pt.save()
-                            changed.append(f"pool {pt.name}")
-                    for f in DHCPFile.objects.all():
-                        if old in used_names(f.template):
-                            f.template = rename_use(f.template, old, value)
-                            f.save()  # regenerates the stored file
-                            changed.append(f"file {f.name}")
-                    from .models import SubnetOverride
-
-                    for o in SubnetOverride.objects.select_related("pool"):
-                        if old in used_names(o.code):
-                            o.code = rename_use(o.code, old, value)
-                            o.save()
-                            changed.append(f"subnet {o.prefix_text} ({o.pool.name})")
+                    changed = _rewrite_use(old, value)
                 if changed:
                     messages.success(request, t("msg.var_renamed", old=old, new=value, where=", ".join(changed)))
                     return redirect("plugins:netbox_isc_dhcp:variables")
+        elif action == "remap":  # repair: USE lines naming a variable that does not exist -> an existing one
+            from django.db import transaction
+
+            old = request.POST.get("old", "").strip()
+            if not ConfigVariable.objects.filter(name=value).exists() or not old or ConfigVariable.objects.filter(name=old).exists():
+                err = t("err.var_remap")
+            else:
+                with transaction.atomic():
+                    changed = _rewrite_use(old, value)
+                messages.success(request, t("msg.var_renamed", old=old, new=value, where=", ".join(changed) or "-"))
+                return redirect("plugins:netbox_isc_dhcp:variables")
         elif obj is not None and action == "set_value":
             from .variables import VariableError
 
