@@ -47,7 +47,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   Subnet directory chosen on the Subnety page (= PluginSettings.subnet_dir).
   OWN VARIABLES (DHCP-CFG > Vlastné premenné, dhcp/variables/): ConfigVariable(name=description, option from CATALOG in variables.py, value, dns_servers).
   Pool code line `USE <name>` is replaced by the variable's ISC lines (indent kept); lease -> default + max (PluginSettings.lease_factor, 1.3).
-  Used variables (any USE in pool/file code) are locked: no rename/delete. Code editors: no spellcheck, no wrap, `..` autocomplete (_code_editor.html).
+  Used variables (any USE in pool/file code) cannot be deleted; renaming rewrites all `USE old` lines (variables.rename_use, atomic). Code editors: no spellcheck, no wrap, `..` autocomplete (_code_editor.html).
   All text/code fields are stored with LF (browsers send CRLF) - pre_save signal.
   NEXT: store generated <network>_CFG files (sha256) + subnet includes in dhcpd.conf.
   DONE v0.9.0: save-time protection of pool code (owner: "kontrola musí prebiehať poriadne"): code is rendered on ALL prefixes of the pool,

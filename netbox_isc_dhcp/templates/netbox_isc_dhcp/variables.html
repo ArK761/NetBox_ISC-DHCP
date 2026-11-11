@@ -16,11 +16,11 @@
       <thead><tr><th>{% tr "lbl.var_desc" %}</th><th>{% tr "lbl.var_option" %}</th><th>{% tr "lbl.var_value" %}</th><th>{% tr "lbl.var_lines" %}</th><th></th></tr></thead>
       {% for r in rows %}
       <tr>
-        <td>{% if r.used_by %}<strong><i class="mdi mdi-lock-outline text-muted" title="{% tr 'lbl.var_locked' %}"></i> {{ r.obj.name }}</strong>
-              <div class="small text-muted">{% tr "lbl.var_used" %}: {{ r.used_by|join:", " }}</div>
-            {% else %}<details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><strong>{{ r.obj.name }}</strong> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <td><details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><strong>{{ r.obj.name }}</strong> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
               <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="rename"><input type="hidden" name="pk" value="{{ r.obj.pk }}">
-                <input name="value" value="{{ r.obj.name }}" class="form-control form-control-sm font-monospace"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>{% endif %}</td>
+                <input name="value" value="{{ r.obj.name }}" class="form-control form-control-sm font-monospace"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form>
+              {% if r.used_by %}<div class="small text-warning mt-1">{% tr "lbl.var_rename_note" %}</div>{% endif %}</details>
+            {% if r.used_by %}<div class="small text-muted"><i class="mdi mdi-lock-outline" title="{% tr 'lbl.var_locked' %}"></i> {% tr "lbl.var_used" %}: {{ r.used_by|join:", " }}</div>{% endif %}</td>
         <td><code>{{ r.label }}</code></td>
         <td><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">
               {% if r.error %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% elif r.kind == "dns" %}{{ r.lines|cut:"option domain-name-servers "|cut:";" }}{% elif r.kind == "raw" %}<span class="text-muted">…</span>{% else %}<code>{{ r.obj.value }}</code>{% endif %}

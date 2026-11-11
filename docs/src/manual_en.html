@@ -63,7 +63,7 @@
 <tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (factor 1.3 – configurable)</td></tr>
 <tr><td>domain-name-servers</td><td>ticked DNS servers</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
-<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. A variable in use is locked – it cannot be renamed or deleted.</p>
+<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. A variable in use cannot be deleted. When renamed, the new name is written automatically into every code that uses it (USE lines).</p>
 
 <h2>9. Hosts and MAC addresses (tenants)</h2>
 <ul><li>Tenant group = DHCP class; tenant name = host-name.</li>

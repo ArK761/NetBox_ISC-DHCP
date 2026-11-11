@@ -580,15 +580,33 @@ class VariablesInlineView(LoginRequiredMixin, View):
                 except VariableError as exc:
                     err = tmsg(str(exc))
         elif obj is not None and action == "rename":
-            if used:
-                err = t("err.var_used", name=obj.name)
-            elif not NAME_RE.match(value):
+            if not NAME_RE.match(value):
                 err = t("err.var_name")
             elif ConfigVariable.objects.filter(name=value).exclude(pk=obj.pk).exists():
                 err = t("err.var_exists", name=value)
-            else:
-                obj.name = value
-                obj.save()
+            elif value != obj.name:
+                from django.db import transaction
+
+                from .models import DHCPFile, PoolTemplate
+                from .variables import rename_use, used_names
+
+                old, changed = obj.name, []
+                with transaction.atomic():  # name and every USE line change together
+                    obj.name = value
+                    obj.save()
+                    for pt in PoolTemplate.objects.all():
+                        if old in used_names(pt.template):
+                            pt.template = rename_use(pt.template, old, value)
+                            pt.save()
+                            changed.append(f"pool {pt.name}")
+                    for f in DHCPFile.objects.all():
+                        if old in used_names(f.template):
+                            f.template = rename_use(f.template, old, value)
+                            f.save()  # regenerates the stored file
+                            changed.append(f"file {f.name}")
+                if changed:
+                    messages.success(request, t("msg.var_renamed", old=old, new=value, where=", ".join(changed)))
+                    return redirect("plugins:netbox_isc_dhcp:variables")
         elif obj is not None and action == "set_value":
             from .variables import VariableError
 

@@ -108,6 +108,12 @@ def used_names(text: str) -> set[str]:
     return {m.group("name") for m in USE_RE.finditer(normalize(text))}
 
 
+def rename_use(text: str, old: str, new: str) -> str:
+    """Rewrite every `USE <old>` line to `USE <new>` (indentation kept)."""
+    pattern = re.compile(r"^(?P<indent>[ \t]*)USE[ \t]+" + re.escape(old) + r"[ \t]*$", re.M)
+    return pattern.sub(lambda m: m.group("indent") + "USE " + new, normalize(text))
+
+
 def expand_use(template: str, snippets: dict[str, str]) -> tuple[str, list[str]]:
     """Replace every `USE <name>` line by the snippet lines (same indentation). Unknown names are errors."""
     errors: list[str] = []

@@ -34,3 +34,10 @@ def test_crlf_from_browser_is_handled():
     tpl = "subnet x {\r\n  USE A\r\n}\r\n"
     out, err = expand_use(tpl, {"A": "deny duplicates;"})
     assert out == "subnet x {\n  deny duplicates;\n}\n" and err == [] and used_names(tpl) == {"A"}
+
+
+def test_rename_use_lines_only_exact_name():
+    from netbox_isc_dhcp.variables import rename_use
+
+    tpl = "subnet x {\n    USE TIME_600\n    USE TIME_6000\n  USE TIME_600  \n}\n"
+    assert rename_use(tpl, "TIME_600", "LEASE_10MIN") == "subnet x {\n    USE LEASE_10MIN\n    USE TIME_6000\n  USE LEASE_10MIN\n}\n"
