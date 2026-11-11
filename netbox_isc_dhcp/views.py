@@ -384,11 +384,17 @@ def _subnetconfig_context(request, instance):
         if len(names) > MAX_POOLS:
             pools_error = t("err.pool_key_many", n=len(names), max=MAX_POOLS)
         else:
+            from .compat import incompatible
+
+            bad = incompatible()
             for value, name in names:
                 pt, _ = PoolTemplate.objects.get_or_create(name=name[:100])
-                pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [value])).count()})
+                lo, hi = pt.allowed_range()
+                pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [value])).count(),
+                              "range": f"/{lo} – /{hi}" if lo else "—", "bad": sum(1 for x in bad if x["pool_pk"] == pt.pk)})
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
+            "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
             "gateway_label": t("lbl.gw_first") if instance.gateway_mode == "first" else t("lbl.gw_last"),
             "subdirs": DHCPPath.objects.all(), "subnet_dir": getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "subnet_dir", None),
             "matched_text": t("lbl.matched", n=count) if any_active else t("lbl.matched_none")}
@@ -420,14 +426,23 @@ def _pooltemplate_context(request, instance):
                                      {"obj": chosen, "cf": getattr(chosen, "custom_field_data", {}) or {}},
                                      gateway_mode=cfg.gateway_mode if cfg else "first", snippets=variable_snippets(),
                                      **__import__("netbox_isc_dhcp.services", fromlist=["x"]).check_context())
+    from .compat import incompatible, ranges_text, suitable_lengths
+
+    if not instance.suitable:
+        instance.suitable = suitable_lengths(instance.template)
+        PoolTemplate.objects.filter(pk=instance.pk).update(suitable=instance.suitable)
+    lo, hi = instance.allowed_range()
+    bad = [dict(x, reason=tmsg(x["reason"])) for x in incompatible() if x["pool_pk"] == instance.pk]
     errors = [tmsg(e) for e in errors]
     draft = request.session.pop(f"isc_pool_draft_{instance.pk}", None)
     if draft:
         draft["problems"] = [(tmsg(e), n, pfx) for e, n, pfx in draft["problems"]]
-    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars(), "draft": draft}
+    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars(), "draft": draft,
+            "suitable_text": ranges_text(instance.suitable), "allowed": (lo, hi), "incompatible": bad,
+            "lengths": instance.suitable}
 
 
-def _check_pool_code(instance, code):
+def _check_pool_code(instance, code, lo=None, hi=None):
     """Render the code on EVERY prefix of the pool. Returns (checked prefixes, [(prefix, error), ...])."""
     from .models import DNSServer
     from .services import variable_snippets
@@ -444,6 +459,9 @@ def _check_pool_code(instance, code):
     dns = list(DNSServer.objects.filter(active=True).values_list("ip", flat=True))
     snippets, problems, n, ctx = variable_snippets(), [], 0, check_context()
     for obj in qs.filter(_field_q(model, key["field"], [value]))[:5000]:
+        plen = getattr(getattr(obj, "prefix", None), "prefixlen", None)
+        if lo is not None and (plen is None or not lo <= plen <= hi):
+            continue  # outside the pool's range: not exported, shown as incompatible
         n += 1
         _, errs = render_subnet(code, str(getattr(obj, "prefix", "")), dns, {"obj": obj, "cf": getattr(obj, "custom_field_data", {}) or {}},
                                 gateway_mode=cfg.gateway_mode, snippets=snippets, **ctx)
@@ -461,8 +479,13 @@ class PoolTemplateInlineView(View):
         if field == "template":
             from .variables import normalize
 
+            from .compat import suitable_lengths
+
             code = normalize(request.POST.get("value", ""))
-            checked, problems = _check_pool_code(obj, code)
+            suitable = suitable_lengths(code)
+            lo = max(obj.min_prefixlen or 0, min(suitable)) if suitable else None
+            hi = min(obj.max_prefixlen or 99, max(suitable)) if suitable else None
+            checked, problems = _check_pool_code(obj, code, lo, hi) if suitable else _check_pool_code(obj, code)
             if problems:
                 # refuse: the working code stays, the edited text is kept for fixing
                 grouped = {}
@@ -477,6 +500,11 @@ class PoolTemplateInlineView(View):
                 return redirect(f"{url}?p={p}" if p.isdigit() else url)
             request.session.pop(draft_key, None)
             obj.template = code
+            obj.suitable = suitable
+            if obj.min_prefixlen and obj.min_prefixlen not in suitable:
+                obj.min_prefixlen = None
+            if obj.max_prefixlen and obj.max_prefixlen not in suitable:
+                obj.max_prefixlen = None
             obj.save()
             messages.success(request, t("msg.code_saved", n=checked))
             url = obj.get_absolute_url()
@@ -484,6 +512,13 @@ class PoolTemplateInlineView(View):
             return redirect(f"{url}?p={p}" if p.isdigit() else url)
         elif field == "enabled":
             obj.enabled = request.POST.get("value") == "1"
+        elif field == "range":
+            lo, hi = request.POST.get("min", ""), request.POST.get("max", "")
+            lo, hi = (int(lo) if lo.isdigit() else None), (int(hi) if hi.isdigit() else None)
+            if (lo and lo not in obj.suitable) or (hi and hi not in obj.suitable) or (lo and hi and lo > hi):
+                messages.error(request, t("err.range_bad"))
+                return redirect(obj.get_absolute_url())
+            obj.min_prefixlen, obj.max_prefixlen = lo, hi
         obj.save()
         messages.success(request, t("msg.saved"))
         url = obj.get_absolute_url()

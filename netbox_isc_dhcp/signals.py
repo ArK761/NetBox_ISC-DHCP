@@ -60,3 +60,18 @@ def normalize_text(sender, instance, **kwargs):
         from .models import _normalize_text_fields
 
         _normalize_text_fields(instance)
+
+
+# any change that can make a subnet (in)compatible with its pool drops the cached result
+def _connect_invalidation():
+    from ipam.models import Prefix
+
+    from . import compat
+    from .models import BaseConfig, ConfigVariable, DHCPFile, DNSServer, PoolTemplate, SubnetConfig
+
+    for m in (Prefix, PoolTemplate, SubnetConfig, DNSServer, ConfigVariable, BaseConfig, DHCPFile):
+        post_save.connect(compat.invalidate, sender=m, dispatch_uid=f"isc_dhcp_compat_save_{m.__name__}")
+        post_delete.connect(compat.invalidate, sender=m, dispatch_uid=f"isc_dhcp_compat_del_{m.__name__}")
+
+
+_connect_invalidation()

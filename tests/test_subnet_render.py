@@ -112,3 +112,25 @@ def test_custom_option_and_set_variable_from_static_part_are_accepted():
 def test_routers_outside_subnet():
     bad = GOOD.replace("option routers 10.20.0.1;", "option routers 10.30.0.1;")
     assert any("not a usable address" in e for e in structure_errors(bad, "10.20.0.0/24", SITE, CLASSES))
+
+
+def test_lenient_mode_ignores_site_references_but_not_size_errors():
+    tpl = GOOD.replace('deny members of "A";', 'deny members of "Unknown";').replace("concat (", "concat (fooo, ")
+    assert structure_errors(tpl, "10.20.0.0/24", SITE, CLASSES)            # strict: class + word errors
+    assert structure_errors(tpl, "10.20.0.0/24", SITE, CLASSES, lenient=True) == []
+
+
+def test_every_check_message_has_a_slovak_translation(monkeypatch):
+    import netbox_isc_dhcp.i18n as i18n
+
+    monkeypatch.setattr(i18n, "current_language", lambda: "sk")
+    msgs = []
+    for line, _ in [(l, e) for l, e in [
+        ("    optin routers 10.20.0.1;", 0), ("    option dns-servers 1.1.1.1;", 0), ("    option ntp-servers 1.1.1.999;", 0),
+        ("    option interface-mtu big;", 0), ("    option domain-name firma.local;", 0), ("    option subnet-mask 255.255.0.0;", 0),
+        ("    max-lease-time 100;", 0), ('    allow members of "Nope";', 0), ('    log (info, concat("X ", fooo));', 0),
+        ("    filename pxelinux.0;", 0), ("    deny duplicates", 0), ("option routers 1.1.1.1;", 0)]]:
+        msgs += errs(line)
+    msgs += ["size /28 is outside the range /24-/24 of the pool", "the pool code has errors", "USE X: unknown variable"]
+    untranslated = [m for m in msgs if i18n.tmsg(m) == m]
+    assert untranslated == []

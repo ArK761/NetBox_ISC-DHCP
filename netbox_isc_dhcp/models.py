@@ -70,10 +70,19 @@ class PoolTemplate(NetBoxModel):
     name = models.CharField(max_length=100, unique=True, help_text="Pool type value, e.g. WorkStation.")
     enabled = models.BooleanField(default=True, verbose_name="Generate")
     template = models.TextField(blank=True, default=default_pool_template, help_text="Jinja template of the subnet file.")
+    suitable = models.JSONField(default=list, blank=True, help_text="Prefix lengths the code works for (computed).")
+    min_prefixlen = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Use only for prefixes from /min ...")
+    max_prefixlen = models.PositiveSmallIntegerField(null=True, blank=True, help_text="... to /max.")
 
     class Meta:
         ordering = ("name",)
         verbose_name = "pool"
+
+    def allowed_range(self):
+        """(min, max) prefix length this pool is used for; defaults to the suitable range."""
+        lo = self.min_prefixlen or (min(self.suitable) if self.suitable else None)
+        hi = self.max_prefixlen or (max(self.suitable) if self.suitable else None)
+        return lo, hi
 
     def __str__(self):
         return self.name

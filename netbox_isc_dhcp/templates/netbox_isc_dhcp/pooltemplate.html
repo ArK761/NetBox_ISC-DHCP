@@ -10,8 +10,20 @@
           <input type="hidden" name="value" value="{% if object.enabled %}0{% else %}1{% endif %}">
           <button class="btn btn-link p-0 border-0"><i class="mdi {% if object.enabled %}mdi-checkbox-marked text-success{% else %}mdi-checkbox-blank-outline text-muted{% endif %} fs-3"></i></button></form></td></tr>
       <tr><th scope="row">{% tr "lbl.prefixes" %}</th><td>{{ prefixes|length }}</td></tr>
+      <tr><th scope="row">{% tr "lbl.suitable" %}</th><td><code>{{ suitable_text }}</code></td></tr>
+      <tr><th scope="row">{% tr "lbl.use_for" %}</th><td>
+        <details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><code>{% if allowed.0 %}/{{ allowed.0 }} – /{{ allowed.1 }}{% else %}—{% endif %}</code>
+          {% if not object.min_prefixlen and not object.max_prefixlen %}<span class="small text-muted">{% tr "lbl.auto" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+          <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="range">
+            <span class="align-self-center">{% tr "lbl.from" %}</span><select name="min" class="form-select form-select-sm no-ts" style="max-width:7rem"><option value="">auto</option>
+              {% for n in lengths %}<option value="{{ n }}"{% if object.min_prefixlen == n %} selected{% endif %}>/{{ n }}</option>{% endfor %}</select>
+            <span class="align-self-center">{% tr "lbl.to" %}</span><select name="max" class="form-select form-select-sm no-ts" style="max-width:7rem"><option value="">auto</option>
+              {% for n in lengths %}<option value="{{ n }}"{% if object.max_prefixlen == n %} selected{% endif %}>/{{ n }}</option>{% endfor %}</select>
+            <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr>
     </table>
   </div>
+  {% if incompatible %}<div class="card mb-3 border-danger"><h5 class="card-header text-danger">{% tr "lbl.incompat" %} ({{ incompatible|length }})</h5>
+    <table class="table table-sm mb-0">{% for x in incompatible|slice:":50" %}<tr><td style="width:25%"><code>{{ x.prefix }}</code></td><td class="text-danger">{{ x.reason }}</td></tr>{% endfor %}</table></div>{% endif %}
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.template_code" %}</h5>
     <div class="card-body">

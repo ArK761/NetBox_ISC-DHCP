@@ -90,4 +90,10 @@
 <li>words in <code>log (...)</code> expressions – e.g. <code>foo</code> must be defined with <code>set foo = …</code> in the static part,</li>
 <li><code>range</code> inside the network, not overlapping, gateway outside ranges, <code>ip(n)</code> within usable addresses, unknown <code>USE</code>.</li></ul>
 <div class="note">The check does not replace <code>dhcpd -t</code> on the DHCP server, but it catches the common errors that would stop the DHCP server from starting.</div>
+<h2>12. Pool sizes and incompatible subnets</h2>
+<ul><li><b>Code is suitable for</b> – on save the plugin tries the code on sizes /16 to /30 and shows which work (e.g. /16 – /27).</li>
+<li><b>Use for</b> – narrow where the code is used (e.g. only /24). It cannot exceed the suitable range; "auto" = the whole suitable range.</li>
+<li>A subnet whose size is outside the range (e.g. changed from /24 to /28 in NetBox) or that the code does not fit is <b>incompatible</b>: it is not exported and the DHCP server keeps running without it.</li>
+<li>A red warning is then shown on every plugin page; the list with reasons is on the Subnets page and on the pool, and the pools table shows a red count.</li>
+<li>Incompatible subnets do not block saving the code – only subnets within the range are checked.</li></ul>
 </body></html>

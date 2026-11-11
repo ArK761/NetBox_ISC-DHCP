@@ -40,6 +40,18 @@ def inject_badge(response):
     return response
 
 
+def _error_once(request, text):
+    """Add an error message unless the same text is already waiting (e.g. after a redirect)."""
+    storage = messages.get_messages(request)
+    waiting = [str(m.message) for m in getattr(storage, "_queued_messages", [])]
+    try:
+        waiting += [str(m.message) for m in storage._loaded_messages]
+    except Exception:
+        pass
+    if text not in waiting:
+        messages.error(request, text)
+
+
 class DNSWarningMiddleware:
     """On plugin pages: error while no DNS server is in use, and the version badge."""
 
@@ -53,7 +65,12 @@ class DNSWarningMiddleware:
                 from .models import DNSServer
 
                 if not DNSServer.objects.filter(active=True).exists():
-                    messages.error(request, t("warn.no_dns"))
+                    _error_once(request, t("warn.no_dns"))
+                from .compat import incompatible
+
+                bad = incompatible()
+                if bad:
+                    _error_once(request, t("warn.incompat", n=len(bad)))
             except Exception:
                 pass
         response = self.get_response(request)

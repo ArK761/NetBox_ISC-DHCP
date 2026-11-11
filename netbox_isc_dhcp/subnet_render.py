@@ -95,7 +95,7 @@ _REPEATABLE = {"range", "allow", "deny", "log", "if", "elsif", "else", "on", "po
                "match", "spawn", "set", "unset", "execute", "ignore", "next-server", "include"}
 
 
-def structure_errors(text: str, prefix: str, site: dict | None = None, known_classes=()) -> list[str]:
+def structure_errors(text: str, prefix: str, site: dict | None = None, known_classes=(), lenient: bool = False) -> list[str]:
     """Basic ISC syntax checks of a subnet file (no dhcpd needed):
     everything inside one `subnet <network> netmask <mask> { }` block, `;` at the end of statements,
     closed quotes and parentheses, balanced braces, no option twice in the same block."""
@@ -159,7 +159,7 @@ def structure_errors(text: str, prefix: str, site: dict | None = None, known_cla
                     if len(words) < 4 or words[1] != str(net.network_address) or words[3] != str(net.netmask):
                         errors.append(f"line {stmt_line}: subnet must be '{net.network_address} netmask {net.netmask}'")
             errors += _statement_errors(stmt_line, body, words, depth, net, site, classes,
-                                        STATEMENTS, OPTIONS, EXPR_WORDS, check_value, expression_words, lease)
+                                        STATEMENTS, OPTIONS, EXPR_WORDS, check_value, expression_words, lease, lenient)
             if end == "{":
                 depth += 1
                 seen_stack.append(set())
@@ -184,7 +184,8 @@ def structure_errors(text: str, prefix: str, site: dict | None = None, known_cla
     return errors
 
 
-def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OPTIONS, EXPR_WORDS, check_value, expression_words, lease):
+def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OPTIONS, EXPR_WORDS, check_value, expression_words, lease,
+                      lenient=False):
     """Keyword, value and reference checks of one statement."""
     errs, w0 = [], words[0]
     short = body if len(body) <= 70 else body[:67] + "..."
@@ -194,7 +195,9 @@ def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OP
     if w0 == "option" and len(words) >= 2:
         name, value = words[1], body.split(None, 2)[2] if len(words) > 2 else ""
         kind = OPTIONS.get(name)
-        if kind is None and name not in site.get("options", ()):
+        if kind is None and lenient:
+            pass
+        elif kind is None and name not in site.get("options", ()):
             errs.append(f"line {no}: unknown option '{name}' (not a standard ISC option and not defined in the static part)")
         elif kind and not value.strip():
             errs.append(f"line {no}: option '{name}' has no value")
@@ -219,7 +222,7 @@ def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OP
                 errs.append(f"line {no}: default-lease-time {d} is greater than max-lease-time {m}")
     elif w0 in ("allow", "deny", "ignore") and len(words) >= 3 and words[1] == "members" and words[2] == "of":
         m = re.search(r'"([^"]+)"', body)
-        if m and classes and m.group(1) not in classes:
+        if m and classes and not lenient and m.group(1) not in classes:
             errs.append(f"line {no}: class \"{m.group(1)}\" is not defined (tenant tables or static part)")
     elif w0 in ("next-server",) and len(words) >= 2:
         bad = check_value("hostlist", words[1])
@@ -229,7 +232,7 @@ def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OP
         bad = check_value("text", body.split(None, 1)[1])
         if bad:
             errs.append(f"line {no}: {w0}: {bad}")
-    if w0 in ("log", "set", "if", "elsif", "match"):
+    if w0 in ("log", "set", "if", "elsif", "match") and not lenient:
         known = EXPR_WORDS | set(OPTIONS) | set(site.get("vars", ())) | set(site.get("options", ()))
         unknown = sorted({x for x in expression_words(body) if x not in known})
         if unknown:
@@ -238,7 +241,7 @@ def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OP
 
 
 def render_subnet(template: str, prefix: str, dns=(), extra=None, gateway_mode: str = "first", snippets=None,
-                  site=None, known_classes=()) -> tuple[str, list[str]]:
+                  site=None, known_classes=(), lenient: bool = False) -> tuple[str, list[str]]:
     """Return (text, errors). Errors mean the file must NOT be used. `USE <name>` lines are expanded first."""
     from .variables import expand_use
 
@@ -249,4 +252,4 @@ def render_subnet(template: str, prefix: str, dns=(), extra=None, gateway_mode: 
         text = render(template, context(prefix, dns, extra, gateway_mode))
     except (RenderError, SubnetError) as exc:
         return "", [str(exc)]
-    return text, structure_errors(text, prefix, site, known_classes) + validate(text, prefix)
+    return text, structure_errors(text, prefix, site, known_classes, lenient) + validate(text, prefix)

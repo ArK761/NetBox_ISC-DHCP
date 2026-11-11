@@ -90,4 +90,10 @@
 <li>slová vo výrazoch <code>log (...)</code> – napr. <code>foo</code> musí byť definované cez <code>set foo = …</code> v statickej časti,</li>
 <li>rozsahy <code>range</code> vnútri siete, neprekrývajúce sa, brána mimo rozsahov, <code>ip(n)</code> v použiteľných adresách, neznáme <code>USE</code>.</li></ul>
 <div class="note">Kontrola nenahrádza <code>dhcpd -t</code> na DHCP serveri, ale zachytí bežné chyby, pre ktoré by DHCP server nenaštartoval.</div>
+<h2>12. Rozsahy poolu a nekompatibilné subnety</h2>
+<ul><li><b>Kód je vhodný pre</b> – plugin pri uložení vyskúša kód na veľkostiach /16 až /30 a ukáže, pre ktoré funguje (napr. /16 – /27).</li>
+<li><b>Používať pre</b> – zúžite, kde sa kód použije (napr. len /24). Viac ako vhodný rozsah sa nastaviť nedá; „auto" = celý vhodný rozsah.</li>
+<li>Subnet, ktorého veľkosť je mimo nastaveného rozsahu (napr. ste v NetBoxe zmenili /24 na /28) alebo na ktorý kód nevyjde, je <b>nekompatibilný</b>: nejde do exportu a DHCP server beží ďalej bez neho.</li>
+<li>Na každej stránke pluginu sa vtedy zobrazí červené upozornenie; zoznam s dôvodmi je na stránke Subnety a pri poole, v tabuľke poolov je červený počet.</li>
+<li>Nekompatibilné subnety neblokujú uloženie kódu – kontroluje sa len na subnetoch v nastavenom rozsahu.</li></ul>
 </body></html>
