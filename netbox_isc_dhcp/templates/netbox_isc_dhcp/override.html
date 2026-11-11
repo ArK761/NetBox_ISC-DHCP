@@ -1,6 +1,6 @@
 {% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
 {% block title %}{% tr "lbl.override" %}: {{ pool.name }} / {{ prefix.prefix }}{% endblock %}
-{% block content %}
+{% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}</style>
 <div class="row"><div class="col-12 col-xl-11">
   <div class="alert alert-warning d-block"><i class="mdi mdi-alert-outline me-1"></i>{% tr "lbl.override_info" %}
     <a class="ms-2" href="{{ pool.get_absolute_url }}?p={{ prefix.pk }}"><i class="mdi mdi-arrow-left"></i> {% tr "lbl.back_to_pool" %} {{ pool.name }}</a></div>
@@ -15,7 +15,7 @@
         <button class="btn btn-sm btn-outline-danger"><i class="mdi mdi-undo"></i> {% tr "lbl.override_remove" %}</button></form>{% endif %}
     </div></div>
   <div class="card mb-3"><h5 class="card-header">{% tr "lbl.preview_for" %} <code>{{ prefix.prefix }}</code></h5>
-    <div class="card-body"><pre class="m-0">{{ rendered }}</pre></div></div>
+    <div class="card-body"><pre class="m-0">{{ rendered|isc_highlight }}</pre></div></div>
 </div></div>
 {% include "netbox_isc_dhcp/_code_editor.html" %}
 {% endblock %}

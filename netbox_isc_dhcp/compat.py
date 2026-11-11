@@ -81,7 +81,7 @@ def compute() -> list[dict]:
             if o is not None:  # individual code: its own check, no size range
                 _, errs = render_subnet(o.code, pfx, args["dns"], {"obj": obj, "cf": getattr(obj, "custom_field_data", {}) or {}},
                                         gateway_mode=args["gateway_mode"], snippets=args["snippets"],
-                                        site=args["site"], known_classes=args["known_classes"])
+                                        site=args["site"], known_classes=args["known_classes"], invalid=args["invalid"])
                 if errs:
                     out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx, "prefix_pk": obj.pk, "reason": "individual code: " + errs[0]})
                 continue
@@ -91,7 +91,7 @@ def compute() -> list[dict]:
                 continue
             _, errs = render_subnet(pt.template, pfx, args["dns"], {"obj": obj, "cf": getattr(obj, "custom_field_data", {}) or {}},
                                     gateway_mode=args["gateway_mode"], snippets=args["snippets"],
-                                    site=args["site"], known_classes=args["known_classes"])
+                                    site=args["site"], known_classes=args["known_classes"], invalid=args["invalid"])
             if errs:
                 out.append({"pool": name, "pool_pk": pt.pk, "prefix": pfx, "prefix_pk": obj.pk, "reason": errs[0]})
     return out

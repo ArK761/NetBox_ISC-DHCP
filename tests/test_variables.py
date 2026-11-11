@@ -25,7 +25,7 @@ def test_invalid_values(opt, val):
 def test_expand_use_keeps_indent_and_reports_unknown():
     tpl = "subnet x {\n        USE LEASE_SHORT\n    USE AltDNS\n  USE Nope\n}\n"
     out, err = expand_use(tpl, {"LEASE_SHORT": "default-lease-time 100;\nmax-lease-time 130;", "AltDNS": "option domain-name-servers 1.1.1.1;"})
-    assert "        default-lease-time 100;\n        max-lease-time 130;\n    option domain-name-servers 1.1.1.1;\n  USE Nope" in out
+    assert "        default-lease-time 100; ## added via own variable LEASE_SHORT ##\n        max-lease-time 130; ## added via own variable LEASE_SHORT ##\n    option domain-name-servers 1.1.1.1; ## added via own variable AltDNS ##\n  USE Nope" in out
     assert err == ["USE Nope: unknown variable"]
     assert used_names(tpl) == {"LEASE_SHORT", "AltDNS", "Nope"}
 
@@ -33,7 +33,7 @@ def test_expand_use_keeps_indent_and_reports_unknown():
 def test_crlf_from_browser_is_handled():
     tpl = "subnet x {\r\n  USE A\r\n}\r\n"
     out, err = expand_use(tpl, {"A": "deny duplicates;"})
-    assert out == "subnet x {\n  deny duplicates;\n}\n" and err == [] and used_names(tpl) == {"A"}
+    assert out == "subnet x {\n  deny duplicates; ## added via own variable A ##\n}\n" and err == [] and used_names(tpl) == {"A"}
 
 
 def test_rename_use_lines_only_exact_name():
@@ -53,4 +53,10 @@ def test_range_option_and_slash_in_name():
             build_lines("range", bad)
     assert NAME_RE.match("RANGE_10.17.0.0/22") and not NAME_RE.match("A B")
     out, err = expand_use("  USE RANGE_10.17.0.0/22\n", {"RANGE_10.17.0.0/22": "range 10.17.0.10 10.17.3.254;"})
-    assert out == "  range 10.17.0.10 10.17.3.254;\n" and err == []
+    assert out == "  range 10.17.0.10 10.17.3.254; ## added via own variable RANGE_10.17.0.0/22 ##\n" and err == []
+
+
+def test_generated_lines_carry_the_variable_comment_and_invalid_message():
+    out, err = expand_use("  USE L\n  USE BAD\n", {"L": "default-lease-time 600;\nmax-lease-time 780;"}, invalid={"BAD"})
+    assert "  default-lease-time 600; ## added via own variable L ##\n  max-lease-time 780; ## added via own variable L ##" in out
+    assert err == ["USE BAD: variable has no valid value"]

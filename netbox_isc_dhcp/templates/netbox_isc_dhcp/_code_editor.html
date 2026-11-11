@@ -2,6 +2,11 @@
 {{ editor_vars|json_script:"isc-vars" }}
 <style>
   textarea.code-editor { white-space: pre; overflow-x: auto; font-family: monospace; }
+  .isc-ed-wrap { position: relative; }
+  .isc-ed-wrap textarea.code-editor { position: relative; z-index: 1; background: transparent !important; }
+  .isc-ed-back { position: absolute; inset: 0; z-index: 0; overflow: hidden; white-space: pre; color: transparent; pointer-events: none; }
+  .isc-ed-back mark, mark.isc-var { background: rgba(250, 204, 21, .35); color: inherit; padding: 0; border-radius: 2px; }
+  .isc-ed-back mark { color: transparent; }
   #isc-ac { position: absolute; z-index: 3000; max-height: 16rem; overflow: auto; min-width: 24rem; display: none;
             background: #111827; border: 1px solid #9ca3af; border-radius: .375rem; box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.5); }
   #isc-ac button { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #374151;
@@ -52,14 +57,36 @@
     var res = {left: sp.offsetLeft - t.scrollLeft, top: sp.offsetTop - t.scrollTop, height: parseFloat(cs.lineHeight) || 18};
     document.body.removeChild(d); return res;
   }
+  // yellow background behind own-variable lines (a mirror div under the transparent textarea)
+  function esc(x) { return x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function isVar(l) { return /^\s*USE\s+\S+\s*$/.test(l) || l.indexOf("## VARIABLE ADDED VIA OWN VARIABLES") > -1; }
+  function paint(t) {
+    var back = t._iscBack; if (!back) return;
+    back.innerHTML = t.value.split("\n").map(function (l) { return isVar(l) ? "<mark>" + esc(l) + "</mark>" : esc(l); }).join("\n") + "\n";
+    back.scrollTop = t.scrollTop; back.scrollLeft = t.scrollLeft;
+  }
+  function setupBack(t) {
+    var wrap = document.createElement("div"); wrap.className = "isc-ed-wrap";
+    t.parentNode.insertBefore(wrap, t); wrap.appendChild(t);
+    var back = document.createElement("div"); back.className = "isc-ed-back"; var cs = getComputedStyle(t);
+    ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingLeft", "paddingRight", "paddingBottom",
+     "borderTopWidth", "borderLeftWidth", "borderRightWidth", "borderBottomWidth", "tabSize"].forEach(function (k) { back.style[k] = cs[k]; });
+    back.style.borderStyle = "solid"; back.style.borderColor = "transparent";
+    wrap.insertBefore(back, t); t._iscBack = back;
+    t.addEventListener("scroll", function () { back.scrollTop = t.scrollTop; back.scrollLeft = t.scrollLeft; });
+    paint(t);
+  }
   function pick(i) {
     var m = token(ta); if (!m || !items[i]) return;
     var start = ta.selectionStart - m[0].length;
-    ta.setRangeText("USE " + items[i].name, start, ta.selectionStart, "end"); hide(); ta.focus();
+    var lineStart = ta.value.lastIndexOf("\n", start - 1) + 1, indent = ta.value.slice(lineStart, start).match(/^[ \t]*/)[0];
+    ta.setRangeText("## VARIABLE ADDED VIA OWN VARIABLES\n" + indent + "USE " + items[i].name, start, ta.selectionStart, "end");
+    hide(); ta.focus(); paint(ta);
   }
   document.querySelectorAll("textarea.code-editor").forEach(function (t) {
     t.setAttribute("spellcheck", "false"); t.setAttribute("wrap", "off");
-    t.addEventListener("input", function () { ta = t; idx = 0; if (token(t)) refresh(t); show(t); });
+    setupBack(t);
+    t.addEventListener("input", function () { ta = t; idx = 0; if (token(t)) refresh(t); show(t); paint(t); });
     t.addEventListener("keydown", function (e) {
       if (box.style.display !== "block" || ta !== t) return;
       if (e.key === "ArrowDown") { idx = (idx + 1) % items.length; show(t); e.preventDefault(); }

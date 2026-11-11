@@ -236,6 +236,7 @@ _MSG_SK_PATTERNS = [
     (r"range (\S+) (\S+): start is after end", r"range \1 \2: začiatok je za koncom"),
     (r"gateway (\S+) is inside range (\S+) (\S+)", r"brána \1 je vnútri range \2 \3"),
     (r"USE (\S+): unknown variable", r"USE \1: neznáma premenná"),
+    (r"USE (\S+): variable has no valid value", r"USE \1: premenná nemá platnú hodnotu (nastavte ju vo Vlastných premenných)"),
     (r"line (\d+): unknown statement '(.*?)' in '(.*)'", r"riadok \1: neznámy príkaz '\2' v '\3'"),
     (r"line (\d+): unknown option '(.*?)' \(.*\)", r"riadok \1: neznáma voľba '\2' (nie je štandardná ISC voľba ani definovaná v statickej časti)"),
     (r"line (\d+): option '(.*?)' has no value", r"riadok \1: voľba '\2' nemá hodnotu"),

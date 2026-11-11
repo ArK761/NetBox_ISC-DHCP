@@ -126,15 +126,19 @@ def rename_use(text: str, old: str, new: str) -> str:
     return pattern.sub(lambda m: m.group("indent") + "USE " + new, normalize(text))
 
 
-def expand_use(template: str, snippets: dict[str, str]) -> tuple[str, list[str]]:
-    """Replace every `USE <name>` line by the snippet lines (same indentation). Unknown names are errors."""
+VAR_COMMENT = "## VARIABLE ADDED VIA OWN VARIABLES"
+
+
+def expand_use(template: str, snippets: dict[str, str], invalid=()) -> tuple[str, list[str]]:
+    """Replace every `USE <name>` line by the snippet lines (same indentation), each marked with a trailing
+    comment `## added via own variable <name> ##`. Unknown names / variables without a valid value are errors."""
     errors: list[str] = []
 
     def repl(m):
         name, indent = m.group("name"), m.group("indent")
         if name not in snippets:
-            errors.append(f"USE {name}: unknown variable")
+            errors.append(f"USE {name}: variable has no valid value" if name in invalid else f"USE {name}: unknown variable")
             return m.group(0)
-        return "\n".join(indent + line for line in snippets[name].splitlines())
+        return "\n".join(f"{indent}{line} ## added via own variable {name} ##" for line in snippets[name].splitlines())
 
     return USE_RE.sub(repl, normalize(template)), errors

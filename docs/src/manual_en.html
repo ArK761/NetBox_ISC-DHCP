@@ -64,7 +64,7 @@
 <tr><td>domain-name-servers</td><td>ticked DNS servers</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
-<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. A variable in use cannot be deleted. When renamed, the new name is written automatically into every code that uses it (USE lines).</p>
+<p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. When inserted with <code>..</code>, the comment <code>## VARIABLE ADDED VIA OWN VARIABLES</code> is added above the line. Variable lines are yellow in the editor and in the preview, and in the generated file every line coming from a variable ends with <code>## added via own variable &lt;name&gt; ##</code>. A variable in use cannot be deleted; when renamed, the new name is written automatically into every code (pools, group files and individual subnet codes).</p>
 
 <h2>9. Hosts and MAC addresses (tenants)</h2>
 <ul><li>Tenant group = DHCP class; tenant name = host-name.</li>

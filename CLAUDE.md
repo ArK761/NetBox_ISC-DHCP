@@ -47,7 +47,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   Subnet directory chosen on the Subnety page (= PluginSettings.subnet_dir).
   OWN VARIABLES (DHCP-CFG > Vlastné premenné, dhcp/variables/): ConfigVariable(name=description, option from CATALOG in variables.py, value, dns_servers).
   Pool code line `USE <name>` is replaced by the variable's ISC lines (indent kept); lease -> default + max (PluginSettings.lease_factor, 1.3).
-  Used variables (any USE in pool/file code) cannot be deleted; renaming rewrites all `USE old` lines (variables.rename_use, atomic). Code editors: no spellcheck, no wrap, `..` autocomplete (_code_editor.html).
+  Used variables (any USE in pool/file code) cannot be deleted; renaming rewrites all `USE old` lines in pools, files AND subnet overrides (variables.rename_use, atomic). `..` inserts `## VARIABLE ADDED VIA OWN VARIABLES` + USE; USE/comment lines are yellow (editor overlay .isc-ed-back, filter isc_highlight); generated variable lines end with `## added via own variable NAME ##`. Code editors: no spellcheck, no wrap, `..` autocomplete (_code_editor.html).
   All text/code fields are stored with LF (browsers send CRLF) - pre_save signal.
   DONE v0.10.0: PoolTemplate.suitable (sizes /16-/30 the code renders on, lenient = size errors only), min/max_prefixlen ("Používať pre").
   compat.py: incompatible subnets (size outside range or render error) cached (django cache, invalidated by signals on Prefix/pool/config/DNS/vars/files);

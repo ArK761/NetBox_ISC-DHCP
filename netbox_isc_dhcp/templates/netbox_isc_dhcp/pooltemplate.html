@@ -1,5 +1,5 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
-{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
+{% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
 {% url 'plugins:netbox_isc_dhcp:pooltemplate_inline' pk=object.pk as inline_url %}
 <div class="row"><div class="col-12 col-xl-11">
   <div class="card mb-3">
@@ -38,7 +38,7 @@
     <div class="card-body">
       {% if draft %}<div class="alert alert-danger d-block"><strong class="d-block mb-1">{% tr "lbl.code_refused" %}</strong>
         <ul class="mb-0">{% for e, n, pfx in draft.problems %}<li>{{ e }} <span class="small opacity-75">– {% tr "lbl.in_prefixes" %} {{ n }}, {% tr "lbl.e_g" %} <code>{{ pfx }}</code></span></li>{% endfor %}</ul></div>{% endif %}
-      <details class="ie wide"{% if draft %} open{% endif %}><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.template }}</pre></summary>
+      <details class="ie wide"{% if draft %} open{% endif %}><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.template|isc_highlight }}</pre></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="template"><input type="hidden" name="p" value="{{ chosen.pk }}">
           <textarea name="value" rows="24" class="form-control font-monospace code-editor">{% if draft %}{{ draft.code }}{% else %}{{ object.template }}{% endif %}</textarea>
           <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details>
@@ -57,7 +57,7 @@
     <div class="card-body">
       {% if not chosen %}<div class="text-muted">{% tr "lbl.no_prefix" %}</div>{% else %}
       {% if errors %}<div class="alert alert-danger"><strong>{% tr "lbl.errors" %}:</strong><ul class="mb-0">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
-      <pre class="m-0">{{ rendered }}</pre>{% endif %}
+      <pre class="m-0">{{ rendered|isc_highlight }}</pre>{% endif %}
     </div>
   </div>
 </div></div>

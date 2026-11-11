@@ -120,7 +120,19 @@ def variable_usage() -> dict[str, list[str]]:
     for f in DHCPFile.objects.only("name", "template"):
         for n in used_names(f.template):
             usage.setdefault(n, []).append(f"file {f.name}")
+    from .models import SubnetOverride
+
+    for o in SubnetOverride.objects.select_related("pool"):
+        for n in used_names(o.code):
+            usage.setdefault(n, []).append(f"subnet {o.prefix_text} ({o.pool.name})")
     return usage
+
+
+def invalid_variables() -> set[str]:
+    """Names of variables that exist but have no valid value yet."""
+    from .models import ConfigVariable
+
+    return {v.name for v in ConfigVariable.objects.all()} - set(variable_snippets())
 
 
 def check_context() -> dict:
@@ -134,4 +146,4 @@ def check_context() -> dict:
     classes = set(site["classes"])
     for content in DHCPFile.objects.values_list("content", flat=True):
         classes |= set(_re.findall(r'\bclass\s+"([^"]+)"', content or ""))
-    return {"site": site, "known_classes": classes}
+    return {"site": site, "known_classes": classes, "invalid": invalid_variables()}

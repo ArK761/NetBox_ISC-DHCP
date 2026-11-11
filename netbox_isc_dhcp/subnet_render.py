@@ -241,11 +241,11 @@ def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OP
 
 
 def render_subnet(template: str, prefix: str, dns=(), extra=None, gateway_mode: str = "first", snippets=None,
-                  site=None, known_classes=(), lenient: bool = False) -> tuple[str, list[str]]:
+                  site=None, known_classes=(), lenient: bool = False, invalid=()) -> tuple[str, list[str]]:
     """Return (text, errors). Errors mean the file must NOT be used. `USE <name>` lines are expanded first."""
     from .variables import expand_use
 
-    template, use_errors = expand_use(template, snippets or {})
+    template, use_errors = expand_use(template, snippets or {}, invalid)
     if use_errors:
         return "", use_errors
     try:

@@ -64,7 +64,7 @@
 <tr><td>domain-name-servers</td><td>zaškrtnuté DNS servery</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
-<p>V kóde poolu napíšte <code>..</code> – pri kurzore sa ukáže zoznam premenných; vyberte šípkami a Enterom. Vloží sa riadok <code>USE &lt;popis&gt;</code>, ktorý sa vo výsledku nahradí skutočnými riadkami. Používanú premennú nemožno zmazať. Pri premenovaní sa nový názov automaticky prepíše vo všetkých kódoch, kde sa používa (riadky USE).</p>
+<p>V kóde poolu napíšte <code>..</code> – pri kurzore sa ukáže zoznam premenných; vyberte šípkami a Enterom. Vloží sa riadok <code>USE &lt;popis&gt;</code>, ktorý sa vo výsledku nahradí skutočnými riadkami. Pri vložení cez <code>..</code> sa nad riadok pridá komentár <code>## VARIABLE ADDED VIA OWN VARIABLES</code>. Riadky s premennými svietia v editore aj v náhľade na žlto a vo vygenerovanom súbore má každý riadok z premennej na konci komentár <code>## added via own variable &lt;popis&gt; ##</code>. Používanú premennú nemožno zmazať; pri premenovaní sa nový názov automaticky prepíše vo všetkých kódoch (pooly, súbory skupín aj individuálne úpravy subnetov).</p>
 
 <h2>9. Hosty a MAC adresy (tenanti)</h2>
 <ul><li>Skupina tenantov = trieda DHCP; meno tenanta = host-name.</li>

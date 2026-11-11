@@ -447,7 +447,7 @@ def _pooltemplate_context(request, instance):
 
         a = _render_args()
         text, errors = render_subnet(chosen_override.code, str(chosen.prefix), a["dns"], {"obj": chosen, "cf": chosen.custom_field_data or {}},
-                                     gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"])
+                                     gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"], invalid=a["invalid"])
         errors = [tmsg(e) for e in errors]
     return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars(), "draft": draft,
             "overrides": own, "chosen_override": chosen_override,
@@ -660,6 +660,13 @@ class VariablesInlineView(LoginRequiredMixin, View):
                             f.template = rename_use(f.template, old, value)
                             f.save()  # regenerates the stored file
                             changed.append(f"file {f.name}")
+                    from .models import SubnetOverride
+
+                    for o in SubnetOverride.objects.select_related("pool"):
+                        if old in used_names(o.code):
+                            o.code = rename_use(o.code, old, value)
+                            o.save()
+                            changed.append(f"subnet {o.prefix_text} ({o.pool.name})")
                 if changed:
                     messages.success(request, t("msg.var_renamed", old=old, new=value, where=", ".join(changed)))
                     return redirect("plugins:netbox_isc_dhcp:variables")
@@ -715,7 +722,7 @@ class SubnetOverrideView(LoginRequiredMixin, View):
 
         a = _render_args()
         return render_subnet(code, str(prefix.prefix), a["dns"], {"obj": prefix, "cf": prefix.custom_field_data or {}},
-                             gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"])
+                             gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"], invalid=a["invalid"])
 
     def get(self, request, pk, prefix_pk):
         from django.shortcuts import render
