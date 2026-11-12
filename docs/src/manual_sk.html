@@ -68,10 +68,10 @@
 
 <h2>9. Hosty a MAC adresy</h2>
 <p>Stránka <b>DHCP-CFG › Hosty a MAC adresy</b> (rozpracované – postupne pribúda). Všetko sa nastavuje kliknutím:</p>
-<ol><li><b>Zdroj tabuliek (skupiny)</b> – vyberte objekt (napr. Tenant group). Kliknutím (rozbaľovacie pole) zvolíte, z ktorého poľa sa berie <b>názov tabuľky</b> (zvyčajne Name). <b>Podmienky</b> fungujú ako pri Subnetoch: pridajte pole, kliknutím rozbaľte riadok, zaškrtnite hodnoty (aj s vyhľadávaním) a zvoľte <b>Akceptovať</b> (len tieto) alebo <b>Vylúčiť</b> (všetky okrem týchto); všetky podmienky musia platiť. <b>Výsledok</b> ukazuje skupiny, ktoré dostanú tabuľky (zelené).</li>
-<li><b>Zdroj MAC adries a IP (hosty)</b> – vyberte objekt s MAC adresami (napr. Tenant). Prepojenie na skupinu sa nájde samo. Rozbaľovacím poľom zvolíte pole s názvom hosta, polia s MAC (najviac 3, číslo ukazuje poradie) a pole so statickou IP.</li>
-<li><b>Prehľad tabuliek</b> – pre každú skupinu názvy súborov <code>&lt;Názov&gt;_Table</code> a <code>&lt;Názov&gt;_StaticTable</code>, počet objektov, dynamických a statických hostov (pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…), objektov bez MAC a upozornenia (neplatná alebo duplicitná MAC či IP).</li></ol>
-<p>Ďalší krok: kód tabuliek pre každú skupinu (ako kód poolu).</p>
+<ol><li><b>Zdroj tabuliek (skupiny)</b> – objekt, ktorého každá položka (napr. Tenant group) dostane dve tabuľky <code>&lt;Názov&gt;_Table</code> a <code>&lt;Názov&gt;_StaticTable</code>. Ďalej <b>podadresár pre tabuľky</b> (zobrazí sa celá cesta, napr. <code>/opt/dhcp/TABLE/</code>), pole s <b>názvom tabuľky</b> (zvyčajne Name) a voliteľné <b>podmienky</b> ako pri Subnetoch (rozbaľovací riadok, zaškrtnutie hodnôt, Akceptovať / Vylúčiť). Bez podmienky dostanú tabuľky všetky skupiny.</li>
+<li><b>Skupiny (tabuľky)</b> – tabuľka ako zoznam poolov: skupina, súbory s celou cestou, zdroj hostov, počty hostov a upozornenia. Tlačidlo <b>Nastaviť</b> otvorí stránku skupiny.</li>
+<li><b>Stránka skupiny</b> – <b>zdroj hostov</b>: objekt (napr. Tenant alebo Device), prepojenie na skupinu (nájde sa samo), pole s názvom hosta, polia s MAC (najviac 3, aj custom fields) a pole so statickou IP. <b>Prevziať nastavenie</b> skopíruje tieto voľby z inej skupiny. Pod tým sú obe tabuľky skupiny: hosty bez IP (<code>_Table</code>) a hosty so statickou IP (<code>_StaticTable</code>, pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…) a upozornenia (neplatná alebo duplicitná MAC či IP).</li></ol>
+<p>Ďalší krok: kód oboch tabuliek pre každú skupinu (ako kód poolu).</p>
 
 <h2>10. Riešenie problémov</h2>
 <table><tr><th>Príznak</th><th>Príčina / riešenie</th></tr>

@@ -87,51 +87,61 @@ def condition_rows(model, conds, open_row=None) -> list[dict]:
     return rows
 
 
-def overview(cfg, open_row=None) -> dict:
-    """Groups found (with their table name and whether they get tables) + per selected group:
-    objects, hosts (dynamic / static), skipped, warnings."""
-    gm, mm = get_model(cfg.group_model), get_model(cfg.mac_model)
-    out = {"group_model": gm, "mac_model": mm, "groups": [], "rows": None, "link": "", "links": [], "need": []}
-    conds = [c for c in cfg.group_conditions or [] if c.get("field")]
-    active = [c for c in conds if is_active(c)]
-    chosen = set(gm.objects.filter(build_q(gm, active)).values_list("pk", flat=True)) if gm is not None and active else set()
-    out["conditions"] = condition_rows(gm, conds, open_row)
-    if gm is not None:
-        gkeys = {o["key"] for o in field_options(gm)}
-        gname = cfg.group_name_field if cfg.group_name_field in gkeys else ""
-        found = [{"obj": g, "name": name_of(g, gname), "selected": g.pk in chosen} for g in gm.objects.all()]
-        for g in found:
-            g["valid"] = bool(_SAFE_NAME.match(g["name"]))
-        out["groups"] = sorted(found, key=lambda g: natural_key(g["name"]))
-    if mm is not None:
-        out["links"] = link_candidates(mm, gm)
-        out["link"] = effective_link(cfg, mm, gm)
-    keys = {o["key"] for o in field_options(mm)}
-    macs = [k for k in cfg.mac_fields or [] if k in keys]
+def groups_overview(cfg, open_row=None) -> dict:
+    """Groups of the table source (all, or filtered by the conditions), each with its HostGroup settings and host counts."""
+    from .models import HostGroup
+
+    gm = get_model(cfg.group_model)
+    out = {"group_model": gm, "groups": [], "conditions": []}
     if gm is None:
-        out["need"].append("group_model")
-    elif not any(g["selected"] for g in out["groups"]):
-        out["need"].append("groups")
+        return out
+    conds = [c for c in cfg.group_conditions or [] if c.get("field")]
+    out["conditions"] = condition_rows(gm, conds, open_row)
+    active = [c for c in conds if is_active(c)]
+    qs = gm.objects.filter(build_q(gm, active)) if active else gm.objects.all()
+    gkeys = {o["key"] for o in field_options(gm)}
+    gname = cfg.group_name_field if cfg.group_name_field in gkeys else ""
+    existing = {hg.group_pk: hg for hg in HostGroup.objects.filter(group_model=cfg.group_model)}
+    rows = []
+    for g in qs:
+        name = name_of(g, gname)
+        hg = existing.get(g.pk)
+        if hg is None:
+            hg = HostGroup.objects.create(group_model=cfg.group_model, group_pk=g.pk, name=name[:200])
+        elif hg.name != name[:200]:
+            hg.name = name[:200]
+            hg.save(update_fields=["name"])
+        row = {"obj": g, "hg": hg, "name": name, "valid": bool(_SAFE_NAME.match(name))}
+        row.update(group_hosts(hg, g))
+        rows.append(row)
+    out["groups"] = sorted(rows, key=lambda r: natural_key(r["name"]))
+    out["total"] = gm.objects.count()
+    return out
+
+
+def group_hosts(hg, group_obj) -> dict:
+    """Hosts of one group from its own source: dynamic (<name>_Table) and static (<name>_StaticTable) + warnings."""
+    mm, gm = get_model(hg.mac_model), get_model(hg.group_model)
+    out = {"mac_model": mm, "links": [], "link": "", "need": [], "dynamic": [], "static": [], "warnings": [],
+           "objects": 0, "skipped": 0, "hosts": 0}
     if mm is None:
         out["need"].append("mac_model")
-    else:
-        if not out["link"]:
-            out["need"].append("link")
-        if not macs:
-            out["need"].append("mac")
+        return out
+    out["links"] = link_candidates(mm, gm)
+    out["link"] = effective_link(hg, mm, gm)
+    keys = {o["key"] for o in field_options(mm)}
+    macs = [k for k in hg.mac_fields or [] if k in keys]
+    if not out["link"]:
+        out["need"].append("link")
+    if not macs:
+        out["need"].append("mac")
     if out["need"]:
         return out
-    ip = cfg.ip_field if cfg.ip_field in keys else ""
-    hname = cfg.host_name_field if cfg.host_name_field in keys else ""
-    rows = []
-    for g in out["groups"]:
-        if not g["selected"]:
-            continue
-        raw = [(name_of(o, hname), [read_value(o, k) for k in macs], read_value(o, ip) if ip else None)
-               for o in mm.objects.filter(_group_q(out["link"], g["obj"]))]
-        dyn, st, warn = prepare(raw)
-        rows.append({"group": g["obj"], "name": g["name"], "valid": g["valid"], "objects": len(raw), "dynamic": len(dyn),
-                     "static": len(st), "hosts": sum(len(t.macs) for t in st),
-                     "skipped": len(raw) - len(dyn) - len(st), "warnings": warn})
-    out["rows"] = rows
+    ip = hg.ip_field if hg.ip_field in keys else ""
+    hname = hg.host_name_field if hg.host_name_field in keys else ""
+    raw = [(name_of(o, hname), [read_value(o, k) for k in macs], read_value(o, ip) if ip else None)
+           for o in mm.objects.filter(_group_q(out["link"], group_obj))]
+    dyn, st, warn = prepare(raw)
+    out.update({"dynamic": dyn, "static": st, "warnings": warn, "objects": len(raw),
+                "skipped": len(raw) - len(dyn) - len(st), "hosts": sum(len(t.macs) for t in st)})
     return out

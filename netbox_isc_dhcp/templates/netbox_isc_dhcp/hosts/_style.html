@@ -1,0 +1,15 @@
+<style>
+  .isc-sec { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 0 1.25rem; align-items: start;
+             padding: .75rem 1rem; border-top: 1px solid var(--tblr-border-color, rgba(128,128,128,.25)); }
+  .isc-sec > :not(.isc-sec-title) { grid-column: 2; }
+  .isc-sec-title { grid-column: 1; grid-row: 1 / span 9; font-weight: 600; opacity: .8; padding-top: .1rem; }
+  .isc-sec-title .badge { display: inline-block; margin-top: .35rem; }
+  @media (max-width: 768px) { .isc-sec { grid-template-columns: 1fr; } .isc-sec > * { grid-column: 1 !important; grid-row: auto !important; } }
+  .isc-hint { font-size: .8rem; opacity: .65; }
+  .isc-card-hint { font-size: .85rem; opacity: .75; padding: .6rem 1rem; }
+  .isc-zero { opacity: .35; }
+  .isc-step { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+              background: var(--tblr-primary, #0d6efd); color: #fff; font-weight: 700; margin-right: .5rem; font-size: .85rem; }
+  .isc-path { font-family: var(--tblr-font-monospace, monospace); font-size: .82rem; opacity: .85; }
+  .isc-files code { background: transparent; padding: 0; }
+</style>

@@ -283,4 +283,4 @@ class DNSServer(NetBoxModel):
                 raise ValidationError({"active": t("err.max_dns", n=MAX_ACTIVE_DNS)})
 
 
-from .hosts.models import HostConfig  # noqa: E402,F401  (hosts package model)
+from .hosts.models import HostConfig, HostGroup  # noqa: E402,F401  (hosts package models)
