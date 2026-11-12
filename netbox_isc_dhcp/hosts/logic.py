@@ -3,8 +3,8 @@ from django.db import models
 from django.db.models import Q
 from extras.models import CustomField
 
-from ..dhcp_tables import natural_key, prepare
-from ..source_fields import _custom_field, field_options, get_model
+from ..dhcp_tables import _SAFE_NAME, natural_key, prepare
+from ..source_fields import _custom_field, build_q, distinct_values, field_options, get_model, is_active, label_for
 
 MAX_MAC_FIELDS = 3
 
@@ -55,39 +55,78 @@ def read_value(obj, key):
     return _scalar(v) if isinstance(v, models.Model) else v
 
 
+def name_of(obj, key) -> str:
+    """Name taken from the chosen field (empty field -> the object's own name)."""
+    v = read_value(obj, key) if key else None
+    return str(v).strip() if v not in (None, "") else str(obj)
+
+
 def _group_q(link, group) -> Q:
     if link.startswith("cf_"):
         return Q(**{f"custom_field_data__{link[3:]}": group.pk})
     return Q(**{link: group})
 
 
+MAX_VALUES = 300
+
+
+def condition_rows(model, conds) -> list[dict]:
+    """Conditions for the page: field label, mode and every value of the field with its ticked state."""
+    rows = []
+    for i, c in enumerate(conds):
+        ticked = {str(v) for v in c.get("values") or []}
+        vals = distinct_values(model, c["field"]) if model is not None else []
+        rows.append({"index": i, "field": c["field"], "label": label_for(model, c["field"]), "mode": c.get("mode", "include"),
+                     "values": [(v, l, v in ticked) for v, l in vals[:MAX_VALUES]], "more": max(0, len(vals) - MAX_VALUES),
+                     "ticked": len(ticked)})
+    return rows
+
+
 def overview(cfg) -> dict:
-    """Groups found + per group: objects, hosts (dynamic / static), skipped, warnings."""
+    """Groups found (with their table name and whether they get tables) + per selected group:
+    objects, hosts (dynamic / static), skipped, warnings."""
     gm, mm = get_model(cfg.group_model), get_model(cfg.mac_model)
     out = {"group_model": gm, "mac_model": mm, "groups": [], "rows": None, "link": "", "links": [], "need": []}
+    conds = [c for c in cfg.group_conditions or [] if c.get("field")]
+    active = [c for c in conds if is_active(c)]
+    chosen = set(gm.objects.filter(build_q(gm, active)).values_list("pk", flat=True)) if gm is not None and active else set()
+    out["conditions"] = condition_rows(gm, conds)
     if gm is not None:
-        out["groups"] = sorted(gm.objects.all(), key=lambda g: natural_key(str(g)))
-    if mm is None:
-        return out
-    out["links"] = link_candidates(mm, gm)
-    out["link"] = effective_link(cfg, mm, gm)
+        gkeys = {o["key"] for o in field_options(gm)}
+        gname = cfg.group_name_field if cfg.group_name_field in gkeys else ""
+        found = [{"obj": g, "name": name_of(g, gname), "selected": g.pk in chosen} for g in gm.objects.all()]
+        for g in found:
+            g["valid"] = bool(_SAFE_NAME.match(g["name"]))
+        out["groups"] = sorted(found, key=lambda g: natural_key(g["name"]))
+    if mm is not None:
+        out["links"] = link_candidates(mm, gm)
+        out["link"] = effective_link(cfg, mm, gm)
     keys = {o["key"] for o in field_options(mm)}
     macs = [k for k in cfg.mac_fields or [] if k in keys]
     if gm is None:
         out["need"].append("group_model")
-    if not out["link"]:
-        out["need"].append("link")
-    if not macs:
-        out["need"].append("mac")
+    elif not any(g["selected"] for g in out["groups"]):
+        out["need"].append("groups")
+    if mm is None:
+        out["need"].append("mac_model")
+    else:
+        if not out["link"]:
+            out["need"].append("link")
+        if not macs:
+            out["need"].append("mac")
     if out["need"]:
         return out
     ip = cfg.ip_field if cfg.ip_field in keys else ""
+    hname = cfg.host_name_field if cfg.host_name_field in keys else ""
     rows = []
     for g in out["groups"]:
-        raw = [(str(o), [read_value(o, k) for k in macs], read_value(o, ip) if ip else None)
-               for o in mm.objects.filter(_group_q(out["link"], g))]
+        if not g["selected"]:
+            continue
+        raw = [(name_of(o, hname), [read_value(o, k) for k in macs], read_value(o, ip) if ip else None)
+               for o in mm.objects.filter(_group_q(out["link"], g["obj"]))]
         dyn, st, warn = prepare(raw)
-        rows.append({"group": g, "objects": len(raw), "dynamic": len(dyn), "static": len(st),
-                     "hosts": sum(len(t.macs) for t in st), "skipped": len(raw) - len(dyn) - len(st), "warnings": warn})
+        rows.append({"group": g["obj"], "name": g["name"], "valid": g["valid"], "objects": len(raw), "dynamic": len(dyn),
+                     "static": len(st), "hosts": sum(len(t.macs) for t in st),
+                     "skipped": len(raw) - len(dyn) - len(st), "warnings": warn})
     out["rows"] = rows
     return out
