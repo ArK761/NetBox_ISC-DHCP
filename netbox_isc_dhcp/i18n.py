@@ -299,3 +299,10 @@ def t(key: str, **kw) -> str:
 
 
 t_lazy = lazy(t, str)
+
+
+# texts of the hosts package (kept in netbox_isc_dhcp/hosts/texts.py)
+from .hosts.texts import PATTERNS as _HOSTS_PATTERNS, TR as _HOSTS_TR  # noqa: E402
+
+TR.update(_HOSTS_TR)
+_MSG_SK_PATTERNS.extend(_HOSTS_PATTERNS)

@@ -66,12 +66,12 @@
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
 <p>V kóde poolu napíšte <code>..</code> – pri kurzore sa ukáže zoznam premenných; vyberte šípkami a Enterom. Vloží sa riadok <code>USE &lt;popis&gt;</code>, ktorý sa vo výsledku nahradí skutočnými riadkami. Pri vložení cez <code>..</code> sa nad riadok pridá komentár <code>## VARIABLE ADDED VIA OWN VARIABLES</code>. Riadky s premennými svietia v editore aj v náhľade na žlto a vo vygenerovanom súbore má každý riadok z premennej na konci komentár <code>## added via own variable &lt;popis&gt; ##</code>. Používanú premennú nemožno zmazať; pri premenovaní sa nový názov automaticky prepíše vo všetkých kódoch (pooly, súbory skupín aj individuálne úpravy subnetov). Ak kód obsahuje <code>USE</code> s názvom, ku ktorému neexistuje premenná (napr. premenovanou v staršej verzii), hore svieti červený pruh a na stránke Vlastné premenné je karta „Kód používa neexistujúce premenné“: vyberte existujúcu premennú a kliknite <b>Prepísať</b> – riadky sa prepíšu vo všetkých kódoch.</p>
 
-<h2>9. Hosty a MAC adresy (tenanti)</h2>
-<ul><li>Skupina tenantov = trieda DHCP; meno tenanta = host-name.</li>
-<li>Každá skupina má súbory (napr. <code>Skupina_Table</code>, <code>Skupina_StaticTable</code>) – dajú sa premenovať, pridávať, zahrnúť / vynechať z configu a priradiť podadresár.</li>
-<li>Pri súbore zaškrtnete custom fieldy tenanta s MAC adresami (1–3) a pole so statickou IP.</li>
-<li>Tenant bez MAC sa preskočí; so statickou IP ide do statickej tabuľky (pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…).</li>
-<li>Súbory sa ukladajú hotové a pri zmene tenanta sa prepočítajú; ikona kruhovej šípky ich prepočíta ručne.</li></ul>
+<h2>9. Hosty a MAC adresy</h2>
+<p>Stránka <b>DHCP-CFG › Hosty a MAC adresy</b> (rozpracované – postupne pribúda):</p>
+<ol><li><b>Zdroj skupín (DHCP triedy)</b> – vyberte typ objektu (napr. Tenant group). Každý jeho objekt je jedna trieda <code>class "názov"</code>. Ukážu sa polia objektu (aj custom fields) a počet nájdených skupín.</li>
+<li><b>Zdroj MAC adries a IP</b> – vyberte objekt s MAC adresami (napr. Tenant). Prepojenie na skupinu (pole, ktoré na ňu ukazuje) plugin nájde sám; ak je ich viac, vyberiete ho. Zaškrtnite polia s MAC (najviac 3) a pole so statickou IP.</li>
+<li><b>Prehľad tried</b> – pre každú triedu počet objektov, dynamických hostov (<code>&lt;Trieda&gt;_Table</code>), statických (<code>&lt;Trieda&gt;_StaticTable</code>, pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…), objektov bez MAC a upozornenia (neplatná MAC alebo IP, duplicitná MAC alebo IP).</li></ol>
+<p>Ďalší krok: kód tabuliek pre každú triedu (ako kód poolu).</p>
 
 <h2>10. Riešenie problémov</h2>
 <table><tr><th>Príznak</th><th>Príčina / riešenie</th></tr>

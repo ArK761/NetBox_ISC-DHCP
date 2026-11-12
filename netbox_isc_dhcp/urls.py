@@ -7,6 +7,7 @@ app = "netbox_isc_dhcp"
 
 urlpatterns = [
     path("dhcp/", views.DHCPHubView.as_view(), name="dhcp_hub"),
+    path("dhcp/hosts/", include("netbox_isc_dhcp.hosts.urls")),
     path("dhcp/variables/", views.VariablesView.as_view(), name="variables"),
     path("dhcp/variables/inline/", views.VariablesInlineView.as_view(), name="variables_inline"),
     path("dhcp/variables/json/", views.VariablesJSONView.as_view(), name="variables_json"),

@@ -281,3 +281,6 @@ class DNSServer(NetBoxModel):
             others = DNSServer.objects.filter(active=True).exclude(pk=self.pk).count()
             if others >= MAX_ACTIVE_DNS:
                 raise ValidationError({"active": t("err.max_dns", n=MAX_ACTIVE_DNS)})
+
+
+from .hosts.models import HostConfig  # noqa: E402,F401  (hosts package model)

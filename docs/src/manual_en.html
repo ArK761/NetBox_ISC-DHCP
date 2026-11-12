@@ -66,12 +66,12 @@
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
 <p>In pool code type <code>..</code> – a list of variables appears at the cursor; pick with the arrows and Enter. A line <code>USE &lt;name&gt;</code> is inserted and replaced by the real lines in the result. When inserted with <code>..</code>, the comment <code>## VARIABLE ADDED VIA OWN VARIABLES</code> is added above the line. Variable lines are yellow in the editor and in the preview, and in the generated file every line coming from a variable ends with <code>## added via own variable &lt;name&gt; ##</code>. A variable in use cannot be deleted; when renamed, the new name is written automatically into every code (pools, group files and individual subnet codes). If a code contains <code>USE</code> with a name that has no variable (e.g. renamed in an older version), a red bar is shown at the top and the Own variables page has a card “Code uses variables that do not exist”: pick an existing variable and click <b>Rewrite</b> – the lines are rewritten in every code.</p>
 
-<h2>9. Hosts and MAC addresses (tenants)</h2>
-<ul><li>Tenant group = DHCP class; tenant name = host-name.</li>
-<li>Every group has files (e.g. <code>Group_Table</code>, <code>Group_StaticTable</code>) – they can be renamed, added, included / left out of the config and assigned a subdirectory.</li>
-<li>For a file, tick the tenant custom fields holding MAC addresses (1–3) and the field with the static IP.</li>
-<li>A tenant without MAC is skipped; with a static IP it goes to the static table (with several MACs <code>NAME_1</code>, <code>NAME_2</code>…).</li>
-<li>Files are stored ready-made and recomputed when a tenant changes; the circular arrow icon recomputes them manually.</li></ul>
+<h2>9. Hosts and MAC addresses</h2>
+<p>Page <b>DHCP-CFG › Hosts and MAC addresses</b> (work in progress – grows step by step):</p>
+<ol><li><b>Group source (DHCP classes)</b> – pick the object type (e.g. Tenant group). Every object of it is one class <code>class "name"</code>. The object fields (custom fields too) and the number of groups found are shown.</li>
+<li><b>MAC address and IP source</b> – pick the object holding the MAC addresses (e.g. Tenant). The link to the group (the field pointing to it) is found automatically; if there are several, pick one. Tick the MAC fields (at most 3) and the static IP field.</li>
+<li><b>Classes overview</b> – per class the number of objects, dynamic hosts (<code>&lt;Class&gt;_Table</code>), static ones (<code>&lt;Class&gt;_StaticTable</code>, with several MACs <code>NAME_1</code>, <code>NAME_2</code>…), objects without MAC and warnings (invalid MAC or IP, duplicate MAC or IP).</li></ol>
+<p>Next step: table code for every class (like the pool code).</p>
 
 <h2>10. Troubleshooting</h2>
 <table><tr><th>Symptom</th><th>Cause / fix</th></tr>

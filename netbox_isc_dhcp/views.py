@@ -329,7 +329,7 @@ class DHCPHubView(LoginRequiredMixin, View):
             ("plugins:netbox_isc_dhcp:baseconfig_list", "mdi-file-cog-outline", "menu.base", "hub.base"),
             ("plugins:netbox_isc_dhcp:dnsserver_list", "mdi-dns-outline", "menu.dns", "hub.dns"),
             ("plugins:netbox_isc_dhcp:subnetconfig_list", "mdi-ip-network-outline", "menu.subnets", "hub.subnets"),
-            ("plugins:netbox_isc_dhcp:dhcpgroup_list", "mdi-lan-connect", "menu.hosts", "hub.hosts"),
+            ("plugins:netbox_isc_dhcp:hosts", "mdi-lan-connect", "menu.hosts", "hub.hosts"),
             ("plugins:netbox_isc_dhcp:variables", "mdi-variable", "menu.vars", "hub.vars"),
         ]
         return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
