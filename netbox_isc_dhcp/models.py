@@ -79,6 +79,13 @@ class PoolTemplate(NetBoxModel):
         ordering = ("name",)
         verbose_name = "pool"
 
+    @property
+    def is_default_code(self):
+        """True while the code is still the plugin's default (never edited)."""
+        from .subnet_render import DEFAULT_POOL_TEMPLATE
+
+        return (self.template or "").replace("\r\n", "\n").strip() == DEFAULT_POOL_TEMPLATE.strip()
+
     def allowed_range(self):
         """(min, max) prefix length this pool is used for; defaults to the suitable range."""
         lo = self.min_prefixlen or (min(self.suitable) if self.suitable else None)

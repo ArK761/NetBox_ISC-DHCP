@@ -387,11 +387,17 @@ def _subnetconfig_context(request, instance):
             from .compat import incompatible
 
             bad = incompatible()
+            from django.db.models import Count
+
+            from .models import SubnetOverride
+
+            ovr = dict(SubnetOverride.objects.values_list("pool_id").annotate(n=Count("id")))
             for value, name in names:
                 pt, _ = PoolTemplate.objects.get_or_create(name=name[:100])
                 lo, hi = pt.allowed_range()
                 pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [value])).count(),
-                              "range": f"/{lo} – /{hi}" if lo else "—", "bad": sum(1 for x in bad if x["pool_pk"] == pt.pk)})
+                              "range": f"/{lo} – /{hi}" if lo else "—", "bad": sum(1 for x in bad if x["pool_pk"] == pt.pk),
+                              "ovr": ovr.get(pt.pk, 0)})
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],

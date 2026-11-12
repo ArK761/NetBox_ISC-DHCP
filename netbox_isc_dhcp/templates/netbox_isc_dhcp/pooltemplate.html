@@ -1,7 +1,9 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
+{% block breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:dhcp_hub' %}">{% tr "menu.dhcp" %}</a></li><li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:subnetconfig_list' %}">{% tr "menu.subnets" %}</a></li>{% endblock breadcrumbs %}
 {% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
 {% url 'plugins:netbox_isc_dhcp:pooltemplate_inline' pk=object.pk as inline_url %}
 <div class="row"><div class="col-12 col-xl-11">
+  <a class="btn btn-sm btn-outline-secondary mb-3" id="isc-back" href="{% url 'plugins:netbox_isc_dhcp:subnetconfig_list' %}"><i class="mdi mdi-arrow-left"></i> {% tr "lbl.back_to" %} {% tr "menu.subnets" %}</a>
   <div class="card mb-3">
     <h5 class="card-header">{{ object.name }}</h5>
     <table class="table attr-table mb-0">
@@ -13,6 +15,7 @@
         <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="allow_override"><input type="hidden" name="p" value="{{ chosen.pk }}">
           <input type="hidden" name="value" value="{% if object.allow_override %}0{% else %}1{% endif %}">
           <button class="btn btn-link p-0 border-0"><i class="mdi {% if object.allow_override %}mdi-checkbox-marked text-success{% else %}mdi-checkbox-blank-outline text-muted{% endif %} fs-3"></i></button></form></td></tr>
+      <tr><th scope="row">{% tr "lbl.code_state" %}</th><td>{% include "netbox_isc_dhcp/_code_state.html" with pool=object ovr=overrides|length %}</td></tr>
       <tr><th scope="row">{% tr "lbl.prefixes" %}</th><td>{{ prefixes|length }}</td></tr>
       <tr><th scope="row">{% tr "lbl.suitable" %}</th><td><code>{{ suitable_text }}</code></td></tr>
       <tr><th scope="row">{% tr "lbl.use_for" %}</th><td>

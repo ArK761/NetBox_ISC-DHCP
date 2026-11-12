@@ -57,6 +57,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   states active/disabled/orphan. Plugin warnings (no DNS, incompatible, overrides) are a solid bar at the TOP of plugin pages (middleware), not toasts
   (toasts covered buttons). Export must use the override code for overridden subnets.
   DONE v0.12.2: tree bars have a "Zobraziť strom" toggle (no "Subnety ->" link; details.isc-notice display:block, NetBox .alert is flex). Orphan USE names (variable missing, e.g. renamed in old version): red bar + card on Vlastné premenné with remap (views._rewrite_use shared with rename). Updating the plugin never changes stored data.
+  DONE v0.12.4: pools table + pool page show code state (PoolTemplate.is_default_code: predvolený/upravený, +N individuálne, _code_state.html); pool page has breadcrumb DHCP-CFG / Subnety + "Späť na Subnety" button.
   NEXT: store generated <network>_CFG files (sha256) for compatible subnets only (override code where active) + subnet includes in dhcpd.conf.
   DONE v0.9.0: save-time protection of pool code (owner: "kontrola musí prebiehať poriadne"): code is rendered on ALL prefixes of the pool,
   save refused on any error, draft kept in session + shown in editor, errors grouped (count + example prefix), Slovak via tmsg patterns.

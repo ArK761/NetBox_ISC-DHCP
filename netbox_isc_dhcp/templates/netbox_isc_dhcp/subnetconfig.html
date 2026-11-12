@@ -85,13 +85,14 @@
     {% elif not has_pool_key %}<div class="card-body text-muted">{% tr "lbl.no_pool_key" %}</div>
     {% else %}
     <table class="table table-hover mb-0">
-      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.prefixes" %}</th><th>{% tr "lbl.use_for" %}</th><th>{% tr "lbl.incompat_short" %}</th><th>{% tr "lbl.generate" %}</th><th></th></tr></thead>
+      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.prefixes" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "lbl.use_for" %}</th><th>{% tr "lbl.incompat_short" %}</th><th>{% tr "lbl.generate" %}</th><th></th></tr></thead>
       {% for p in pools %}
       <tr><td><a href="{{ p.obj.get_absolute_url }}"><strong>{{ p.obj.name }}</strong></a></td><td>{{ p.count }}</td>
+        <td class="text-nowrap">{% include "netbox_isc_dhcp/_code_state.html" with pool=p.obj ovr=p.ovr %}</td>
         <td><code>{{ p.range }}</code></td><td>{% if p.bad %}<span class="badge text-bg-danger">{{ p.bad }}</span>{% else %}<span class="text-success">0</span>{% endif %}</td>
         <td>{% if p.obj.enabled %}<span class="text-success">{% tr "lbl.yes" %}</span>{% else %}{% tr "lbl.no" %}{% endif %}</td>
         <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ p.obj.get_absolute_url }}"><i class="mdi mdi-code-braces"></i> {% tr "lbl.template_code" %}</a></td></tr>
-      {% empty %}<tr><td colspan="6" class="text-muted">—</td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="7" class="text-muted">—</td></tr>{% endfor %}
     </table>{% endif %}
   </div>
   {% if incompatible %}<div class="card mb-3 border-danger"><h5 class="card-header text-danger">{% tr "lbl.incompat" %} ({{ incompatible|length }})</h5>
