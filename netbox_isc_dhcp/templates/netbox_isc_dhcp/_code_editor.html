@@ -2,7 +2,7 @@
 {{ editor_vars|json_script:"isc-vars" }}
 <style>
   textarea.code-editor { white-space: pre; overflow-x: auto; font-family: monospace; }
-  .isc-ed-wrap { position: relative; }
+  .isc-ed-wrap { position: relative; width: 100%; align-self: stretch; }
   .isc-ed-wrap textarea.code-editor { position: relative; z-index: 1; background: transparent !important; }
   .isc-ed-back { position: absolute; inset: 0; z-index: 0; overflow: hidden; white-space: pre; color: transparent; pointer-events: none; }
   .isc-ed-back mark, mark.isc-var { background: rgba(250, 204, 21, .35); color: inherit; padding: 0; border-radius: 2px; }
