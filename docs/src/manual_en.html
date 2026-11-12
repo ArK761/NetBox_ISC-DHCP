@@ -68,8 +68,8 @@
 
 <h2>9. Hosts and MAC addresses</h2>
 <p>Page <b>DHCP-CFG › Hosts and MAC addresses</b> (work in progress – grows step by step). Everything is set by clicking:</p>
-<ol><li><b>Table source (groups)</b> – pick the object (e.g. Tenant group). Click the field that gives the <b>table name</b> (usually Name). <b>Conditions</b> work like on Subnets: add a field, tick values and choose <b>Accept</b> (only these) or <b>Exclude</b> (all except these); all conditions must match. <b>Result</b> shows the groups that get tables (green).</li>
-<li><b>MAC address and IP source (hosts)</b> – pick the object holding the MAC addresses (e.g. Tenant). The link to the group is found automatically. Click the host name field, the MAC fields (at most 3, the number shows the order) and the static IP field.</li>
+<ol><li><b>Table source (groups)</b> – pick the object (e.g. Tenant group). Pick (drop-down) the field that gives the <b>table name</b> (usually Name). <b>Conditions</b> work like on Subnets: add a field, click the row to expand it, tick values (with search) and choose <b>Accept</b> (only these) or <b>Exclude</b> (all except these); all conditions must match. <b>Result</b> shows the groups that get tables (green).</li>
+<li><b>MAC address and IP source (hosts)</b> – pick the object holding the MAC addresses (e.g. Tenant). The link to the group is found automatically. Pick (drop-down) the host name field, the MAC fields (at most 3, the number shows the order) and the static IP field.</li>
 <li><b>Tables overview</b> – per group the file names <code>&lt;Name&gt;_Table</code> and <code>&lt;Name&gt;_StaticTable</code>, objects, dynamic and static hosts (with several MACs <code>NAME_1</code>, <code>NAME_2</code>…), objects without MAC and warnings (invalid or duplicate MAC or IP).</li></ol>
 <p>Next step: table code for every group (like the pool code).</p>
 

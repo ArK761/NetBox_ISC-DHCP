@@ -70,19 +70,24 @@ def _group_q(link, group) -> Q:
 MAX_VALUES = 300
 
 
-def condition_rows(model, conds) -> list[dict]:
-    """Conditions for the page: field label, mode and every value of the field with its ticked state."""
+def condition_rows(model, conds, open_row=None) -> list[dict]:
+    """Conditions for the page: field label, mode, summary of the ticked values; the list of every value
+    of the field is built only for the row that is open."""
     rows = []
     for i, c in enumerate(conds):
-        ticked = {str(v) for v in c.get("values") or []}
+        ticked = [str(v) for v in c.get("values") or []]
         vals = distinct_values(model, c["field"]) if model is not None else []
+        names = dict(vals)
+        shown = [names.get(v, v) for v in ticked[:4]]
         rows.append({"index": i, "field": c["field"], "label": label_for(model, c["field"]), "mode": c.get("mode", "include"),
-                     "values": [(v, l, v in ticked) for v, l in vals[:MAX_VALUES]], "more": max(0, len(vals) - MAX_VALUES),
-                     "ticked": len(ticked)})
+                     "summary": ", ".join(shown) + (f" … (+{len(ticked) - 4})" if len(ticked) > 4 else ""), "ticked": len(ticked),
+                     "open": i == open_row,
+                     "values": [(v, l, v in ticked) for v, l in vals[:MAX_VALUES]] if i == open_row else [],
+                     "more": max(0, len(vals) - MAX_VALUES)})
     return rows
 
 
-def overview(cfg) -> dict:
+def overview(cfg, open_row=None) -> dict:
     """Groups found (with their table name and whether they get tables) + per selected group:
     objects, hosts (dynamic / static), skipped, warnings."""
     gm, mm = get_model(cfg.group_model), get_model(cfg.mac_model)
@@ -90,7 +95,7 @@ def overview(cfg) -> dict:
     conds = [c for c in cfg.group_conditions or [] if c.get("field")]
     active = [c for c in conds if is_active(c)]
     chosen = set(gm.objects.filter(build_q(gm, active)).values_list("pk", flat=True)) if gm is not None and active else set()
-    out["conditions"] = condition_rows(gm, conds)
+    out["conditions"] = condition_rows(gm, conds, open_row)
     if gm is not None:
         gkeys = {o["key"] for o in field_options(gm)}
         gname = cfg.group_name_field if cfg.group_name_field in gkeys else ""

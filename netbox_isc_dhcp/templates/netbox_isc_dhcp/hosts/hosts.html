@@ -3,8 +3,16 @@
 {% block breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:dhcp_hub' %}">{% tr "menu.dhcp" %}</a></li>{% endblock breadcrumbs %}
 {% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
 <style>
-  .isc-sec { padding: .9rem 1rem; border-top: 1px solid var(--tblr-border-color, rgba(128,128,128,.25)); }
-  .isc-sec-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .7; margin-bottom: .5rem; }
+  .isc-sec { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 0 1.25rem; align-items: start;
+             padding: .75rem 1rem; border-top: 1px solid var(--tblr-border-color, rgba(128,128,128,.25)); }
+  .isc-sec > :not(.isc-sec-title) { grid-column: 2; }
+  .isc-sec-title { grid-column: 1; grid-row: 1 / span 9; font-weight: 600; opacity: .8; padding-top: .1rem; }
+  .isc-sec-title .badge { display: inline-block; margin-top: .35rem; }
+  @media (max-width: 768px) { .isc-sec { grid-template-columns: 1fr; } .isc-sec > * { grid-column: 1 !important; grid-row: auto !important; } }
+  .isc-hint { font-size: .8rem; opacity: .65; }
+  .isc-card-hint { font-size: .85rem; opacity: .75; padding: .6rem 1rem; }
+  .isc-zero { opacity: .35; }
+  #isc-overview td code { background: transparent; padding: 0; }
   .isc-pills { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0; }
   .isc-pills .btn { border-radius: 999px; padding: .2rem .75rem; font-size: .82rem; }
   .isc-pills .btn .badge { margin-left: .35rem; }
@@ -17,7 +25,7 @@
   {# ---- table source (groups) ---- #}
   <div class="card mb-3" id="isc-src-group">
     <h5 class="card-header d-flex align-items-center"><span class="isc-step">1</span><i class="mdi mdi-table-multiple me-2"></i>{% tr "hosts.src_group" %}</h5>
-    <div class="card-body py-2 text-muted small">{% tr "hosts.src_group_hint" %}</div>
+    <div class="isc-card-hint"><i class="mdi mdi-information-outline"></i> {% tr "hosts.src_group_hint" %}</div>
     <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.object" %}</div>
       <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if cfg.group_model %}<strong>{{ group_label }}</strong>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="group_model">
@@ -26,47 +34,60 @@
           <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></div>
     {% if cfg.group_model %}
     <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.name_field" %}</div>
-      <form method="post" action="{{ inline_url }}" class="isc-pills" id="isc-gname">{% csrf_token %}<input type="hidden" name="field" value="group_name_field">
-        {% for f in group_fields %}<input type="radio" class="btn-check" name="value" id="gn-{{ forloop.counter }}" value="{{ f.key }}"{% if f.key == cfg.group_name_field %} checked{% endif %} onchange="this.form.submit()">
-        <label class="btn btn-sm {% if f.key == cfg.group_name_field %}btn-primary{% else %}btn-outline-secondary{% endif %}" for="gn-{{ forloop.counter }}">{{ f.label }}</label>{% endfor %}
-      </form><div class="small text-muted mt-2">{% tr "hosts.name_field_hint" %}</div></div>
+      <span id="isc-gname"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if group_name_label %}<strong>{{ group_name_label }}</strong>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="group_name_field">
+          <select name="value" class="form-select form-select-sm">{% for f in group_fields %}<option value="{{ f.key }}"{% if f.key == cfg.group_name_field %} selected{% endif %}>{{ f.label }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></span><div class="isc-hint mt-1">{% tr "hosts.name_field_hint" %}</div></div>
     <div class="isc-sec" id="isc-groups"><div class="isc-sec-title">{% tr "hosts.conditions" %}</div>
-      <div class="small text-muted mb-2">{% tr "hosts.cond_hint" %}</div>
+      <div class="isc-hint mb-2">{% tr "hosts.cond_hint" %}</div>
+      <ul class="list-group mb-2">
       {% for c in ov.conditions %}
-      <div class="border rounded p-2 mb-2 isc-cond {% if c.mode == 'exclude' %}border-danger{% else %}border-success{% endif %}" data-field="{{ c.field }}">
-        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-          <strong>{{ c.label }}</strong>
-          <form method="post" action="{{ inline_url }}" class="isc-pills">{% csrf_token %}<input type="hidden" name="field" value="cond_mode"><input type="hidden" name="row" value="{{ c.index }}">
-            <input type="radio" class="btn-check" name="value" id="cm-{{ c.index }}-i" value="include"{% if c.mode != 'exclude' %} checked{% endif %} onchange="this.form.submit()">
-            <label class="btn btn-sm {% if c.mode != 'exclude' %}btn-success{% else %}btn-outline-secondary{% endif %}" for="cm-{{ c.index }}-i"><i class="mdi mdi-check"></i> {% tr "hosts.accept" %}</label>
-            <input type="radio" class="btn-check" name="value" id="cm-{{ c.index }}-e" value="exclude"{% if c.mode == 'exclude' %} checked{% endif %} onchange="this.form.submit()">
-            <label class="btn btn-sm {% if c.mode == 'exclude' %}btn-danger{% else %}btn-outline-secondary{% endif %}" for="cm-{{ c.index }}-e"><i class="mdi mdi-cancel"></i> {% tr "hosts.exclude" %}</label></form>
-          <form method="post" action="{{ inline_url }}" class="ms-auto d-flex gap-1 m-0">{% csrf_token %}<input type="hidden" name="row" value="{{ c.index }}">
-            <button name="field" value="cond_all" class="btn btn-sm btn-outline-secondary py-0"><i class="mdi mdi-check-all"></i> {% tr "hosts.select_all" %}</button>
-            <button name="field" value="cond_none" class="btn btn-sm btn-outline-secondary py-0"><i class="mdi mdi-close"></i> {% tr "hosts.select_none" %}</button>
-            <button name="field" value="cond_del" class="btn btn-sm btn-outline-danger py-0" title="{% tr 'hosts.delete' %}"><i class="mdi mdi-trash-can-outline"></i></button></form>
-        </div>
-        <form method="post" action="{{ inline_url }}" class="isc-pills">{% csrf_token %}<input type="hidden" name="field" value="cond_values"><input type="hidden" name="row" value="{{ c.index }}">
-          {% for v, l, on in c.values %}<input type="checkbox" class="btn-check" name="value" id="cv-{{ c.index }}-{{ forloop.counter }}" value="{{ v }}"{% if on %} checked{% endif %} onchange="this.form.submit()">
-          <label class="btn btn-sm isc-cval {% if on %}{% if c.mode == 'exclude' %}btn-danger{% else %}btn-success{% endif %}{% else %}btn-outline-secondary{% endif %}" for="cv-{{ c.index }}-{{ forloop.counter }}">{% if on %}<i class="mdi {% if c.mode == 'exclude' %}mdi-cancel{% else %}mdi-check{% endif %}"></i> {% endif %}{{ l }}</label>{% empty %}<span class="text-muted">—</span>{% endfor %}
-          {% if c.more %}<span class="small text-muted align-self-center">… {% tr "hosts.more_values" %} {{ c.more }}</span>{% endif %}</form>
-      </div>
-      {% empty %}<div class="text-warning small mb-2"><i class="mdi mdi-alert-outline"></i> {% tr "hosts.no_cond" %}</div>{% endfor %}
+        <li class="list-group-item isc-cond" data-field="{{ c.field }}" id="c{{ c.index }}">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="flex-grow-1"><a href="{% if c.open %}?#isc-groups{% else %}?edit={{ c.index }}#c{{ c.index }}{% endif %}" class="d-flex align-items-center gap-3 text-reset text-decoration-none isc-cond-toggle" title="{% tr 'lbl.click_edit' %}">
+                <i class="mdi {% if c.open %}mdi-chevron-up{% else %}mdi-chevron-down{% endif %} text-muted"></i>
+                <strong class="d-inline-block" style="min-width:12rem">{{ c.label }}</strong>
+                {% if c.ticked %}<span class="badge {% if c.mode == 'exclude' %}text-bg-danger{% else %}text-bg-success{% endif %}">{% if c.mode == 'exclude' %}<i class="mdi mdi-cancel"></i> {% tr "hosts.exclude_short" %}{% else %}<i class="mdi mdi-check"></i> {% tr "hosts.accept_short" %}{% endif %}</span>
+                <code class="isc-cond-sum">{{ c.summary }}</code>{% else %}<span class="text-muted fst-italic">{% tr "hosts.nothing_ticked" %}</span>{% endif %}</a>
+              {% if c.open %}<form method="post" action="{{ inline_url }}" class="mt-2">{% csrf_token %}<input type="hidden" name="row" value="{{ c.index }}">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                  <label class="text-success"><input type="radio" name="mode" value="include"{% if c.mode != "exclude" %} checked{% endif %}> {% tr "hosts.accept" %}</label>
+                  <label class="text-danger"><input type="radio" name="mode" value="exclude"{% if c.mode == "exclude" %} checked{% endif %}> {% tr "hosts.exclude" %}</label>
+                  <input type="search" placeholder="{% tr 'hosts.search' %}" class="form-control form-control-sm" style="max-width:16rem"
+                    oninput="var q=this.value.toLowerCase();this.form.querySelectorAll('label[data-v]').forEach(function(l){l.style.display=l.dataset.v.indexOf(q)>-1?'':'none'})">
+                </div>
+                <div class="border rounded p-2 my-2" style="max-height:18rem;overflow:auto;columns:14rem">
+                  {% for v, l, on in c.values %}<label class="d-block text-nowrap isc-cval" data-v="{{ l|lower }}"><input type="checkbox" name="values" value="{{ v }}"{% if on %} checked{% endif %}> {{ l }}</label>
+                  {% empty %}<span class="text-muted">—</span>{% endfor %}
+                  {% if c.more %}<span class="small text-muted">… {% tr "hosts.more_values" %} {{ c.more }}</span>{% endif %}
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-primary" name="field" value="cond_set" id="isc-cond-save">{% tr "lbl.save" %}</button>
+                  <button class="btn btn-sm btn-outline-secondary" name="field" value="cond_all">{% tr "hosts.select_all" %}</button>
+                  <button class="btn btn-sm btn-outline-secondary" name="field" value="cond_none">{% tr "hosts.untick" %}</button>
+                </div>
+              </form>{% endif %}</div>
+            <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_del"><input type="hidden" name="row" value="{{ c.index }}">
+              <button class="btn btn-sm btn-danger" title="{% tr 'hosts.delete' %}"><i class="mdi mdi-trash-can-outline"></i></button></form>
+          </div>
+        </li>
+      {% empty %}<li class="list-group-item text-warning"><i class="mdi mdi-alert-outline"></i> {% tr "hosts.no_cond" %}</li>{% endfor %}
+      </ul>
       <form method="post" action="{{ inline_url }}" class="d-flex gap-2" style="max-width:34rem">{% csrf_token %}<input type="hidden" name="field" value="cond_add">
         <select name="value" class="form-select form-select-sm" required><option value="">{% tr "hosts.pick_field" %}</option>
           {% for f in group_fields %}{% if f.key not in used_fields %}<option value="{{ f.key }}">{{ f.label }}</option>{% endif %}{% endfor %}</select>
         <button class="btn btn-sm btn-primary text-nowrap" id="isc-cond-add"><i class="mdi mdi-plus"></i> {% tr "hosts.add_cond" %}</button></form>
     </div>
-    <div class="isc-sec"><div class="isc-sec-title d-flex align-items-center gap-2">{% tr "hosts.groups" %} <span class="badge text-bg-secondary" id="isc-groups-count">{{ groups_count_text }}</span></div>
+    <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.groups" %}<br><span class="badge text-bg-secondary" id="isc-groups-count">{{ groups_count_text }}</span></div>
       <div class="isc-pills">{% for g in ov.groups %}<span class="btn btn-sm isc-group {% if g.selected and not g.valid %}btn-danger{% elif g.selected %}btn-success{% else %}btn-outline-secondary opacity-50{% endif %}" data-name="{{ g.name }}" data-on="{{ g.selected|yesno:'1,0' }}"{% if not g.valid %} title="{% tr 'hosts.bad_name' %}"{% endif %} style="cursor:default">{% if g.selected %}<i class="mdi mdi-check"></i> {% endif %}{{ g.name }}</span>{% empty %}<span class="text-muted">—</span>{% endfor %}</div>
-      <div class="small text-muted mt-2">{% tr "hosts.groups_hint" %}</div></div>
+      <div class="isc-hint mt-2">{% tr "hosts.groups_hint" %}</div></div>
     {% endif %}
   </div>
 
   {# ---- MAC + IP source (hosts) ---- #}
   <div class="card mb-3" id="isc-src-mac">
     <h5 class="card-header d-flex align-items-center"><span class="isc-step">2</span><i class="mdi mdi-lan-connect me-2"></i>{% tr "hosts.src_mac" %}</h5>
-    <div class="card-body py-2 text-muted small">{% tr "hosts.src_mac_hint" %}</div>
+    <div class="isc-card-hint"><i class="mdi mdi-information-outline"></i> {% tr "hosts.src_mac_hint" %}</div>
     <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.object" %}</div>
       <details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if cfg.mac_model %}<strong>{{ mac_label }}</strong>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="mac_model">
@@ -76,24 +97,26 @@
     {% if cfg.mac_model %}
     <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.link" %}</div>
       {% if not ov.links %}<span class="text-warning" id="isc-no-link"><i class="mdi mdi-alert-outline"></i> {% tr "hosts.no_link" %}</span>
-      {% else %}<form method="post" action="{{ inline_url }}" class="isc-pills">{% csrf_token %}<input type="hidden" name="field" value="link_field">
-        {% for k, l in ov.links %}<input type="radio" class="btn-check" name="value" id="ln-{{ forloop.counter }}" value="{{ k }}"{% if k == ov.link %} checked{% endif %} onchange="this.form.submit()">
-        <label class="btn btn-sm {% if k == ov.link %}btn-primary{% else %}btn-outline-secondary{% endif %}" for="ln-{{ forloop.counter }}"{% if k == ov.link %} id="isc-link"{% endif %}>{{ l }}</label>{% endfor %}</form>
-      {% if not ov.link %}<div class="small text-warning mt-2">{% tr "hosts.pick_link" %}</div>{% endif %}{% endif %}</div>
+      {% else %}<details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if ov.link %}<strong id="isc-link">{{ link_label }}</strong>{% else %}<span class="text-warning">{% tr "hosts.pick_link" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="link_field">
+          <select name="value" class="form-select form-select-sm">{% for k, l in ov.links %}<option value="{{ k }}"{% if k == ov.link %} selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
+      {% endif %}</div>
     <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.host_name_field" %}</div>
-      <form method="post" action="{{ inline_url }}" class="isc-pills" id="isc-hname">{% csrf_token %}<input type="hidden" name="field" value="host_name_field">
-        {% for f in mac_opts %}<input type="radio" class="btn-check" name="value" id="hn-{{ forloop.counter }}" value="{{ f.key }}"{% if f.key == cfg.host_name_field %} checked{% endif %} onchange="this.form.submit()">
-        <label class="btn btn-sm {% if f.key == cfg.host_name_field %}btn-primary{% else %}btn-outline-secondary{% endif %}" for="hn-{{ forloop.counter }}">{{ f.label }}</label>{% endfor %}</form></div>
+      <span id="isc-hname"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if host_name_label %}<strong>{{ host_name_label }}</strong>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="host_name_field">
+          <select name="value" class="form-select form-select-sm">{% for f in mac_opts %}<option value="{{ f.key }}"{% if f.key == cfg.host_name_field %} selected{% endif %}>{{ f.label }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></span></div>
     <div class="isc-sec"><div class="isc-sec-title">{{ mac_fields_title }}</div>
-      <form method="post" action="{{ inline_url }}" class="isc-pills" id="isc-macs">{% csrf_token %}<input type="hidden" name="field" value="mac_fields">
-        {% for f in mac_opts %}{% with n=f.order %}<input type="checkbox" class="btn-check" name="value" id="mf-{{ forloop.counter }}" value="{{ f.key }}"{% if n %} checked{% endif %} onchange="this.form.submit()">
-        <label class="btn btn-sm {% if n %}btn-primary isc-macf{% else %}btn-outline-secondary{% endif %}" for="mf-{{ forloop.counter }}">{{ f.label }}{% if n %}<span class="badge text-bg-light">{{ n }}</span>{% endif %}</label>{% endwith %}{% endfor %}</form></div>
+      <details class="ie wide" id="isc-macs"><summary title="{% tr 'lbl.click_edit' %}">{% for f in mac_sel %}<span class="badge text-bg-primary me-1 isc-macf">{{ forloop.counter }}. {{ f.label }}</span>{% empty %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endfor %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="mac_fields">
+          <div class="border rounded p-2" style="max-height:16rem;overflow:auto;columns:14rem;width:100%">{% for f in mac_opts %}<label class="d-block text-nowrap"><input type="checkbox" name="value" value="{{ f.key }}"{% if f.order %} checked{% endif %}> {{ f.label }}</label>{% endfor %}</div>
+          <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></div>
     <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.ip_field" %}</div>
-      <form method="post" action="{{ inline_url }}" class="isc-pills">{% csrf_token %}<input type="hidden" name="field" value="ip_field">
-        <input type="radio" class="btn-check" name="value" id="ip-0" value=""{% if not cfg.ip_field %} checked{% endif %} onchange="this.form.submit()">
-        <label class="btn btn-sm {% if not cfg.ip_field %}btn-primary{% else %}btn-outline-secondary{% endif %}" for="ip-0">{% tr "hosts.no_ip" %}</label>
-        {% for f in mac_opts %}<input type="radio" class="btn-check" name="value" id="ip-{{ forloop.counter }}" value="{{ f.key }}"{% if f.key == cfg.ip_field %} checked{% endif %} onchange="this.form.submit()">
-        <label class="btn btn-sm {% if f.key == cfg.ip_field %}btn-primary{% else %}btn-outline-secondary{% endif %}" for="ip-{{ forloop.counter }}"{% if f.key == cfg.ip_field %} id="isc-ipf"{% endif %}>{{ f.label }}</label>{% endfor %}</form></div>
+      <span id="isc-ip"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if ip_label %}<strong id="isc-ipf">{{ ip_label }}</strong>{% else %}<span class="text-muted">{% tr "hosts.no_ip" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="ip_field">
+          <select name="value" class="form-select form-select-sm"><option value="">{% tr "hosts.no_ip" %}</option>{% for f in mac_opts %}<option value="{{ f.key }}"{% if f.key == cfg.ip_field %} selected{% endif %}>{{ f.label }}</option>{% endfor %}</select>
+          <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></span></div>
     {% endif %}
   </div>
 
@@ -104,12 +127,12 @@
       <div class="card-body text-muted"><i class="mdi mdi-information-outline"></i> {% tr "hosts.need" %}: <strong>{{ need_texts|join:", " }}</strong></div>
     {% else %}
     <div class="table-responsive"><table class="table table-hover mb-0 align-middle">
-      <thead><tr><th>{% tr "hosts.col_class" %}</th><th>{% tr "hosts.col_files" %}</th><th class="text-end">{% tr "hosts.col_objects" %}</th><th class="text-end">{% tr "hosts.col_dynamic" %}</th><th class="text-end">{% tr "hosts.col_static" %}</th><th class="text-end">{% tr "hosts.col_skipped" %}</th><th>{% tr "hosts.col_warnings" %}</th></tr></thead>
+      <thead><tr><th>{% tr "hosts.col_class" %}</th><th>{% tr "hosts.col_files" %}</th><th class="text-end">{% tr "hosts.col_objects" %}</th><th class="text-end">{% tr "hosts.col_dynamic" %}</th><th class="text-end">{% tr "hosts.col_static" %}</th><th class="text-end">{% tr "hosts.col_skipped" %}</th><th style="min-width:14rem">{% tr "hosts.col_warnings" %}</th></tr></thead>
       {% for r in ov.rows %}<tr class="isc-class-row" data-class="{{ r.name }}"><td><strong>{{ r.name }}</strong></td>
-        <td>{% if r.valid %}<code class="small d-block">{{ r.name }}_Table</code><code class="small d-block">{{ r.name }}_StaticTable</code>{% else %}<span class="text-danger small">{% tr "hosts.bad_name" %}</span>{% endif %}</td>
-        <td class="text-end">{{ r.objects }}</td><td class="text-end">{{ r.dynamic }}</td>
-        <td class="text-end">{{ r.static }}{% if r.static %} <span class="small text-muted d-block">{{ r.hosts_text }}</span>{% endif %}</td><td class="text-end text-muted">{{ r.skipped }}</td>
-        <td>{% if r.warnings %}<details><summary class="text-warning"><i class="mdi mdi-alert-outline"></i> {{ r.warnings|length }}</summary><ul class="small mb-0 ps-3">{% for w in r.warnings %}<li>{{ w }}</li>{% endfor %}</ul></details>{% else %}<span class="text-success"><i class="mdi mdi-check"></i> 0</span>{% endif %}</td></tr>
+        <td>{% if r.valid %}<div class="small text-nowrap"><i class="mdi mdi-file-outline opacity-50"></i> <code>{{ r.name }}_Table</code></div><div class="small text-nowrap"><i class="mdi mdi-file-lock-outline opacity-50"></i> <code>{{ r.name }}_StaticTable</code></div>{% else %}<span class="text-danger small">{% tr "hosts.bad_name" %}</span>{% endif %}</td>
+        <td class="text-end">{% if r.objects %}{{ r.objects }}{% else %}<span class="isc-zero">0</span>{% endif %}</td><td class="text-end">{% if r.dynamic %}{{ r.dynamic }}{% else %}<span class="isc-zero">0</span>{% endif %}</td>
+        <td class="text-end">{% if r.static %}{{ r.static }}{% else %}<span class="isc-zero">0</span>{% endif %}{% if r.static %} <span class="small text-muted d-block text-nowrap">{{ r.hosts_text }}</span>{% endif %}</td><td class="text-end">{% if r.skipped %}{{ r.skipped }}{% else %}<span class="isc-zero">0</span>{% endif %}</td>
+        <td>{% if r.warnings %}<details><summary class="text-warning"><i class="mdi mdi-alert-outline"></i> {{ r.warnings|length }}</summary><ul class="small mb-0 ps-3">{% for w in r.warnings %}<li>{{ w }}</li>{% endfor %}</ul></details>{% else %}<span class="text-success"><i class="mdi mdi-check-circle-outline"></i></span>{% endif %}</td></tr>
       {% empty %}<tr><td colspan="7" class="text-muted">—</td></tr>{% endfor %}
     </table></div>
     <div class="card-body border-top small text-muted"><i class="mdi mdi-information-outline"></i> {% tr "hosts.next" %}</div>
