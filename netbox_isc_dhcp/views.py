@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views import View
-from netbox.object_actions import AddObject, BulkDelete
+from netbox.object_actions import AddObject, BulkDelete, DeleteObject
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -13,8 +13,11 @@ from .models import MAX_ACTIVE_DNS, PoolTemplate, SubnetConfig, BaseConfig, DHCP
 from .services import build_base_config
 
 
-def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
-    """Register list / detail / add / edit / delete views for a model."""
+def _crud(model, form_cls, table_cls, singleton=False, extra_context=None, inline_only=False):
+    """Register list / detail / add / edit / delete views for a model.
+    Singletons and inline_only models are edited only by clicking on their page: no Edit button, the edit URL redirects
+    to the page (the generic form would bypass the checks). Singletons have no Delete either."""
+    no_form = singleton or inline_only
 
     if singleton:
         # The list URL is the menu link. It redirects to the one object, whose URL contains the
@@ -43,15 +46,31 @@ def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
     class DetailView(generic.ObjectView):
         queryset = model.objects.all()
         template_name = f"netbox_isc_dhcp/{model._meta.model_name}.html"
+        if no_form:
+            actions = () if singleton else (DeleteObject,)
 
         def get_extra_context(self, request, instance):
             return extra_context(request, instance) if extra_context else {}
 
-    @register_model_view(model, "add", detail=False)
-    @register_model_view(model, "edit")
-    class EditView(generic.ObjectEditView):
-        queryset = model.objects.all()
-        form = form_cls
+    if no_form:
+        @register_model_view(model, "edit")
+        class InlineOnlyView(View):
+            def get(self, request, pk):
+                return redirect(get_object_or_404(model, pk=pk).get_absolute_url())
+
+            post = get
+
+        if not singleton:
+            @register_model_view(model, "add", detail=False)
+            class AddView(generic.ObjectEditView):
+                queryset = model.objects.all()
+                form = form_cls
+    else:
+        @register_model_view(model, "add", detail=False)
+        @register_model_view(model, "edit")
+        class EditView(generic.ObjectEditView):
+            queryset = model.objects.all()
+            form = form_cls
 
     @register_model_view(model, "delete")
     class DeleteView(generic.ObjectDeleteView):
@@ -83,7 +102,7 @@ def _crud(model, form_cls, table_cls, singleton=False, extra_context=None):
                 **self.get_extra_context(request, obj),
             })
 
-    return ListView, DetailView, EditView, DeleteView
+    return ListView, DetailView, (AddView if not singleton else None) if no_form else EditView, DeleteView
 
 
 # --- Base config -----------------------------------------------------------------
@@ -553,7 +572,7 @@ class PoolTemplateInlineView(View):
         return redirect(f"{url}?p={p}" if p.isdigit() else url)
 
 
-_crud(PoolTemplate, forms.PoolTemplateForm, tables.PoolTemplateTable,
+_crud(PoolTemplate, forms.PoolTemplateForm, tables.PoolTemplateTable, inline_only=True,
       extra_context=lambda request, instance: _pooltemplate_context(request, instance))
 
 
