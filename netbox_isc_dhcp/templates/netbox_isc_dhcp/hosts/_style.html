@@ -13,4 +13,11 @@
   .isc-path { font-family: var(--tblr-font-monospace, monospace); font-size: .82rem; opacity: .85; }
   .isc-files code { background: transparent; padding: 0; }
   tr.isc-off > td:not(:nth-child(2)) { opacity: .5; }
+  .isc-path { font-family: inherit !important; font-size: inherit !important; }
+  .isc-green { color: var(--tblr-success, #2fb344); opacity: 1; font-weight: 500; }
+  .isc-tree .isc-sec { border-top: 0; }
+  .isc-tree .isc-root { border-top: 1px solid var(--tblr-border-color, rgba(128,128,128,.25)); }
+  .isc-tree .isc-leaf { position: relative; padding-left: 3rem; grid-template-columns: 12.75rem minmax(0,1fr); }
+  .isc-tree .isc-leaf::before { content: ""; position: absolute; left: 1.6rem; top: 0; height: 1.35rem; width: 1rem;
+     border-left: 2px solid var(--tblr-success, #2fb344); border-bottom: 2px solid var(--tblr-success, #2fb344); border-bottom-left-radius: 6px; opacity: .7; }
 </style>

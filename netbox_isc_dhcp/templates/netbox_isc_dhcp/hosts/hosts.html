@@ -6,9 +6,8 @@
 <div class="row"><div class="col-12">
 
   {# ---- table source (groups) ---- #}
-  <div class="card mb-3" id="isc-src-group">
-    <h5 class="card-header d-flex align-items-center"><span class="isc-step">1</span><i class="mdi mdi-table-multiple me-2"></i>{% tr "hosts.src_group" %}</h5>
-    <div class="isc-card-hint"><i class="mdi mdi-information-outline"></i> {% tr "hosts.src_group_hint" %}</div>
+  <div class="card mb-3" id="isc-dir-card">
+    <h5 class="card-header d-flex align-items-center"><span class="isc-step">1</span><i class="mdi mdi-folder-outline me-2"></i>{% tr "hosts.dir_card" %}</h5>
     <div class="isc-sec" id="isc-tabledir"><div class="isc-sec-title">{% tr "hosts.table_dir" %}</div>
       <div><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if table_dir %}<strong>{{ table_dir.name }}</strong> <span class="isc-path ms-2" id="isc-tabledir-path">{{ table_dir.path }}/</span>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="table_dir">
@@ -17,26 +16,32 @@
           <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <a class="small" href="{% url 'plugins:netbox_isc_dhcp:pluginsettings_list' %}"><i class="mdi mdi-folder-plus-outline"></i> {% tr "lbl.add_subdir" %}</a></div>
       <div class="isc-hint mt-1">{% tr "hosts.table_dir_hint" %}</div></div>
-    <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.object" %}</div>
+  </div>
+  <div class="card mb-3" id="isc-src-group">
+    <h5 class="card-header d-flex align-items-center"><span class="isc-step">2</span><i class="mdi mdi-table-multiple me-2"></i>{% tr "hosts.src_group" %}</h5>
+    <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "hosts.src_group_hint" %}</div>
+    <div class="isc-tree">
+    <div class="isc-sec isc-root"><div class="isc-sec-title">{% tr "hosts.object" %}</div>
       <div><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if cfg.group_model %}<strong>{{ group_label }}</strong>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="group_model">
           <select name="value" class="form-select form-select-sm"><option value="">{% tr "lbl.none" %}</option>
             {% for app, items in source_groups.items %}<optgroup label="{{ app }}">{% for v, l in items %}<option value="{{ v }}"{% if v == cfg.group_model %} selected{% endif %}>{{ l }}</option>{% endfor %}</optgroup>{% endfor %}</select>
           <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></div></div>
     {% if cfg.group_model %}
-    <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.name_field" %}</div>
+    <div class="isc-sec isc-leaf"><div class="isc-sec-title">{% tr "hosts.name_field" %}</div>
       <div id="isc-gname"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}">{% if group_name_label %}<strong>{{ group_name_label }}</strong>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %} <i class="mdi mdi-pencil-outline text-muted"></i></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="group_name_field">
           <select name="value" class="form-select form-select-sm">{% for f in group_fields %}<option value="{{ f.key }}"{% if f.key == cfg.group_name_field %} selected{% endif %}>{{ f.label }}</option>{% endfor %}</select>
           <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></div>
       <div class="isc-hint mt-1">{% tr "hosts.name_field_hint" %}</div></div>
     {% endif %}
+    </div>
   </div>
 
   {# ---- groups (like the pools list) ---- #}
   {% if cfg.group_model %}
   <div class="card mb-3" id="isc-groups">
-    <h5 class="card-header d-flex align-items-center"><span class="isc-step">2</span><i class="mdi mdi-format-list-group me-2"></i>{% tr "hosts.groups_table" %}
+    <h5 class="card-header d-flex align-items-center"><span class="isc-step">3</span><i class="mdi mdi-format-list-group me-2"></i>{% tr "hosts.groups_table" %}
       <span class="badge text-bg-secondary ms-2" id="isc-groups-count">{{ groups_count_text }}</span></h5>
     <div class="isc-card-hint"><i class="mdi mdi-information-outline"></i> {% tr "hosts.groups_table_hint" %}</div>
     <div class="table-responsive"><table class="table table-hover mb-0 align-middle">

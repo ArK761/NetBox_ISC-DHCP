@@ -50,6 +50,7 @@ TR = {
     "hosts.with_ip_count": ("so statickou IP (vynechané)", "with a static IP (left out)"),
     "hosts.no_ip_count": ("bez IP (preskočené)", "without IP (left out)"),
     "hosts.name_field": ("Názov tabuľky z poľa", "Table name from field"),
+    "hosts.dir_card": ("Umiestnenie tabuliek", "Table location"),
     "hosts.name_field_hint": ("Interné pole alebo custom field, ktorého hodnota je názov tabuľky (zvyčajne Name). Generovanie skupiny vypnete vypínačom v zozname skupín.", "Built-in field or custom field whose value is the table name (usually Name). Turn a group off with the switch in the groups list."),
     "hosts.conditions": ("Podmienky (voliteľné)", "Conditions (optional)"),
     "hosts.cond_hint": ("Filter skupín: pridajte pole, rozbaľte riadok, zaškrtnite hodnoty a zvoľte Akceptovať alebo Vylúčiť. Všetky podmienky musia platiť.",
