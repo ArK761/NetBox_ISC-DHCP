@@ -113,7 +113,7 @@ TR = {
     "hosts.ip_none": ("— bez IP —", "— no IP —"),
     "hosts.add_row": ("Pridať hosta", "Add host"),
     "hosts.no_rows": ("Zatiaľ žiadny host – vyberte pole MAC (a IP).", "No host yet – pick a MAC field (and IP)."),
-    "hosts.dyn_toggle": ("Prepnúť: MAC aj do class v dynamickom súbore (v inom poole dostane IP, inak MismatchClient)", "Toggle: MAC also into the class of the dynamic file (gets an IP in another pool, otherwise MismatchClient)"),
+    "hosts.dyn_toggle": ("Prepnúť: MAC aj do class v dynamickom súbore (v inom poole dostane IP, inak MismatchClient). Bez IP ide host vždy do dynamického.", "Toggle: MAC also into the class of the dynamic file (gets an IP in another pool, otherwise MismatchClient). Without IP the host always goes to the dynamic file."),
     "hosts.dyn_add": ("aj do class", "also into class"),
     "hosts.to_dynamic": ("Dynamic", "Dynamic"),
     "hosts.to_static": ("Static", "Static"),
@@ -143,6 +143,7 @@ TR = {
 
 # validation messages of dhcp_tables.prepare (English) -> Slovak
 PATTERNS = [
+    (r"(.*): invalid IP '(.*)', host only in the dynamic file", r"\1: neplatná IP '\2', host je len v dynamickom súbore"),
     (r"(.*): duplicate MAC (\S+) in both files: (.*)", r"\1: duplicitná MAC \2 v oboch súboroch: \3"),
     (r"(.*): duplicate MAC (\S+): (.*)", r"\1: detegovaná duplicitná MAC \2: \3"),
     (r"(.*): duplicate IP (\S+): (.*)", r"\1: detegovaná duplicitná IP \2: \3"),

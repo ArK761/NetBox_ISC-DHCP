@@ -140,7 +140,7 @@ def build_group(hg) -> dict:
     """Both files of a group from all its sources.
     dynamic rows: (host, mac, object name); static rows: (host, mac, ip, object name);
     lost: hosts that do not get into DHCP (host, reason, value); warnings: duplicate MAC / IP (never a reason to leave out)."""
-    dyn, sta, lost = [], [], []
+    dyn, sta, lost, bad_ip = [], [], [], []
     objects, configured = 0, 0
     for src in hg.sources.all():
         info = source_info(src)
@@ -175,11 +175,10 @@ def build_group(hg) -> dict:
                     dyn.append((host, m, base))
                     continue
                 ip = None if _empty(ipv) else normalize_ip(ipv)
-                if ip is None:
-                    if r["dyn"]:  # still gets an address from the class
-                        dyn.append((host, m, base))
-                    else:
-                        own.append((host, "no_ip" if _empty(ipv) else "bad_ip", "" if _empty(ipv) else str(ipv)))
+                if ip is None:  # no (valid) IP -> cannot be static, goes to the dynamic class
+                    dyn.append((host, m, base))
+                    if not _empty(ipv):
+                        bad_ip.append(f"{host}: invalid IP '{ipv}', host only in the dynamic file")
                     continue
                 sta.append((host, m, ip, base))
                 if r["dyn"]:
@@ -196,7 +195,7 @@ def build_group(hg) -> dict:
             continue
         seen.add(r[0])
         static.append(r)
-    warnings = []
+    warnings = list(bad_ip)
     for kind, rows in (("dynamic", dyn), ("static", static)):
         owners = {}
         for r in rows:
