@@ -1,7 +1,7 @@
 """Hosts: read groups (DHCP classes) and MAC/IP objects from any NetBox object type."""
 from django.db import models
 
-from ..dhcp_tables import _SAFE_NAME, natural_key, prepare
+from ..dhcp_tables import _SAFE_NAME, Tenant, natural_key, normalize_ip, normalize_mac
 from ..source_fields import _custom_field, build_q, distinct_values, field_options, get_model, is_active, label_for
 
 MAX_MAC_FIELDS = 3
@@ -125,6 +125,49 @@ def source_info(src, open_row=None) -> dict:
     return {"src": src, "model": mm, "need": need, "conditions": condition_rows(mm, conds, open_row) if mm else []}
 
 
+def prepare_hosts(raw, static):
+    """raw: (name, [mac values], ip). Duplicate MAC / IP are only warnings (dhcpd accepts them);
+    left out: invalid MAC / IP / name and, in the static file, a second host block with the same name."""
+    hosts, warnings, mac_owners, ip_owners, blocks = [], [], {}, {}, set()
+    for name, mac_values, ip_value in sorted(raw, key=lambda r: natural_key(r[0])):
+        macs = []
+        for v in mac_values:
+            if v in (None, ""):
+                continue
+            m = normalize_mac(v)
+            if m is None:
+                warnings.append(f"{name}: invalid MAC '{v}' skipped")
+            elif m not in macs:
+                macs.append(m)
+        if not macs:
+            continue
+        if not _SAFE_NAME.match(name):
+            warnings.append(f"{name}: tenant name has characters not allowed in DHCP host names, skipped")
+            continue
+        ip = None
+        if static:
+            ip = normalize_ip(ip_value)
+            if ip is None:
+                warnings.append(f"{name}: invalid IP '{ip_value}', tenant skipped")
+                continue
+            names = [name] if len(macs) == 1 else [f"{name}_{i}" for i in range(1, len(macs) + 1)]
+            if blocks & set(names):
+                warnings.append(f"{name}: host name already used in this file, skipped")
+                continue
+            blocks.update(names)
+            ip_owners.setdefault(ip, []).append(name)
+        for m in macs:
+            mac_owners.setdefault(m, []).append(name)
+        hosts.append(Tenant(name, tuple(macs), ip))
+    for m, owners in mac_owners.items():
+        if len(owners) > 1:
+            warnings.append(f"duplicate MAC {m}: {', '.join(owners)}")
+    for i, owners in ip_owners.items():
+        if len(owners) > 1:
+            warnings.append(f"duplicate IP {i}: {', '.join(owners)}")
+    return hosts, warnings
+
+
 def build_group(hg) -> dict:
     """Both files of a group from all their sources: hosts, warnings, counts."""
     out = {"objects": 0, "warnings": [], "has_sources": False}
@@ -153,8 +196,7 @@ def build_group(hg) -> dict:
                     continue
                 ip = ip if kind == "static" else None
                 raw.append((name_of(o, hname), [read_value(o, k) for k in macs], ip))
-        dyn, st, warn = prepare(raw)
-        hosts = dyn if kind == "dynamic" else st
+        hosts, warn = prepare_hosts(raw, kind == "static")
         macs_of[kind] = {m: t.name for t in hosts for m in t.macs}
         out[kind] = {"hosts": hosts, "macs": sum(len(t.macs) for t in hosts), "objects": objects, "no_ip": no_ip, "with_ip": with_ip,
                      "skipped": objects - no_ip - with_ip - len(hosts), "configured": configured}
@@ -164,5 +206,5 @@ def build_group(hg) -> dict:
     out["source_labels"] = sorted({str(get_model(x.model)._meta.verbose_name).capitalize() for x in hg.sources.all() if get_model(x.model)})
     out["source_count"] = hg.sources.count()
     for m in sorted(set(macs_of["dynamic"]) & set(macs_of["static"])):
-        out["warnings"].append(f"MAC {m} is in both files ({macs_of['dynamic'][m]}, {macs_of['static'][m]})")
+        out["warnings"].append(f"duplicate MAC {m} in both files: {macs_of['dynamic'][m]}, {macs_of['static'][m]}")
     return out

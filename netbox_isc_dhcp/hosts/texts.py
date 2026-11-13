@@ -111,6 +111,11 @@ TR = {
 
 # validation messages of dhcp_tables.prepare (English) -> Slovak
 PATTERNS = [
+    (r"(.*): duplicate MAC (\S+) in both files: (.*)", r"\1: duplicitná MAC \2 v oboch súboroch: \3"),
+    (r"(.*): duplicate MAC (\S+): (.*)", r"\1: detegovaná duplicitná MAC \2: \3"),
+    (r"(.*): duplicate IP (\S+): (.*)", r"\1: detegovaná duplicitná IP \2: \3"),
+    (r"duplicate MAC (\S+) in both files: (.*)", r"duplicitná MAC \1 v oboch súboroch: \2"),
+    (r"(.*): host name already used in this file, skipped", r"\1: názov hosta už v tomto súbore je, vynechaný"),
     (r"(.*): invalid MAC '(.*)' skipped", r"\1: neplatná MAC '\2' vynechaná"),
     (r"(.*): MAC (\S+) already used by (.*), skipped", r"\1: MAC \2 už používa \3, vynechaná"),
     (r"(.*): tenant name has characters not allowed in DHCP host names, skipped", r"\1: názov obsahuje znaky nepovolené v názve DHCP hosta, vynechaný"),
