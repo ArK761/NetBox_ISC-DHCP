@@ -137,7 +137,9 @@ class HostGroupInlineView(LoginRequiredMixin, View):
         field, value = request.POST.get("field"), request.POST.get("value", "").strip()
         keys = {o["key"] for o in field_options(get_model(hg.mac_model))}
         err = ""
-        if field == "mac_model":
+        if field == "enabled":
+            hg.enabled = value == "1"
+        elif field == "mac_model":
             if value and value not in {v for v, _, _ in source_models()}:
                 err = t("hosts.err_object")
             elif value != hg.mac_model:  # fields belong to the old object type
@@ -170,4 +172,6 @@ class HostGroupInlineView(LoginRequiredMixin, View):
             messages.error(request, err)
         else:
             hg.save()
+        if request.POST.get("next") == "list":
+            return redirect(reverse("plugins:netbox_isc_dhcp:hosts") + f"#g{hg.pk}")
         return redirect(hg.get_absolute_url())

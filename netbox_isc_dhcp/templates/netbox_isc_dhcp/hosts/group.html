@@ -7,10 +7,15 @@
   <a class="btn btn-sm btn-outline-secondary mb-3" id="isc-back" href="{% url 'plugins:netbox_isc_dhcp:hosts' %}#isc-groups"><i class="mdi mdi-arrow-left"></i> {% tr "lbl.back_to" %} {% tr "hosts.title" %}</a>
   {% if group_obj is None %}<div class="alert alert-danger d-block">{% tr "hosts.group_missing" %}</div>{% else %}
 
+  {% if not hg.enabled %}<div class="alert alert-secondary d-block" id="isc-off-info"><i class="mdi mdi-toggle-switch-off-outline me-1"></i>{% tr "hosts.off_info" %}</div>{% endif %}
   {# ---- host source ---- #}
   <div class="card mb-3" id="isc-src-mac">
     <h5 class="card-header d-flex align-items-center"><i class="mdi mdi-lan-connect me-2"></i>{% tr "hosts.src_hosts" %} – {{ hg.name }}</h5>
     <div class="isc-card-hint"><i class="mdi mdi-information-outline"></i> {% tr "hosts.src_mac_hint" %}</div>
+    <div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.enabled_field" %}</div>
+      <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="enabled"><input type="hidden" name="value" value="{% if hg.enabled %}0{% else %}1{% endif %}">
+        <button class="btn btn-link p-0 border-0 text-reset text-decoration-none d-flex align-items-center gap-2" id="isc-toggle" title="{% tr 'hosts.toggle' %}"><i class="mdi {% if hg.enabled %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-2"></i>
+          <strong>{% if hg.enabled %}{% tr "hosts.on" %}{% else %}{% tr "hosts.off" %}{% endif %}</strong></button></form></div>
     {% if others %}<div class="isc-sec"><div class="isc-sec-title">{% tr "hosts.copy_from" %}</div>
       <form method="post" action="{{ inline_url }}" class="d-flex gap-2" style="max-width:30rem" id="isc-copy">{% csrf_token %}<input type="hidden" name="field" value="copy_from">
         <select name="value" class="form-select form-select-sm" required><option value="">{% tr "hosts.pick_group" %}</option>{% for g in others %}<option value="{{ g.pk }}">{{ g.name }}</option>{% endfor %}</select>

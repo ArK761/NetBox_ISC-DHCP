@@ -26,6 +26,7 @@ class HostGroup(models.Model):
     group_model = models.CharField(max_length=100)
     group_pk = models.PositiveBigIntegerField()
     name = models.CharField(max_length=200, blank=True, default="", help_text="Table name (last seen value of the name field).")
+    enabled = models.BooleanField(default=True, help_text="Off: both files are still made, but without MAC addresses (base content only).")
     mac_model = models.CharField(max_length=100, blank=True, default="", help_text="Object type that holds the hosts (MAC addresses), e.g. tenancy.tenant.")
     link_field = models.CharField(max_length=100, blank=True, default="", help_text="Field of the host object that points to the group.")
     host_name_field = models.CharField(max_length=100, blank=True, default="name", help_text="Field of the host object that gives the host name.")

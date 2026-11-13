@@ -113,10 +113,27 @@ def groups_overview(cfg, open_row=None) -> dict:
             hg.save(update_fields=["name"])
         row = {"obj": g, "hg": hg, "name": name, "valid": bool(_SAFE_NAME.match(name))}
         row.update(group_hosts(hg, g))
+        if row["mac_model"] is None or row["need"]:  # no host source yet: what NetBox links to the group
+            row["objects"], row["objects_of"] = related_count(g)
         rows.append(row)
     out["groups"] = sorted(rows, key=lambda r: natural_key(r["name"]))
     out["total"] = gm.objects.count()
     return out
+
+
+def related_count(group_obj):
+    """Objects NetBox itself links to the group (e.g. tenants of a tenant group): (count, object label)."""
+    best = (0, "")
+    for rel in type(group_obj)._meta.related_objects:
+        if not rel.one_to_many or rel.related_model is type(group_obj):
+            continue
+        try:
+            n = rel.related_model.objects.filter(**{rel.field.name: group_obj}).count()
+        except Exception:
+            continue
+        if n > best[0] or not best[1]:
+            best = (n, str(rel.related_model._meta.verbose_name_plural))
+    return best
 
 
 def group_hosts(hg, group_obj) -> dict:
