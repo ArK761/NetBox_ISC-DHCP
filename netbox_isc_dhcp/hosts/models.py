@@ -21,17 +21,15 @@ class HostConfig(models.Model):
 
 
 class HostGroup(models.Model):
-    """One group (e.g. tenant group WorkStation): where its hosts come from. Its tables are <name>_Table and <name>_StaticTable."""
+    """One group (e.g. tenant group WorkStation) = two files: <name><dynamic_suffix> and <name><static_suffix>,
+    each built from its own sources (HostSource)."""
 
     group_model = models.CharField(max_length=100)
     group_pk = models.PositiveBigIntegerField()
     name = models.CharField(max_length=200, blank=True, default="", help_text="Table name (last seen value of the name field).")
     enabled = models.BooleanField(default=True, help_text="Off: both files are still made, but without MAC addresses (base content only).")
-    mac_model = models.CharField(max_length=100, blank=True, default="", help_text="Object type that holds the hosts (MAC addresses), e.g. tenancy.tenant.")
-    link_field = models.CharField(max_length=100, blank=True, default="", help_text="Field of the host object that points to the group.")
-    host_name_field = models.CharField(max_length=100, blank=True, default="name", help_text="Field of the host object that gives the host name.")
-    mac_fields = models.JSONField(default=list, blank=True, help_text="Fields with MAC addresses (1-3), in order.")
-    ip_field = models.CharField(max_length=100, blank=True, default="", help_text="Field with the static IP (empty = no static hosts).")
+    dynamic_suffix = models.CharField(max_length=50, default="_Dynamic", help_text="File name = group name + this suffix (hosts without IP).")
+    static_suffix = models.CharField(max_length=50, default="_Static", help_text="File name = group name + this suffix (hosts with static IP).")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
@@ -44,9 +42,38 @@ class HostGroup(models.Model):
     def get_absolute_url(self):
         return reverse("plugins:netbox_isc_dhcp:hosts_group", kwargs={"pk": self.pk})
 
-    def source_fields(self):
-        return {"mac_model": self.mac_model, "link_field": self.link_field, "host_name_field": self.host_name_field,
-                "mac_fields": list(self.mac_fields or []), "ip_field": self.ip_field}
+    def file_name(self, kind):
+        return f"{self.name}{self.dynamic_suffix if kind == 'dynamic' else self.static_suffix}"
+
+
+class HostSource(models.Model):
+    """One source of a group file: objects of a type chosen by conditions, with their MAC fields (and IP for the static file)."""
+
+    KINDS = (("dynamic", "dynamic"), ("static", "static"))
+
+    group = models.ForeignKey(HostGroup, on_delete=models.CASCADE, related_name="sources")
+    kind = models.CharField(max_length=10, choices=KINDS)
+    order = models.PositiveSmallIntegerField(default=100)
+    model = models.CharField(max_length=100, blank=True, default="", help_text="Object type of the hosts, e.g. tenancy.tenant or dcim.device.")
+    conditions = models.JSONField(default=list, blank=True, help_text="Conditions [{field, values, mode include|exclude}] choosing the objects.")
+    host_name_field = models.CharField(max_length=100, blank=True, default="name")
+    mac_fields = models.JSONField(default=list, blank=True, help_text="Fields with MAC addresses (1-3), in order.")
+    ip_field = models.CharField(max_length=100, blank=True, default="", help_text="Static file: field with the static IP. Dynamic file: objects with a value in this field are left out.")
+
+    class Meta:
+        app_label = "netbox_isc_dhcp"
+        ordering = ("group", "kind", "order", "pk")
+        verbose_name = "host source"
+
+    def __str__(self):
+        return f"{self.group} {self.kind} {self.model}"
+
+    def get_absolute_url(self):
+        return self.group.get_absolute_url()
+
+    def copy_fields(self):
+        return {"kind": self.kind, "order": self.order, "model": self.model, "conditions": list(self.conditions or []),
+                "host_name_field": self.host_name_field, "mac_fields": list(self.mac_fields or []), "ip_field": self.ip_field}
 
 
 def host_config() -> HostConfig:

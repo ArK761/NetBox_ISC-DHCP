@@ -8,8 +8,8 @@ from django.views import View
 from ..i18n import t, tmsg
 from ..models import DHCPPath, PluginSettings, settings_obj
 from ..source_fields import distinct_values, field_options, get_model, source_label, source_models
-from .logic import MAX_MAC_FIELDS, group_hosts, groups_overview
-from .models import HostGroup, host_config
+from .logic import MAX_MAC_FIELDS, build_group, groups_overview, source_info
+from .models import HostGroup, HostSource, host_config
 
 
 def _source_groups():
@@ -20,7 +20,7 @@ def _source_groups():
 
 
 def _need_texts(need):
-    keys = {"mac_model": "hosts.need_mac_model", "link": "hosts.need_link", "mac": "hosts.need_mac"}
+    keys = {"model": "hosts.need_model", "cond": "hosts.need_cond", "mac": "hosts.need_mac", "ip": "hosts.need_ip"}
     return [t(keys[n]) for n in need]
 
 
@@ -34,8 +34,6 @@ class HostsView(LoginRequiredMixin, View):
         edit = request.GET.get("edit", "")
         ov = groups_overview(cfg, int(edit) if edit.isdigit() else None)
         for r in ov["groups"]:
-            r["source_label"] = source_label(r["hg"].mac_model)
-            r["need_texts"] = _need_texts(r["need"])
             r["warnings"] = [tmsg(w) for w in r["warnings"]]
         gfields = field_options(ov["group_model"])
         st = settings_obj()
@@ -101,7 +99,7 @@ class HostsInlineView(LoginRequiredMixin, View):
 
 
 class HostGroupView(LoginRequiredMixin, View):
-    """One group: where its hosts come from (object, fields) and which hosts go to which table."""
+    """One group: its two files, each built from its own sources (object, conditions, MAC, IP)."""
 
     def get(self, request, pk):
         if not request.user.has_perm("netbox_isc_dhcp.view_hostconfig"):
@@ -109,69 +107,129 @@ class HostGroupView(LoginRequiredMixin, View):
         hg = get_object_or_404(HostGroup, pk=pk)
         gm = get_model(hg.group_model)
         group_obj = gm.objects.filter(pk=hg.group_pk).first() if gm else None
-        info = group_hosts(hg, group_obj) if group_obj is not None else {"need": [], "links": [], "link": "", "warnings": []}
-        order = {k: i for i, k in enumerate(hg.mac_fields or [], 1)}
-        opts = [dict(o, order=order.get(o["key"], 0)) for o in field_options(get_model(hg.mac_model))]
-        labels = {o["key"]: o["label"] for o in opts}
+        open_src, edit = request.GET.get("src", ""), request.GET.get("edit", "")
+        built = build_group(hg)
         st = settings_obj()
-        others = [g for g in HostGroup.objects.filter(group_model=hg.group_model).exclude(pk=hg.pk) if g.mac_model]
-        dyn_rows = [(t_.name, m) for t_ in info.get("dynamic", []) for m in t_.macs]
-        static_rows = [(t_.name if len(t_.macs) == 1 else f"{t_.name}_{i}", m, t_.ip) for t_ in info.get("static", []) for i, m in enumerate(t_.macs, 1)]
+        files = []
+        for kind in ("dynamic", "static"):
+            sources = []
+            for src in hg.sources.filter(kind=kind):
+                info = source_info(src, int(edit) if edit.isdigit() and open_src == str(src.pk) else None)
+                order = {k: i for i, k in enumerate(src.mac_fields or [], 1)}
+                opts = [dict(o, order=order.get(o["key"], 0)) for o in field_options(info["model"])]
+                labels = {o["key"]: o["label"] for o in opts}
+                info.update({"label": source_label(src.model), "opts": opts, "need_texts": _need_texts(info["need"]),
+                             "mac_sel": sorted([o for o in opts if o["order"]], key=lambda o: o["order"]),
+                             "host_name_label": labels.get(src.host_name_field, ""), "ip_label": labels.get(src.ip_field, ""),
+                             "used_fields": [c["field"] for c in info["conditions"]]})
+                sources.append(info)
+            b = built[kind]
+            rows = ([(h.name, m, "") for h in b["hosts"] for m in h.macs] if kind == "dynamic" else
+                    [(h.name if len(h.macs) == 1 else f"{h.name}_{i}", m, h.ip) for h in b["hosts"] for i, m in enumerate(h.macs, 1)])
+            files.append({"kind": kind, "name": hg.file_name(kind), "suffix": hg.dynamic_suffix if kind == "dynamic" else hg.static_suffix,
+                          "sources": sources, "built": b, "rows": rows[:500], "more": max(0, len(rows) - 500)})
+        others = [g for g in HostGroup.objects.filter(group_model=hg.group_model).exclude(pk=hg.pk) if g.sources.exists()]
         return render(request, "netbox_isc_dhcp/hosts/group.html", {
-            "hg": hg, "group_obj": group_obj, "info": info, "source_groups": _source_groups(),
-            "mac_label": source_label(hg.mac_model), "opts": opts, "mac_sel": sorted([o for o in opts if o["order"]], key=lambda o: o["order"]),
-            "host_name_label": labels.get(hg.host_name_field, ""), "ip_label": labels.get(hg.ip_field, ""),
-            "link_label": dict(info.get("links", [])).get(info.get("link", ""), ""),
-            "need_texts": _need_texts(info.get("need", [])), "warnings": [tmsg(w) for w in info.get("warnings", [])],
-            "others": others, "dyn_rows": dyn_rows[:500], "static_rows": static_rows[:500],
-            "table_dir": st.table_dir if st else None,
-            "mac_fields_title": t("hosts.mac_fields", n=MAX_MAC_FIELDS),
+            "hg": hg, "group_obj": group_obj, "files": files, "source_groups": _source_groups(),
+            "warnings": [tmsg(w) for w in built["warnings"]], "others": others,
+            "table_dir": st.table_dir if st else None, "mac_fields_title": t("hosts.mac_fields", n=MAX_MAC_FIELDS),
         })
 
 
 class HostGroupInlineView(LoginRequiredMixin, View):
+    """Click-to-edit values of a group page: on/off, file suffixes, sources and their conditions / fields."""
+
     def post(self, request, pk):
         if not request.user.has_perm("netbox_isc_dhcp.change_hostconfig"):
             raise PermissionDenied
         hg = get_object_or_404(HostGroup, pk=pk)
-        field, value = request.POST.get("field"), request.POST.get("value", "").strip()
-        keys = {o["key"] for o in field_options(get_model(hg.mac_model))}
-        err = ""
+        field, value = request.POST.get("field", ""), request.POST.get("value", "").strip()
+        sid = request.POST.get("src", "")
+        src = hg.sources.filter(pk=int(sid)).first() if sid.isdigit() else None
+        models_ok = {v for v, _, _ in source_models()}
+        err, anchor, edit = "", "isc-files", None
         if field == "enabled":
             hg.enabled = value == "1"
-        elif field == "mac_model":
-            if value and value not in {v for v, _, _ in source_models()}:
-                err = t("hosts.err_object")
-            elif value != hg.mac_model:  # fields belong to the old object type
-                hg.mac_model, hg.link_field, hg.mac_fields, hg.ip_field, hg.host_name_field = value, "", [], "", "name"
-        elif field == "link_field":
-            hg.link_field = value
-        elif field in ("host_name_field", "ip_field"):
-            if (value or field == "host_name_field") and value not in keys:
-                err = t("hosts.err_field")
+        elif field in ("dynamic_suffix", "static_suffix"):
+            import re
+            if not re.fullmatch(r"[A-Za-z0-9_.-]{1,50}", value):
+                err = t("hosts.err_suffix")
             else:
                 setattr(hg, field, value)
-        elif field == "mac_fields":
-            picked = [k for k in request.POST.getlist("value") if k]
-            if len(picked) > MAX_MAC_FIELDS:
-                err = t("hosts.err_max_macs", n=MAX_MAC_FIELDS)
-            elif any(k not in keys for k in picked):
-                err = t("hosts.err_field")
-            else:  # keep the order in which the fields were ticked
-                old = [k for k in hg.mac_fields or [] if k in picked]
-                hg.mac_fields = old + [k for k in picked if k not in old]
+        elif field == "src_add":
+            kind = request.POST.get("kind")
+            if kind not in ("dynamic", "static") or value not in models_ok:
+                err = t("hosts.err_object")
+            else:
+                last = hg.sources.filter(kind=kind).order_by("-order").first()
+                src = HostSource.objects.create(group=hg, kind=kind, model=value, order=(last.order if last else 0) + 10)
         elif field == "copy_from":
-            src = HostGroup.objects.filter(pk=int(value) if value.isdigit() else 0, group_model=hg.group_model).first()
-            if src is None:
+            other = HostGroup.objects.filter(pk=int(value) if value.isdigit() else 0, group_model=hg.group_model).first()
+            if other is None:
                 err = t("hosts.err_copy")
             else:
-                for k, v in src.source_fields().items():
-                    setattr(hg, k, v)
-                messages.success(request, t("hosts.copied", name=src.name))
+                hg.sources.all().delete()
+                for o in other.sources.all():
+                    HostSource.objects.create(group=hg, **o.copy_fields())
+                hg.dynamic_suffix, hg.static_suffix = other.dynamic_suffix, other.static_suffix
+                messages.success(request, t("hosts.copied", name=other.name))
+        elif src is not None:
+            keys = {o["key"] for o in field_options(get_model(src.model))}
+            if field == "src_del":
+                src.delete()
+                src = None
+            elif field == "src_model":
+                if value not in models_ok:
+                    err = t("hosts.err_object")
+                elif value != src.model:  # fields belong to the old object type
+                    src.model, src.conditions, src.mac_fields, src.ip_field, src.host_name_field = value, [], [], "", "name"
+            elif field == "host_name_field":
+                if value not in keys:
+                    err = t("hosts.err_field")
+                else:
+                    src.host_name_field = value
+            elif field == "ip_field":
+                if value and value not in keys:
+                    err = t("hosts.err_field")
+                else:
+                    src.ip_field = value
+            elif field == "mac_fields":
+                picked = [k for k in request.POST.getlist("value") if k]
+                if len(picked) > MAX_MAC_FIELDS:
+                    err = t("hosts.err_max_macs", n=MAX_MAC_FIELDS)
+                elif any(k not in keys for k in picked):
+                    err = t("hosts.err_field")
+                else:  # keep the order in which the fields were ticked
+                    old = [k for k in src.mac_fields or [] if k in picked]
+                    src.mac_fields = old + [k for k in picked if k not in old]
+            elif field.startswith("cond_"):
+                model = get_model(src.model)
+                conds = list(src.conditions or [])
+                i = request.POST.get("row", "")
+                row = conds[int(i)] if i.isdigit() and int(i) < len(conds) else None
+                if field == "cond_add" and value in keys:
+                    conds.append({"field": value, "values": [], "mode": "include"})
+                    edit = len(conds) - 1
+                elif row is not None and field == "cond_set":
+                    allowed = {v for v, _ in distinct_values(model, row["field"])}
+                    row["values"] = [v for v in request.POST.getlist("values") if v in allowed]
+                    if request.POST.get("mode") in ("include", "exclude"):
+                        row["mode"] = request.POST["mode"]
+                elif row is not None and field in ("cond_all", "cond_none"):
+                    row["values"] = [v for v, _ in distinct_values(model, row["field"])] if field == "cond_all" else []
+                    edit = int(i)
+                elif row is not None and field == "cond_del":
+                    conds.pop(int(i))
+                src.conditions = conds
+            if src is not None and not err:
+                src.save()
         if err:
             messages.error(request, err)
         else:
             hg.save()
+        url = hg.get_absolute_url()
         if request.POST.get("next") == "list":
             return redirect(reverse("plugins:netbox_isc_dhcp:hosts") + f"#g{hg.pk}")
-        return redirect(hg.get_absolute_url())
+        if src is not None and edit is not None:
+            return redirect(f"{url}?src={src.pk}&edit={edit}#s{src.pk}c{edit}")
+        return redirect(f"{url}#s{src.pk}" if src is not None else f"{url}#{anchor}")

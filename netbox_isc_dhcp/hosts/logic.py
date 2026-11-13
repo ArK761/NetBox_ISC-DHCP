@@ -1,33 +1,10 @@
 """Hosts: read groups (DHCP classes) and MAC/IP objects from any NetBox object type."""
 from django.db import models
-from django.db.models import Q
-from extras.models import CustomField
 
 from ..dhcp_tables import _SAFE_NAME, natural_key, prepare
 from ..source_fields import _custom_field, build_q, distinct_values, field_options, get_model, is_active, label_for
 
 MAX_MAC_FIELDS = 3
-
-
-def link_candidates(mac_model, group_model) -> list[tuple[str, str]]:
-    """Fields of the MAC object that point to the group object (foreign key or object custom field)."""
-    if mac_model is None or group_model is None:
-        return []
-    out = []
-    for f in mac_model._meta.get_fields():
-        if getattr(f, "concrete", False) and f.is_relation and not f.many_to_many and f.related_model is group_model:
-            out.append((f.name, str(f.verbose_name).capitalize()))
-    for cf in CustomField.objects.get_for_model(mac_model):
-        if cf.type == "object" and cf.related_object_type is not None and cf.related_object_type.model_class() is group_model:
-            out.append((f"cf_{cf.name}", f"{cf.label or cf.name} (custom field)"))
-    return out
-
-
-def effective_link(cfg, mac_model, group_model) -> str:
-    keys = [k for k, _ in link_candidates(mac_model, group_model)]
-    if cfg.link_field in keys:
-        return cfg.link_field
-    return keys[0] if len(keys) == 1 else ""
 
 
 def _scalar(obj):
@@ -59,12 +36,6 @@ def name_of(obj, key) -> str:
     """Name taken from the chosen field (empty field -> the object's own name)."""
     v = read_value(obj, key) if key else None
     return str(v).strip() if v not in (None, "") else str(obj)
-
-
-def _group_q(link, group) -> Q:
-    if link.startswith("cf_"):
-        return Q(**{f"custom_field_data__{link[3:]}": group.pk})
-    return Q(**{link: group})
 
 
 MAX_VALUES = 300
@@ -112,8 +83,8 @@ def groups_overview(cfg, open_row=None) -> dict:
             hg.name = name[:200]
             hg.save(update_fields=["name"])
         row = {"obj": g, "hg": hg, "name": name, "valid": bool(_SAFE_NAME.match(name))}
-        row.update(group_hosts(hg, g))
-        if row["mac_model"] is None or row["need"]:  # no host source yet: what NetBox links to the group
+        row.update(build_group(hg))
+        if not row["objects"]:  # nothing from the sources yet: what NetBox links to the group
             row["objects"], row["objects_of"] = related_count(g)
         rows.append(row)
     out["groups"] = sorted(rows, key=lambda r: natural_key(r["name"]))
@@ -136,29 +107,62 @@ def related_count(group_obj):
     return best
 
 
-def group_hosts(hg, group_obj) -> dict:
-    """Hosts of one group from its own source: dynamic (<name>_Table) and static (<name>_StaticTable) + warnings."""
-    mm, gm = get_model(hg.mac_model), get_model(hg.group_model)
-    out = {"mac_model": mm, "links": [], "link": "", "need": [], "dynamic": [], "static": [], "warnings": [],
-           "objects": 0, "skipped": 0, "hosts": 0}
-    if mm is None:
-        out["need"].append("mac_model")
-        return out
-    out["links"] = link_candidates(mm, gm)
-    out["link"] = effective_link(hg, mm, gm)
+def source_info(src, open_row=None) -> dict:
+    """One source for the page: object, conditions, what is still missing."""
+    mm = get_model(src.model)
     keys = {o["key"] for o in field_options(mm)}
-    macs = [k for k in hg.mac_fields or [] if k in keys]
-    if not out["link"]:
-        out["need"].append("link")
-    if not macs:
-        out["need"].append("mac")
-    if out["need"]:
-        return out
-    ip = hg.ip_field if hg.ip_field in keys else ""
-    hname = hg.host_name_field if hg.host_name_field in keys else ""
-    raw = [(name_of(o, hname), [read_value(o, k) for k in macs], read_value(o, ip) if ip else None)
-           for o in mm.objects.filter(_group_q(out["link"], group_obj))]
-    dyn, st, warn = prepare(raw)
-    out.update({"dynamic": dyn, "static": st, "warnings": warn, "objects": len(raw),
-                "skipped": len(raw) - len(dyn) - len(st), "hosts": sum(len(t.macs) for t in st)})
+    conds = [c for c in src.conditions or [] if c.get("field")]
+    need = []
+    if mm is None:
+        need.append("model")
+    else:
+        if not any(is_active(c) for c in conds):
+            need.append("cond")
+        if not [k for k in src.mac_fields or [] if k in keys]:
+            need.append("mac")
+        if src.kind == "static" and src.ip_field not in keys:
+            need.append("ip")
+    return {"src": src, "model": mm, "need": need, "conditions": condition_rows(mm, conds, open_row) if mm else []}
+
+
+def build_group(hg) -> dict:
+    """Both files of a group from all their sources: hosts, warnings, counts."""
+    out = {"objects": 0, "warnings": [], "has_sources": False}
+    macs_of = {}
+    for kind in ("dynamic", "static"):
+        raw, objects, no_ip, with_ip, configured = [], 0, 0, 0, 0
+        for src in hg.sources.filter(kind=kind):
+            out["has_sources"] = True
+            info = source_info(src)
+            if info["need"]:
+                continue
+            configured += 1
+            mm, keys = info["model"], {o["key"] for o in field_options(info["model"])}
+            macs = [k for k in src.mac_fields if k in keys]
+            hname = src.host_name_field if src.host_name_field in keys else ""
+            active = [c for c in src.conditions if c.get("field") and is_active(c)]
+            ipf = src.ip_field if src.ip_field in keys else ""
+            for o in mm.objects.filter(build_q(mm, active)):
+                objects += 1
+                ip = read_value(o, ipf) if ipf else None
+                if kind == "static" and ip in (None, ""):
+                    no_ip += 1
+                    continue
+                if kind == "dynamic" and ip not in (None, ""):  # has a static IP: belongs to the static file
+                    with_ip += 1
+                    continue
+                ip = ip if kind == "static" else None
+                raw.append((name_of(o, hname), [read_value(o, k) for k in macs], ip))
+        dyn, st, warn = prepare(raw)
+        hosts = dyn if kind == "dynamic" else st
+        macs_of[kind] = {m: t.name for t in hosts for m in t.macs}
+        out[kind] = {"hosts": hosts, "macs": sum(len(t.macs) for t in hosts), "objects": objects, "no_ip": no_ip, "with_ip": with_ip,
+                     "skipped": objects - no_ip - with_ip - len(hosts), "configured": configured}
+        out["objects"] += objects
+        out["warnings"] += [f"{hg.file_name(kind)}: {w}" for w in warn]
+    out["skipped"] = out["dynamic"]["skipped"] + out["static"]["skipped"]
+    out["source_labels"] = sorted({str(get_model(x.model)._meta.verbose_name).capitalize() for x in hg.sources.all() if get_model(x.model)})
+    out["source_count"] = hg.sources.count()
+    for m in sorted(set(macs_of["dynamic"]) & set(macs_of["static"])):
+        out["warnings"].append(f"MAC {m} is in both files ({macs_of['dynamic'][m]}, {macs_of['static'][m]})")
     return out
