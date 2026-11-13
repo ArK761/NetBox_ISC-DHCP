@@ -50,8 +50,10 @@
             <input name="value" value="{{ f.suffix }}" class="form-control form-control-sm" style="max-width:12rem"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <span class="ms-auto small text-muted">{% if f.kind == 'dynamic' %}{% tr "hosts.dyn_hint" %}{% else %}{% tr "hosts.static_hint" %}{% endif %}</span>
       </div>
-      <details class="isc-hosts isc-codeed px-3 pt-2"{% if f.draft %} open{% endif %}><summary><span class="badge text-bg-secondary"><i class="mdi mdi-code-braces"></i> {% tr "hosts.code_label" %}</span>
-          {% if f.draft %}<span class="badge text-bg-danger ms-1">{% tr "hosts.code_draft" %}</span>{% elif f.default %}<span class="badge text-bg-secondary ms-1 isc-code-state">{% tr "hosts.code_default" %}</span>{% else %}<span class="badge text-bg-warning ms-1 isc-code-state">{% tr "hosts.code_edited" %}</span>{% endif %}</summary>
+      <details class="isc-hosts isc-codeed px-3 pt-2"{% if f.draft %} open{% endif %}><summary><span class="badge {% if f.draft %}text-bg-danger{% elif f.default %}text-bg-secondary{% else %}text-bg-warning{% endif %} isc-code-state"><i class="mdi mdi-code-braces"></i> {% tr "hosts.code_label" %} · {% if f.draft %}{% tr "hosts.code_draft" %}{% elif f.default %}{% tr "hosts.code_default" %}{% else %}{% tr "hosts.code_edited" %}{% endif %}</span>
+          <span class="small text-muted ms-1">{% tr "lbl.click_edit" %}</span>
+          <span class="small text-warning ms-2 isc-expert"><i class="mdi mdi-alert"></i> {% tr "hosts.code_expert" %}</span></summary>
+        <div class="alert alert-warning d-block py-2 my-2 small"><i class="mdi mdi-alert"></i> <strong>{% tr "hosts.code_warn_title" %}</strong> {% tr "hosts.code_warn" %}</div>
         <div class="isc-hint my-2">{% tr "hosts.code_vars" %}: <code>{{ f.vars }}</code></div>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="code_{{ f.kind }}">
           <div class="isc-ed-wrap"><textarea name="value" rows="16" class="form-control font-monospace code-editor" spellcheck="false" wrap="off">{{ f.code }}</textarea></div>
