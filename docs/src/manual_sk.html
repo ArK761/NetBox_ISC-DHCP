@@ -68,12 +68,12 @@
 
 <h2>9. Hosty a MAC adresy</h2>
 <p>Stránka <b>DHCP-CFG › Hosty a MAC adresy</b> (rozpracované – postupne pribúda). Všetko sa nastavuje kliknutím:</p>
-<ol><li><b>Zdroj tabuliek (skupiny)</b> – objekt, ktorého každá položka (napr. Tenant group) dostane dva súbory <code>&lt;Názov&gt;_Dynamic</code> a <code>&lt;Názov&gt;_Static</code>. Ďalej <b>podadresár pre tabuľky</b> (zobrazí sa celá cesta, napr. <code>/opt/dhcp/TABLE/</code>), pole s <b>názvom</b> (zvyčajne Name) a voliteľné <b>podmienky</b> (bez podmienky všetky skupiny).</li>
+<ol><li><b>Zdroj tabuliek (skupiny)</b> – najprv <b>podadresár pre tabuľky</b> (zobrazí sa celá cesta, napr. <code>/opt/dhcp/TABLE/</code>), potom objekt, ktorého každá položka (napr. Tenant group) dostane dva súbory <code>&lt;Názov&gt;_Dynamic</code> a <code>&lt;Názov&gt;_Static</code>, a pole s <b>názvom</b> (interné pole alebo custom field, zvyčajne Name). Skupinu, ktorú nechcete generovať, vypnete vypínačom v zozname skupín.</li>
 <li><b>Skupiny (tabuľky)</b> – zoznam ako pri pooloch: prepínač <b>Zapnuté / Vypnuté</b>, počet objektov, súbory s celou cestou, zdroje, počty MAC a upozornenia. <b>Vypnutá</b> skupina má súbory stále vytvorené, ale bez MAC adries – len so základnou konfiguráciou, aby DHCP nespadol. Tlačidlo <b>Nastaviť</b> otvorí stránku skupiny.</li>
 <li><b>Stránka skupiny</b> – oba súbory (príponu <code>_Dynamic</code> / <code>_Static</code> možno zmeniť). Každý súbor sa skladá z jedného alebo <b>viacerých zdrojov</b> (<b>Pridať zdroj</b>). Zdroj = objekt (napr. Tenant, Device), <b>podmienky</b> na interné pole alebo custom field (ktoré objekty; ako pri Subnetoch), pole s názvom hosta, polia s MAC (najviac 3) a IP:
 <ul><li><b>Dynamic</b>: MAC adresy objektov; voliteľne „Vynechať objekty s IP v poli“ – objekt so statickou IP patrí do Static.</li>
 <li><b>Static</b>: pole so statickou IP; objekt bez IP sa preskočí; pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…</li></ul>
-Pod každým súborom je výsledok (hosty, MAC, IP) a hore upozornenia (neplatná či duplicitná MAC alebo IP, MAC v oboch súboroch). <b>Prevziať nastavenie</b> skopíruje zdroje z inej skupiny.</li></ol>
+Pod každým súborom je výsledok (hosty, MAC, IP) a hore upozornenia (neplatná MAC alebo IP, MAC v oboch súboroch; duplicitná MAC alebo IP je len upozornenie, host sa nevynechá). <b>Prevziať nastavenie</b> skopíruje zdroje z inej skupiny.</li></ol>
 <p>Ďalší krok: kód oboch súborov (ako kód poolu), ich uloženie a zaradenie do dhcpd.conf.</p>
 
 <h2>10. Riešenie problémov</h2>

@@ -66,7 +66,7 @@ def groups_overview(cfg, open_row=None) -> dict:
     out = {"group_model": gm, "groups": [], "conditions": []}
     if gm is None:
         return out
-    conds = [c for c in cfg.group_conditions or [] if c.get("field")]
+    conds = []  # owner: no table-source conditions, the per-group switch is enough
     out["conditions"] = condition_rows(gm, conds, open_row)
     active = [c for c in conds if is_active(c)]
     qs = gm.objects.filter(build_q(gm, active)) if active else gm.objects.all()
