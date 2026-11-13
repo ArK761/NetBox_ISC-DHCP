@@ -77,7 +77,7 @@
 <li><b>option host-name</b> (static row): <b>NAME</b> (default), <b>NAME_n</b> (as the host block name), <b>another field</b> of the object or <b>leave out</b>.</li>
 <li><b>Files</b>: path, suffix (<code>_Dynamic</code> / <code>_Static</code>, editable), host count and <b>Show CFG</b> = preview of the finished file from real data; the MAC/IP list expands on click.</li></ul>
 <b>Copy settings</b> copies the sources of another group.</li></ol>
-<p><b>File code</b> (card 4 on the Hosts page): shared Jinja code for <code>_Dynamic</code> (variables <code>class_name</code>, <code>pairs</code>, <code>tenants</code>) and <code>_Static</code> (<code>class_name</code>, <code>hosts</code>: <code>h.host</code>, <code>h.mac</code>, <code>h.ip</code>, <code>h.name</code>, <code>h.hostname</code>). State default / edited, <b>Restore default</b>. Bad code is not saved (the draft stays in the editor). A group switched off has an empty class (<code>match if false;</code>) and no host blocks.</p>
+<p><b>File code</b> – every group has its own code (like a pool), on the group page at each file (<b>Code</b>, expands on click); the groups list marks edited code. Jinja code for <code>_Dynamic</code> (variables <code>class_name</code>, <code>pairs</code>, <code>tenants</code>) and <code>_Static</code> (<code>class_name</code>, <code>hosts</code>: <code>h.host</code>, <code>h.mac</code>, <code>h.ip</code>, <code>h.name</code>, <code>h.hostname</code>). State default / edited, <b>Restore default</b>. Bad code is not saved (the draft stays in the editor). A group switched off has an empty class (<code>match if false;</code>) and no host blocks.</p>
 <p>Next step: storing the files (SHA256) and including them in dhcpd.conf.</p>
 
 <h2>10. Troubleshooting</h2>

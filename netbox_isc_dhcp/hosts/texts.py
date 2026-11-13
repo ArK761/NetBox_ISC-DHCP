@@ -37,6 +37,7 @@ TR = {
     "hosts.err_suffix": ("Prípona smie mať len písmená, číslice a _ . -", "The suffix may only contain letters, digits and _ . -"),
     "hosts.source": ("Zdroj", "Source"),
     "hosts.collapse": ("zbaliť", "collapse"),
+    "hosts.code_label": ("Kód", "Code"),
     "hosts.code_card": ("Kód súborov", "File code"),
     "hosts.code_hint": ("Spoločný kód (Jinja) pre všetky skupiny. Prázdny / predvolený = formát class match + MismatchedClients a host bloky. Náhľad hotového CFG je na stránke skupiny.",
                         "Shared code (Jinja) for all groups. Empty / default = class match + MismatchedClients and host blocks. The finished CFG preview is on the group page."),

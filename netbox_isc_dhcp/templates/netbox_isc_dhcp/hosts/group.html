@@ -50,6 +50,14 @@
             <input name="value" value="{{ f.suffix }}" class="form-control form-control-sm" style="max-width:12rem"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <span class="ms-auto small text-muted">{% if f.kind == 'dynamic' %}{% tr "hosts.dyn_hint" %}{% else %}{% tr "hosts.static_hint" %}{% endif %}</span>
       </div>
+      <details class="isc-hosts isc-codeed px-3 pt-2"{% if f.draft %} open{% endif %}><summary><span class="badge text-bg-secondary"><i class="mdi mdi-code-braces"></i> {% tr "hosts.code_label" %}</span>
+          {% if f.draft %}<span class="badge text-bg-danger ms-1">{% tr "hosts.code_draft" %}</span>{% elif f.default %}<span class="badge text-bg-secondary ms-1 isc-code-state">{% tr "hosts.code_default" %}</span>{% else %}<span class="badge text-bg-warning ms-1 isc-code-state">{% tr "hosts.code_edited" %}</span>{% endif %}</summary>
+        <div class="isc-hint my-2">{% tr "hosts.code_vars" %}: <code>{{ f.vars }}</code></div>
+        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="code_{{ f.kind }}">
+          <div class="isc-ed-wrap"><textarea name="value" rows="16" class="form-control font-monospace code-editor" spellcheck="false" wrap="off">{{ f.code }}</textarea></div>
+          <div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-primary isc-code-save">{% tr "lbl.save" %}</button>
+            {% if not f.default or f.draft %}<button class="btn btn-sm btn-outline-secondary" name="field" value="code_reset_{{ f.kind }}">{% tr "hosts.code_reset" %}</button>{% endif %}</div></form>
+      </details>
       <details class="isc-hosts isc-cfg px-3 pt-2"{% if f.cfg_error %} open{% endif %}><summary><span class="badge {% if f.cfg_error %}text-bg-danger{% else %}text-bg-info{% endif %}"><i class="mdi mdi-file-code-outline"></i> {% tr "hosts.show_cfg" %}</span>
           {% if f.cfg_error %}<span class="small text-danger ms-1">{% tr "hosts.cfg_error" %}</span>{% else %}<span class="small text-muted ms-1">{{ f.lines }} {% tr "hosts.cfg_lines" %}</span>{% endif %}</summary>
         {% if f.cfg_error %}<div class="alert alert-danger d-block mt-2 mb-0 small">{{ f.cfg_error }}</div>{% else %}<pre class="isc-cfg-pre mt-2 mb-0">{{ f.cfg_text }}</pre>{% endif %}
@@ -65,4 +73,5 @@
   </div>
   {% endif %}
 </div></div>
+{% include "netbox_isc_dhcp/_code_editor.html" %}
 {% endblock %}

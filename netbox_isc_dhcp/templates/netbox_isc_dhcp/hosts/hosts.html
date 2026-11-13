@@ -51,7 +51,7 @@
         <td>{% url 'plugins:netbox_isc_dhcp:hosts_group_inline' pk=r.hg.pk as tog_url %}<form method="post" action="{{ tog_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="enabled"><input type="hidden" name="next" value="list"><input type="hidden" name="value" value="{% if r.hg.enabled %}0{% else %}1{% endif %}">
           <button class="btn btn-link p-0 border-0 isc-toggle" title="{% tr 'hosts.toggle' %}"><i class="mdi {% if r.hg.enabled %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-2"></i></button></form></td>
         <td class="text-end isc-objects">{% if r.objects %}{{ r.objects }}{% else %}<span class="isc-zero">0</span>{% endif %}{% if r.objects_of %}<div class="small text-muted text-nowrap">{{ r.objects_of }}</div>{% endif %}</td>
-        <td class="isc-files">{% if r.valid %}<div class="small text-nowrap"><i class="mdi mdi-file-outline opacity-50"></i> <code>{% if table_dir %}{{ table_dir.path }}/{% endif %}{{ r.name }}{{ r.hg.dynamic_suffix }}</code></div><div class="small text-nowrap"><i class="mdi mdi-file-lock-outline opacity-50"></i> <code>{% if table_dir %}{{ table_dir.path }}/{% endif %}{{ r.name }}{{ r.hg.static_suffix }}</code></div>{% else %}<span class="text-danger small">{% tr "hosts.bad_name" %}</span>{% endif %}</td>
+        <td class="isc-files">{% if r.valid %}<div class="small text-nowrap"><i class="mdi mdi-file-outline opacity-50"></i> <code>{% if table_dir %}{{ table_dir.path }}/{% endif %}{{ r.name }}{{ r.hg.dynamic_suffix }}</code></div><div class="small text-nowrap"><i class="mdi mdi-file-lock-outline opacity-50"></i> <code>{% if table_dir %}{{ table_dir.path }}/{% endif %}{{ r.name }}{{ r.hg.static_suffix }}</code></div>{% if not r.hg.is_default_dynamic or not r.hg.is_default_static %}<span class="badge text-bg-warning isc-code-flag">{% tr "hosts.code_edited" %}</span>{% endif %}{% else %}<span class="text-danger small">{% tr "hosts.bad_name" %}</span>{% endif %}</td>
         <td class="text-nowrap isc-srcs">{% if r.source_count %}{{ r.source_labels|join:", " }} <span class="small text-muted">({{ r.source_count }})</span>{% else %}<span class="text-warning">{% tr "lbl.not_set" %}</span>{% endif %}</td>
         <td class="text-end">{% if r.dynamic.macs %}{{ r.dynamic.macs }}{% else %}<span class="isc-zero">0</span>{% endif %}</td>
         <td class="text-end">{% if r.static.macs %}{{ r.static.macs }}{% else %}<span class="isc-zero">0</span>{% endif %}</td>
@@ -62,26 +62,6 @@
     </table></div>
   </div>
 
-  {# ---- shared code of the files ---- #}
-  {% url 'plugins:netbox_isc_dhcp:hosts_inline' as inline_url2 %}
-  <div class="card mb-3" id="isc-code">
-    <h5 class="card-header d-flex align-items-center"><span class="isc-step">4</span><i class="mdi mdi-code-braces me-2"></i>{% tr "hosts.code_card" %}</h5>
-    <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "hosts.code_hint" %}</div>
-    {% for c in codes %}
-    <details class="isc-file isc-code px-3 py-2" id="isc-code-{{ c.kind }}"{% if c.draft %} open{% endif %}>
-      <summary class="d-flex align-items-center gap-2 py-1"><i class="mdi {% if c.kind == 'dynamic' %}mdi-file-outline{% else %}mdi-file-lock-outline{% endif %} fs-5 opacity-75"></i>
-        <strong>{{ c.title }}</strong>
-        {% if c.draft %}<span class="badge text-bg-danger">{% tr "hosts.code_draft" %}</span>{% elif c.default %}<span class="badge text-bg-secondary isc-code-state">{% tr "hosts.code_default" %}</span>{% else %}<span class="badge text-bg-warning isc-code-state">{% tr "hosts.code_edited" %}</span>{% endif %}</summary>
-      <div class="isc-hint my-2">{% tr "hosts.code_vars" %}: <code>{{ c.vars }}</code></div>
-      <form method="post" action="{{ inline_url2 }}">{% csrf_token %}<input type="hidden" name="field" value="code_{{ c.kind }}">
-        <div class="isc-ed-wrap"><textarea name="value" rows="18" class="form-control font-monospace code-editor" spellcheck="false" wrap="off">{{ c.text }}</textarea></div>
-        <div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-primary isc-code-save">{% tr "lbl.save" %}</button>
-          {% if not c.default or c.draft %}<button class="btn btn-sm btn-outline-secondary" name="field" value="code_reset_{{ c.kind }}">{% tr "hosts.code_reset" %}</button>{% endif %}</div>
-      </form>
-    </details>
-    {% endfor %}
-  </div>
-  {% include "netbox_isc_dhcp/_code_editor.html" %}
   {% endif %}
 </div></div>
 {% endblock %}

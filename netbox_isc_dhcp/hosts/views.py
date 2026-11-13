@@ -26,12 +26,6 @@ def _need_texts(need):
     return [t(keys[n]) for n in need]
 
 
-def _codes(request, cfg):
-    drafts = request.session.get("hosts_code_draft", {})
-    return [{"kind": k, "title": t("hosts.code_" + k), "default": cfg.is_default(k), "draft": k in drafts,
-             "text": drafts.get(k, cfg.code(k)), "vars": t("hosts.code_vars_" + k)} for k in ("dynamic", "static")]
-
-
 class HostsView(LoginRequiredMixin, View):
     """Table source (groups), table directory and the list of groups (like the pools list)."""
 
@@ -51,7 +45,6 @@ class HostsView(LoginRequiredMixin, View):
             "used_fields": [c["field"] for c in ov["conditions"]],
             "groups_count_text": t("hosts.groups_selected", n=len(ov["groups"]), total=ov.get("total", 0)),
             "table_dir": st.table_dir if st else None, "subdirs": DHCPPath.objects.all(),
-            "codes": _codes(request, cfg), "editor_vars": _editor_vars(),
         })
 
 
@@ -75,23 +68,6 @@ class HostsInlineView(LoginRequiredMixin, View):
                 err = t("hosts.err_field")
             else:
                 cfg.group_name_field = value
-        elif field in ("code_dynamic", "code_static", "code_reset_dynamic", "code_reset_static"):
-            kind = field.rsplit("_", 1)[1]
-            anchor = "isc-code-" + kind
-            drafts = dict(request.session.get("hosts_code_draft", {}))
-            code = "" if field.startswith("code_reset") else request.POST.get("value", "").replace("\r\n", "\n")
-            default = DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC
-            if code.strip() == default.strip():
-                code = ""
-            bad = code_errors(code) if code else ""
-            if bad:
-                drafts[kind] = code
-                err = t("hosts.code_err", err=tmsg(bad))
-            else:
-                drafts.pop(kind, None)
-                setattr(cfg, kind + "_code", code)
-                messages.success(request, t("hosts.code_saved"))
-            request.session["hosts_code_draft"] = drafts
         elif field == "table_dir":
             st = settings_obj() or PluginSettings.objects.create()
             st.table_dir_id = int(value) if value.isdigit() and DHCPPath.objects.filter(pk=int(value)).exists() else None
@@ -160,8 +136,8 @@ class HostGroupView(LoginRequiredMixin, View):
                          "host_name_label": labels.get(src.host_name_field, ""), "used_fields": [c["field"] for c in info["conditions"]],
                          "names_hint": t("hosts.names_hint1") if len(rows) <= 1 else t("hosts.names_hintn", n=len(rows))})
             sources.append(info)
-        cfg = host_config()
-        rendered = render_files(hg, built, {k: cfg.code(k) for k in ("dynamic", "static")})
+        drafts = request.session.get(f"hosts_code_draft_{hg.pk}", {})
+        rendered = render_files(hg, built, {k: hg.code(k) for k in ("dynamic", "static")})
         files = []
         for kind in ("dynamic", "static"):
             b = built[kind]
@@ -169,7 +145,9 @@ class HostGroupView(LoginRequiredMixin, View):
             files.append({"kind": kind, "name": hg.file_name(kind), "suffix": hg.dynamic_suffix if kind == "dynamic" else hg.static_suffix,
                           "rows": rows[:500], "count": len(rows), "more": max(0, len(rows) - 500),
                           "count_text": t("hosts.hosts_count", n=len(rows)), "cfg_text": rendered[kind][0],
-                          "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n")})
+                          "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n"),
+                          "code": drafts.get(kind, hg.code(kind)), "draft": kind in drafts, "default": hg.is_default(kind),
+                          "vars": t("hosts.code_vars_" + kind)})
         lc = built["lost_counts"]
         lost_parts = [f"{lc[k]}× {t('hosts.lost_' + k)}" for k in LOST_REASONS if lc.get(k)]
         others = [g for g in HostGroup.objects.filter(group_model=hg.group_model).exclude(pk=hg.pk) if g.sources.exists()]
@@ -179,7 +157,7 @@ class HostGroupView(LoginRequiredMixin, View):
             "lost": [(h, t("hosts.lost_" + r), v) for h, r, v in built["lost"]],
             "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
             "warn_title": t("hosts.warn_title", n=len(built["warnings"])),
-            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS),
+            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "editor_vars": _editor_vars(),
         })
 
 
@@ -203,6 +181,23 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                 err = t("hosts.err_suffix")
             else:
                 setattr(hg, field, value)
+        elif field in ("code_dynamic", "code_static", "code_reset_dynamic", "code_reset_static"):
+            kind = field.rsplit("_", 1)[1]
+            anchor = "isc-file-" + kind
+            key = f"hosts_code_draft_{hg.pk}"
+            drafts = dict(request.session.get(key, {}))
+            code = "" if field.startswith("code_reset") else request.POST.get("value", "").replace("\r\n", "\n")
+            if code.strip() == (DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC).strip():
+                code = ""
+            bad = code_errors(code) if code else ""
+            if bad:
+                drafts[kind] = code
+                err = t("hosts.code_err", err=tmsg(bad))
+            else:
+                drafts.pop(kind, None)
+                setattr(hg, kind + "_code", code)
+                messages.success(request, t("hosts.code_saved"))
+            request.session[key] = drafts
         elif field == "src_add":
             if value not in models_ok:
                 err = t("hosts.err_object")
@@ -218,6 +213,7 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                 for o in other.sources.all():
                     HostSource.objects.create(group=hg, **o.copy_fields())
                 hg.dynamic_suffix, hg.static_suffix = other.dynamic_suffix, other.static_suffix
+                hg.dynamic_code, hg.static_code = other.dynamic_code, other.static_code
                 messages.success(request, t("hosts.copied", name=other.name))
         elif src is not None:
             keys = {o["key"] for o in field_options(get_model(src.model))}

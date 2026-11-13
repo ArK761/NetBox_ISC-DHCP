@@ -40,6 +40,8 @@ class HostGroup(models.Model):
     enabled = models.BooleanField(default=True, help_text="Off: both files are still made, but without MAC addresses (base content only).")
     dynamic_suffix = models.CharField(max_length=50, default="_Dynamic", help_text="File name = group name + this suffix (hosts without IP).")
     static_suffix = models.CharField(max_length=50, default="_Static", help_text="File name = group name + this suffix (hosts with static IP).")
+    dynamic_code = models.TextField(blank=True, default="", help_text="Jinja code of the _Dynamic file of this group (empty = default).")
+    static_code = models.TextField(blank=True, default="", help_text="Jinja code of the _Static file of this group (empty = default).")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
@@ -51,6 +53,22 @@ class HostGroup(models.Model):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_isc_dhcp:hosts_group", kwargs={"pk": self.pk})
+
+    def code(self, kind):
+        from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC
+        own = self.dynamic_code if kind == "dynamic" else self.static_code
+        return own or (DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC)
+
+    def is_default(self, kind):
+        return not (self.dynamic_code if kind == "dynamic" else self.static_code)
+
+    @property
+    def is_default_dynamic(self):
+        return not self.dynamic_code
+
+    @property
+    def is_default_static(self):
+        return not self.static_code
 
     def file_name(self, kind):
         return f"{self.name}{self.dynamic_suffix if kind == 'dynamic' else self.static_suffix}"
