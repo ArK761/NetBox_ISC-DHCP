@@ -213,11 +213,13 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                     err = t("hosts.err_max_rows", n=MAX_HOSTS)
                 elif mac not in keys or (ip and ip not in keys) or mac == ip:
                     err = t("hosts.err_field")
-                elif same is not None:  # the same MAC field twice = duplicate hosts
+                elif same is not None and (bool(ip) == bool(rows[same - 1].get("ip")) or rows[same - 1].get("dyn")
+                                           or (ip and request.POST.get("dyn") == "1")):
+                    # the same MAC field may appear twice only as one static row (without class) + one dynamic row
                     r = rows[same - 1]
                     kind = "dyn_used" if not r.get("ip") else "both_used" if r.get("dyn") else "static_used"
                     err = t("hosts.err_" + kind, field=labels.get(mac, mac), n=same)
-                elif ip and ip in {r.get("ip") for r in rows} | {r.get("mac") for r in rows}:
+                elif ip and ip in {r.get("ip") for r in rows} | {r.get("mac") for r in rows if r.get("mac") != mac}:
                     err = t("hosts.err_used")
                 else:
                     rows.append({"mac": mac, "ip": ip, "dyn": bool(ip) and request.POST.get("dyn") == "1"})
@@ -229,7 +231,13 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                     if field == "row_del":
                         rows.pop(int(i))
                     elif rows[int(i)].get("ip"):
-                        rows[int(i)] = dict(rows[int(i)], dyn=not rows[int(i)].get("dyn"))
+                        r = rows[int(i)]
+                        solo = next((n for n, x in enumerate(rows, 1) if x is not r and x.get("mac") == r["mac"] and not x.get("ip")), None)
+                        if not r.get("dyn") and solo:  # its MAC already goes to Dynamic by its own row
+                            labels = {o["key"]: o["label"] for o in field_options(get_model(src.model))}
+                            err = t("hosts.err_dyn_used", field=labels.get(r["mac"], r["mac"]), n=solo)
+                        else:
+                            rows[int(i)] = dict(r, dyn=not r.get("dyn"))
                     src.hosts = rows
             elif field.startswith("cond_"):
                 model = get_model(src.model)
