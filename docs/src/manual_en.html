@@ -74,9 +74,11 @@
 <ul><li><b>Host sources</b> (<b>Add source</b>): object (e.g. Tenant, Device), <b>conditions</b> on an internal field or custom field (which objects; like on Subnets) and the host name field.</li>
 <li><b>Hosts of one object</b> (at most 3): every row = <b>MAC field</b> + <b>IP field</b> (optional). A row <b>without an IP field</b> always goes to <code>_Dynamic</code> (class match). A row <b>with an IP field</b> goes to <code>_Static</code> (host block); the <b>Also into class</b> switch (shown only with an IP field) puts the same MAC into <code>_Dynamic</code> too, so the device gets an IP in another pool (otherwise MismatchClient). If the IP field is empty (or invalid), the host cannot be static: with “Also into class” it goes to <code>_Dynamic</code> only, without it it does not get into DHCP (summary “no IP”). The same MAC field may be in two rows only as one static row (without “Also into class”) + one row without IP (Dynamic); twice in Static or twice in Dynamic is refused with an explanation (duplicate hosts). Every field can be used once. Column <b>Goes to</b>: Dynamic / Static / Static + Dynamic.</li>
 <li>Names: one row = <code>NAME</code>, more rows = <code>NAME_1</code>, <code>NAME_2</code>… by row order. Two host blocks with the same name are never made; a duplicate MAC or IP is only a warning.</li>
-<li><b>Files</b>: path, suffix (<code>_Dynamic</code> / <code>_Static</code>, editable) and host count; the MAC/IP list expands on click.</li></ul>
+<li><b>option host-name</b> (static row): <b>NAME</b> (default), <b>NAME_n</b> (as the host block name), <b>another field</b> of the object or <b>leave out</b>.</li>
+<li><b>Files</b>: path, suffix (<code>_Dynamic</code> / <code>_Static</code>, editable), host count and <b>Show CFG</b> = preview of the finished file from real data; the MAC/IP list expands on click.</li></ul>
 <b>Copy settings</b> copies the sources of another group.</li></ol>
-<p>Next step: the code of both files (like the pool code), storing them and including them in dhcpd.conf.</p>
+<p><b>File code</b> (card 4 on the Hosts page): shared Jinja code for <code>_Dynamic</code> (variables <code>class_name</code>, <code>pairs</code>, <code>tenants</code>) and <code>_Static</code> (<code>class_name</code>, <code>hosts</code>: <code>h.host</code>, <code>h.mac</code>, <code>h.ip</code>, <code>h.name</code>, <code>h.hostname</code>). State default / edited, <b>Restore default</b>. Bad code is not saved (the draft stays in the editor). A group switched off has an empty class (<code>match if false;</code>) and no host blocks.</p>
+<p>Next step: storing the files (SHA256) and including them in dhcpd.conf.</p>
 
 <h2>10. Troubleshooting</h2>
 <table><tr><th>Symptom</th><th>Cause / fix</th></tr>

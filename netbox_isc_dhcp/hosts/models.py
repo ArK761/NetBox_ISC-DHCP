@@ -8,6 +8,8 @@ class HostConfig(models.Model):
     group_model = models.CharField(max_length=100, blank=True, default="", help_text="Object type of the groups, e.g. tenancy.tenantgroup.")
     group_name_field = models.CharField(max_length=100, blank=True, default="name", help_text="Field of the group object that gives the table (class) name.")
     group_conditions = models.JSONField(default=list, blank=True, help_text="Conditions [{field, values, mode include|exclude}] filtering the groups (none = all).")
+    dynamic_code = models.TextField(blank=True, default="", help_text="Jinja code of every <name>_Dynamic file (empty = default).")
+    static_code = models.TextField(blank=True, default="", help_text="Jinja code of every <name>_Static file (empty = default).")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
@@ -18,6 +20,14 @@ class HostConfig(models.Model):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_isc_dhcp:hosts")
+
+    def code(self, kind):
+        from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC
+        own = self.dynamic_code if kind == "dynamic" else self.static_code
+        return own or (DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC)
+
+    def is_default(self, kind):
+        return not (self.dynamic_code if kind == "dynamic" else self.static_code)
 
 
 class HostGroup(models.Model):

@@ -74,9 +74,11 @@
 <ul><li><b>Zdroje hostov</b> (<b>Pridať zdroj</b>): objekt (napr. Tenant, Device), <b>podmienky</b> na interné pole alebo custom field (ktoré objekty; ako pri Subnetoch) a pole s názvom hosta.</li>
 <li><b>Hostia z objektu</b> (najviac 3): každý riadok = <b>pole MAC</b> + <b>pole IP</b> (voliteľné). Riadok <b>bez poľa IP</b> ide vždy do <code>_Dynamic</code> (class match). Riadok <b>s poľom IP</b> ide do <code>_Static</code> (host blok); prepínač <b>Aj do class</b> (zobrazí sa len pri poli IP) dá tú istú MAC aj do <code>_Dynamic</code>, aby zariadenie v inom poole dostalo IP (inak MismatchClient). Ak v poli IP hodnota chýba (alebo je neplatná), host nemôže byť statický: s „Aj do class“ ide len do <code>_Dynamic</code>, bez neho nepôjde do DHCP (súhrn „bez IP“). Rovnaké pole MAC môže byť v dvoch riadkoch len ako jeden statický riadok (bez „Aj do class“) + jeden riadok bez IP (Dynamic); dvakrát v Static alebo dvakrát v Dynamic plugin odmietne s vysvetlením (duplicitní hostia). Každé pole sa dá použiť len raz. Stĺpec <b>Kam ide</b>: Dynamic / Static / Static + Dynamic.</li>
 <li>Názvy: jeden riadok = <code>MENO</code>, viac riadkov = <code>MENO_1</code>, <code>MENO_2</code>… podľa poradia riadku. Dva host bloky s rovnakým názvom nevzniknú nikdy; duplicitná MAC alebo IP je len upozornenie.</li>
-<li><b>Súbory</b>: cesta, prípona (<code>_Dynamic</code> / <code>_Static</code>, dá sa zmeniť) a počet hostov; zoznam MAC/IP sa rozbalí kliknutím.</li></ul>
+<li><b>option host-name</b> (statický riadok): <b>NAME</b> (predvolené), <b>NAME_n</b> (ako názov host bloku), <b>iné pole</b> objektu alebo <b>nevkladať</b>.</li>
+<li><b>Súbory</b>: cesta, prípona (<code>_Dynamic</code> / <code>_Static</code>, dá sa zmeniť), počet hostov a <b>Zobraziť CFG</b> = náhľad hotového súboru z reálnych dát; zoznam MAC/IP sa rozbalí kliknutím.</li></ul>
 <b>Prevziať nastavenie</b> skopíruje zdroje z inej skupiny.</li></ol>
-<p>Ďalší krok: kód oboch súborov (ako kód poolu), ich uloženie a zaradenie do dhcpd.conf.</p>
+<p><b>Kód súborov</b> (karta 4 na stránke Hosty): spoločný Jinja kód pre <code>_Dynamic</code> (premenné <code>class_name</code>, <code>pairs</code>, <code>tenants</code>) a <code>_Static</code> (<code>class_name</code>, <code>hosts</code>: <code>h.host</code>, <code>h.mac</code>, <code>h.ip</code>, <code>h.name</code>, <code>h.hostname</code>). Stav predvolený / upravený, <b>Obnoviť predvolený</b>. Chybný kód sa neuloží (návrh zostane v editore). Vypnutá skupina má prázdnu class (<code>match if false;</code>) a žiadne host bloky.</p>
+<p>Ďalší krok: uloženie súborov (SHA256) a zaradenie do dhcpd.conf.</p>
 
 <h2>10. Riešenie problémov</h2>
 <table><tr><th>Príznak</th><th>Príčina / riešenie</th></tr>

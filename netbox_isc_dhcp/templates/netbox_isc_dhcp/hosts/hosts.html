@@ -61,6 +61,27 @@
       {% empty %}<tr><td colspan="10" class="text-muted">—</td></tr>{% endfor %}
     </table></div>
   </div>
+
+  {# ---- shared code of the files ---- #}
+  {% url 'plugins:netbox_isc_dhcp:hosts_inline' as inline_url2 %}
+  <div class="card mb-3" id="isc-code">
+    <h5 class="card-header d-flex align-items-center"><span class="isc-step">4</span><i class="mdi mdi-code-braces me-2"></i>{% tr "hosts.code_card" %}</h5>
+    <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "hosts.code_hint" %}</div>
+    {% for c in codes %}
+    <details class="isc-file isc-code px-3 py-2" id="isc-code-{{ c.kind }}"{% if c.draft %} open{% endif %}>
+      <summary class="d-flex align-items-center gap-2 py-1"><i class="mdi {% if c.kind == 'dynamic' %}mdi-file-outline{% else %}mdi-file-lock-outline{% endif %} fs-5 opacity-75"></i>
+        <strong>{{ c.title }}</strong>
+        {% if c.draft %}<span class="badge text-bg-danger">{% tr "hosts.code_draft" %}</span>{% elif c.default %}<span class="badge text-bg-secondary isc-code-state">{% tr "hosts.code_default" %}</span>{% else %}<span class="badge text-bg-warning isc-code-state">{% tr "hosts.code_edited" %}</span>{% endif %}</summary>
+      <div class="isc-hint my-2">{% tr "hosts.code_vars" %}: <code>{{ c.vars }}</code></div>
+      <form method="post" action="{{ inline_url2 }}">{% csrf_token %}<input type="hidden" name="field" value="code_{{ c.kind }}">
+        <div class="isc-ed-wrap"><textarea name="value" rows="18" class="form-control font-monospace code-editor" spellcheck="false" wrap="off">{{ c.text }}</textarea></div>
+        <div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-primary isc-code-save">{% tr "lbl.save" %}</button>
+          {% if not c.default or c.draft %}<button class="btn btn-sm btn-outline-secondary" name="field" value="code_reset_{{ c.kind }}">{% tr "hosts.code_reset" %}</button>{% endif %}</div>
+      </form>
+    </details>
+    {% endfor %}
+  </div>
+  {% include "netbox_isc_dhcp/_code_editor.html" %}
   {% endif %}
 </div></div>
 {% endblock %}

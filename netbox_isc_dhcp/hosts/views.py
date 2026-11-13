@@ -8,6 +8,8 @@ from django.views import View
 from ..i18n import t, tmsg
 from ..models import DHCPPath, PluginSettings, settings_obj
 from ..source_fields import distinct_values, field_options, get_model, source_label, source_models
+from ..views import _editor_vars
+from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC, code_errors, render_files
 from .logic import MAX_HOSTS, build_group, groups_overview, source_info
 from .models import HostGroup, HostSource, host_config
 
@@ -22,6 +24,12 @@ def _source_groups():
 def _need_texts(need):
     keys = {"model": "hosts.need_model", "cond": "hosts.need_cond", "mac": "hosts.need_mac", "ip": "hosts.need_ip"}
     return [t(keys[n]) for n in need]
+
+
+def _codes(request, cfg):
+    drafts = request.session.get("hosts_code_draft", {})
+    return [{"kind": k, "title": t("hosts.code_" + k), "default": cfg.is_default(k), "draft": k in drafts,
+             "text": drafts.get(k, cfg.code(k)), "vars": t("hosts.code_vars_" + k)} for k in ("dynamic", "static")]
 
 
 class HostsView(LoginRequiredMixin, View):
@@ -43,6 +51,7 @@ class HostsView(LoginRequiredMixin, View):
             "used_fields": [c["field"] for c in ov["conditions"]],
             "groups_count_text": t("hosts.groups_selected", n=len(ov["groups"]), total=ov.get("total", 0)),
             "table_dir": st.table_dir if st else None, "subdirs": DHCPPath.objects.all(),
+            "codes": _codes(request, cfg), "editor_vars": _editor_vars(),
         })
 
 
@@ -66,6 +75,23 @@ class HostsInlineView(LoginRequiredMixin, View):
                 err = t("hosts.err_field")
             else:
                 cfg.group_name_field = value
+        elif field in ("code_dynamic", "code_static", "code_reset_dynamic", "code_reset_static"):
+            kind = field.rsplit("_", 1)[1]
+            anchor = "isc-code-" + kind
+            drafts = dict(request.session.get("hosts_code_draft", {}))
+            code = "" if field.startswith("code_reset") else request.POST.get("value", "").replace("\r\n", "\n")
+            default = DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC
+            if code.strip() == default.strip():
+                code = ""
+            bad = code_errors(code) if code else ""
+            if bad:
+                drafts[kind] = code
+                err = t("hosts.code_err", err=tmsg(bad))
+            else:
+                drafts.pop(kind, None)
+                setattr(cfg, kind + "_code", code)
+                messages.success(request, t("hosts.code_saved"))
+            request.session["hosts_code_draft"] = drafts
         elif field == "table_dir":
             st = settings_obj() or PluginSettings.objects.create()
             st.table_dir_id = int(value) if value.isdigit() and DHCPPath.objects.filter(pk=int(value)).exists() else None
@@ -123,23 +149,27 @@ class HostGroupView(LoginRequiredMixin, View):
                 ok = r.get("mac") in labels and (not r.get("ip") or r["ip"] in labels)
                 target = "static_dyn" if r.get("ip") and r.get("dyn") else "static" if r.get("ip") else "dynamic"
                 rows.append({"index": i - 1, "n": i, "mac": labels.get(r.get("mac"), r.get("mac")), "ip": labels.get(r.get("ip"), r.get("ip")) if r.get("ip") else "",
-                             "dyn": bool(r.get("dyn")), "ok": ok, "target": target, "target_text": t("hosts.to_" + target)})
+                             "dyn": bool(r.get("dyn")), "ok": ok, "target": target, "target_text": t("hosts.to_" + target),
+                             "hn": r.get("hn") or "name", "hn_text": {"name": t("hosts.hn_name"), "host": t("hosts.hn_host"), "none": t("hosts.hn_none")}.get(r.get("hn") or "name", labels.get(r.get("hn"), r.get("hn")))})
             used = {r.get("mac") for r in src.hosts or []} | {r.get("ip") for r in src.hosts or [] if r.get("ip")}
             info.update({"label": source_label(src.model), "opts": opts, "free": [o for o in opts if o["key"] not in used],
                          "mac_opts": [(o["key"], o["label"] + (f" ({t('hosts.used_row', n=n)})" if n else "")) for o in opts
                                       for n in [next((i for i, r in enumerate(src.hosts or [], 1) if r.get("mac") == o["key"]), 0)]
                                       if o["key"] not in {r.get("ip") for r in src.hosts or []}],
-                         "need_texts": _need_texts(info["need"]), "rows": rows, "can_add": len(src.hosts or []) < MAX_HOSTS,
+                         "need_texts": _need_texts(info["need"]), "hn_choices": [("name", t("hosts.hn_name")), ("host", t("hosts.hn_host")), ("none", t("hosts.hn_none"))], "rows": rows, "can_add": len(src.hosts or []) < MAX_HOSTS,
                          "host_name_label": labels.get(src.host_name_field, ""), "used_fields": [c["field"] for c in info["conditions"]],
                          "names_hint": t("hosts.names_hint1") if len(rows) <= 1 else t("hosts.names_hintn", n=len(rows))})
             sources.append(info)
+        cfg = host_config()
+        rendered = render_files(hg, built, {k: cfg.code(k) for k in ("dynamic", "static")})
         files = []
         for kind in ("dynamic", "static"):
             b = built[kind]
             rows = [(r[0], r[1], r[2] if kind == "static" else "") for r in b["rows"]]
             files.append({"kind": kind, "name": hg.file_name(kind), "suffix": hg.dynamic_suffix if kind == "dynamic" else hg.static_suffix,
                           "rows": rows[:500], "count": len(rows), "more": max(0, len(rows) - 500),
-                          "count_text": t("hosts.hosts_count", n=len(rows))})
+                          "count_text": t("hosts.hosts_count", n=len(rows)), "cfg_text": rendered[kind][0],
+                          "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n")})
         lc = built["lost_counts"]
         lost_parts = [f"{lc[k]}× {t('hosts.lost_' + k)}" for k in LOST_REASONS if lc.get(k)]
         others = [g for g in HostGroup.objects.filter(group_model=hg.group_model).exclude(pk=hg.pk) if g.sources.exists()]
@@ -223,6 +253,14 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                     err = t("hosts.err_used")
                 else:
                     rows.append({"mac": mac, "ip": ip, "dyn": bool(ip) and request.POST.get("dyn") == "1"})
+                    src.hosts = rows
+            elif field == "row_hn":
+                rows = list(src.hosts or [])
+                i = request.POST.get("row", "")
+                if not (i.isdigit() and int(i) < len(rows)) or (value not in ("name", "host", "none") and value not in keys):
+                    err = t("hosts.err_field")
+                else:
+                    rows[int(i)] = dict(rows[int(i)], hn=value)
                     src.hosts = rows
             elif field in ("row_del", "row_dyn"):
                 rows = list(src.hosts or [])

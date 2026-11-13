@@ -128,7 +128,9 @@ def host_rows(src, keys) -> list[dict]:
     out = []
     for r in (src.hosts or [])[:MAX_HOSTS]:
         if r.get("mac") in keys and (not r.get("ip") or r["ip"] in keys):
-            out.append({"mac": r["mac"], "ip": r.get("ip") or "", "dyn": bool(r.get("dyn"))})
+            hn = r.get("hn") or "name"
+            out.append({"mac": r["mac"], "ip": r.get("ip") or "", "dyn": bool(r.get("dyn")),
+                        "hn": hn if hn in ("name", "host", "none") or hn in keys else "name"})
     return out
 
 
@@ -183,7 +185,16 @@ def build_group(hg) -> dict:
                     else:
                         own.append((host, "no_ip" if _empty(ipv) else "bad_ip", "" if _empty(ipv) else str(ipv)))
                     continue
-                sta.append((host, m, ip, base))
+                hn = r["hn"]
+                if hn in ("name", "host", "none"):
+                    hostname = {"name": base, "host": host, "none": None}[hn]
+                else:  # value of another field (empty -> no option host-name)
+                    v = read_value(o, hn)
+                    hostname = None if _empty(v) else str(v).strip()
+                    if hostname and not _SAFE_NAME.match(hostname):
+                        bad_ip.append(f"{host}: host-name '{hostname}' has characters not allowed, option host-name left out")
+                        hostname = None
+                sta.append((host, m, ip, base, hostname))
                 if r["dyn"]:
                     dyn.append((host, m, base))
             if not any_mac and not own:

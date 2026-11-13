@@ -59,13 +59,18 @@
     <div class="isc-hint mt-1">{{ s.names_hint }}</div></div>
   <div class="isc-sec isc-leaf"><div class="isc-sec-title">{{ rows_title }}</div>
     <div class="isc-rows">
-      {% if s.rows %}<table class="table table-sm align-middle mb-2 isc-rows-table"><thead><tr><th style="width:2.5rem">#</th><th>{% tr "hosts.col_mac_field" %}</th><th>{% tr "hosts.col_ip_field" %}</th><th>{% tr "hosts.col_dyn" %}</th><th>{% tr "hosts.col_target" %}</th><th></th></tr></thead>
+      {% if s.rows %}<table class="table table-sm align-middle mb-2 isc-rows-table"><thead><tr><th style="width:2.5rem">#</th><th>{% tr "hosts.col_mac_field" %}</th><th>{% tr "hosts.col_ip_field" %}</th><th>{% tr "hosts.col_dyn" %}</th><th>{% tr "hosts.col_hn" %}</th><th>{% tr "hosts.col_target" %}</th><th></th></tr></thead>
         {% for r in s.rows %}<tr class="isc-row{% if not r.ok %} text-danger{% endif %}" data-target="{{ r.target }}">
           <td><span class="isc-rn">{{ r.n }}</span></td>
           <td><i class="mdi mdi-ethernet opacity-50"></i> <strong>{{ r.mac }}</strong></td>
           <td>{% if r.ip %}<i class="mdi mdi-ip-network-outline opacity-50"></i> <strong>{{ r.ip }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}</td>
           <td>{% if r.ip %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="row_dyn"><input type="hidden" name="src" value="{{ s.src.pk }}"><input type="hidden" name="row" value="{{ r.index }}">
               <button class="btn btn-link p-0 border-0 isc-dyn" title="{% tr 'hosts.dyn_toggle' %}"><i class="mdi {% if r.dyn %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-3"></i></button></form>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
+          <td class="isc-hn">{% if r.ip %}<details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><span class="small">{{ r.hn_text }}</span> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
+              <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="row_hn"><input type="hidden" name="src" value="{{ s.src.pk }}"><input type="hidden" name="row" value="{{ r.index }}">
+                <select name="value" class="form-select form-select-sm">{% for k, l in s.hn_choices %}<option value="{{ k }}"{% if k == r.hn %} selected{% endif %}>{{ l }}</option>{% endfor %}
+                  <optgroup label="{% tr 'hosts.col_mac_field' %} / …">{% for o in s.opts %}<option value="{{ o.key }}"{% if o.key == r.hn %} selected{% endif %}>{{ o.label }}</option>{% endfor %}</optgroup></select>
+                <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
           <td><span class="isc-target isc-t-{{ r.target }}">{{ r.target_text }}</span></td>
           <td class="text-end"><form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="row_del"><input type="hidden" name="src" value="{{ s.src.pk }}"><input type="hidden" name="row" value="{{ r.index }}">
               <button class="btn btn-sm btn-outline-danger isc-row-del" title="{% tr 'hosts.delete' %}"><i class="mdi mdi-trash-can-outline"></i></button></form></td></tr>{% endfor %}</table>
