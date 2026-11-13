@@ -70,10 +70,12 @@
 <p>Stránka <b>DHCP-CFG › Hosty a MAC adresy</b> (rozpracované – postupne pribúda). Všetko sa nastavuje kliknutím:</p>
 <ol><li><b>Umiestnenie tabuliek</b> – <b>podadresár pre tabuľky</b> (zobrazí sa celá cesta, napr. <code>/opt/dhcp/TABLE/</code>).</li><li><b>Zdroj tabuliek (skupiny)</b> – strom: objekt, ktorého každá položka (napr. Tenant group) dostane dva súbory <code>&lt;Názov&gt;_Dynamic</code> a <code>&lt;Názov&gt;_Static</code>, a pole s <b>názvom</b> (interné pole alebo custom field, zvyčajne Name). Skupinu, ktorú nechcete generovať, vypnete vypínačom v zozname skupín.</li>
 <li><b>Skupiny (tabuľky)</b> – zoznam ako pri pooloch: prepínač <b>Zapnuté / Vypnuté</b>, počet objektov, súbory s celou cestou, zdroje, počty MAC a upozornenia. <b>Vypnutá</b> skupina má súbory stále vytvorené, ale bez MAC adries – len so základnou konfiguráciou, aby DHCP nespadol. Tlačidlo <b>Nastaviť</b> otvorí stránku skupiny.</li>
-<li><b>Stránka skupiny</b> – oba súbory (príponu <code>_Dynamic</code> / <code>_Static</code> možno zmeniť). Každý súbor sa skladá z jedného alebo <b>viacerých zdrojov</b> (<b>Pridať zdroj</b>). Zdroj = objekt (napr. Tenant, Device), <b>podmienky</b> na interné pole alebo custom field (ktoré objekty; ako pri Subnetoch), pole s názvom hosta, polia s MAC (najviac 3) a IP:
-<ul><li><b>Dynamic</b>: MAC adresy objektov; voliteľne „Vynechať objekty s IP v poli“ – objekt so statickou IP patrí do Static.</li>
-<li><b>Static</b>: pole so statickou IP; objekt bez IP sa preskočí; pri viacerých MAC <code>MENO_1</code>, <code>MENO_2</code>…</li></ul>
-Pod každým súborom je výsledok (hosty, MAC, IP) a hore upozornenia (neplatná MAC alebo IP, MAC v oboch súboroch; duplicitná MAC alebo IP je len upozornenie, host sa nevynechá). <b>Prevziať nastavenie</b> skopíruje zdroje z inej skupiny.</li></ol>
+<li><b>Stránka skupiny</b> – hore súhrn <b>„N hostov nepôjde do DHCP“</b> (bez MAC, bez IP, neplatná MAC/IP, nepovolený názov, rovnaký názov hosta) a upozornenia; oba sa rozbalia kliknutím. Zapnúť / vypnúť skupinu možno len v zozname skupín.
+<ul><li><b>Zdroje hostov</b> (<b>Pridať zdroj</b>): objekt (napr. Tenant, Device), <b>podmienky</b> na interné pole alebo custom field (ktoré objekty; ako pri Subnetoch) a pole s názvom hosta.</li>
+<li><b>Hostia z objektu</b> (najviac 3): každý riadok = <b>pole MAC</b> + <b>pole IP</b> (voliteľné). Riadok <b>bez IP</b> ide do <code>_Dynamic</code> (class match). Riadok <b>s IP</b> ide do <code>_Static</code> (host blok); prepínač <b>Aj do class</b> dá tú istú MAC aj do <code>_Dynamic</code>, aby zariadenie v inom poole dostalo IP (inak MismatchClient). Každé pole sa dá použiť len raz. Stĺpec <b>Kam ide</b>: Dynamic / Static / Static + Dynamic.</li>
+<li>Názvy: jeden riadok = <code>MENO</code>, viac riadkov = <code>MENO_1</code>, <code>MENO_2</code>… podľa poradia riadku. Dva host bloky s rovnakým názvom nevzniknú nikdy; duplicitná MAC alebo IP je len upozornenie.</li>
+<li><b>Súbory</b>: cesta, prípona (<code>_Dynamic</code> / <code>_Static</code>, dá sa zmeniť) a počet hostov; zoznam MAC/IP sa rozbalí kliknutím.</li></ul>
+<b>Prevziať nastavenie</b> skopíruje zdroje z inej skupiny.</li></ol>
 <p>Ďalší krok: kód oboch súborov (ako kód poolu), ich uloženie a zaradenie do dhcpd.conf.</p>
 
 <h2>10. Riešenie problémov</h2>

@@ -20,4 +20,23 @@
   .isc-tree .isc-leaf { position: relative; padding-left: 3rem; grid-template-columns: 12.75rem minmax(0,1fr); }
   .isc-tree .isc-leaf::before { content: ""; position: absolute; left: 1.6rem; top: 0; height: 1.35rem; width: 1rem;
      border-left: 2px solid var(--tblr-success, #2fb344); border-bottom: 2px solid var(--tblr-success, #2fb344); border-bottom-left-radius: 6px; opacity: .7; }
+  .isc-file + .isc-file { border-top: 1px solid var(--tblr-border-color, rgba(128,128,128,.25)); }
+  .isc-hosts > summary, .isc-box > summary { cursor: pointer; list-style: none; }
+  .isc-hosts > summary::-webkit-details-marker, .isc-box > summary::-webkit-details-marker { display: none; }
+  .isc-hosts > summary::before, .isc-box > summary::before { content: "\25B8"; display: inline-block; width: 1rem; transition: transform .15s; opacity: .7; }
+  .isc-hosts[open] > summary::before, .isc-box[open] > summary::before { transform: rotate(90deg); }
+  .isc-box { margin: .75rem 1rem; border-radius: .4rem; padding: .55rem .8rem; border: 1px solid; }
+  .isc-box-danger { border-color: rgba(214,57,57,.6); background: rgba(214,57,57,.12); }
+  .isc-box-warning { border-color: rgba(247,103,7,.6); background: rgba(247,103,7,.10); }
+  .isc-box-body { margin-top: .5rem; max-height: 22rem; overflow: auto; }
+  .isc-src-head { background: rgba(128,128,128,.08); border-bottom: 1px solid var(--tblr-border-color, rgba(128,128,128,.25)); }
+  .isc-source .isc-tree .isc-leaf:first-child { border-top: 0; }
+  .isc-rn { display: inline-flex; width: 1.4rem; height: 1.4rem; border-radius: 50%; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700;
+            background: rgba(128,128,128,.2); }
+  .isc-target { display: inline-block; padding: .1rem .55rem; border-radius: 1rem; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+  .isc-t-dynamic { background: rgba(66,153,225,.18); color: #4299e1; }
+  .isc-t-static { background: rgba(174,62,201,.18); color: #c06ad6; }
+  .isc-t-static_dyn { background: rgba(47,179,68,.18); color: #2fb344; }
+  .isc-rows-table { max-width: 52rem; }
+  .isc-rows-table th { font-size: .72rem; text-transform: uppercase; opacity: .7; font-weight: 600; }
 </style>

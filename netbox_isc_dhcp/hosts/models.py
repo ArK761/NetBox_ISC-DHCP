@@ -47,33 +47,31 @@ class HostGroup(models.Model):
 
 
 class HostSource(models.Model):
-    """One source of a group file: objects of a type chosen by conditions, with their MAC fields (and IP for the static file)."""
-
-    KINDS = (("dynamic", "dynamic"), ("static", "static"))
+    """One source of a group: objects of a type chosen by conditions. Each object gives up to 3 hosts (rows);
+    a row = MAC field + optional IP field. Row with IP -> static host block (and, if `dyn`, the MAC also into the
+    dynamic class); row without IP -> dynamic class only."""
 
     group = models.ForeignKey(HostGroup, on_delete=models.CASCADE, related_name="sources")
-    kind = models.CharField(max_length=10, choices=KINDS)
     order = models.PositiveSmallIntegerField(default=100)
     model = models.CharField(max_length=100, blank=True, default="", help_text="Object type of the hosts, e.g. tenancy.tenant or dcim.device.")
     conditions = models.JSONField(default=list, blank=True, help_text="Conditions [{field, values, mode include|exclude}] choosing the objects.")
     host_name_field = models.CharField(max_length=100, blank=True, default="name")
-    mac_fields = models.JSONField(default=list, blank=True, help_text="Fields with MAC addresses (1-3), in order.")
-    ip_field = models.CharField(max_length=100, blank=True, default="", help_text="Static file: field with the static IP. Dynamic file: objects with a value in this field are left out.")
+    hosts = models.JSONField(default=list, blank=True, help_text="Hosts of one object: [{mac, ip, dyn}] (max 3); every field used once.")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
-        ordering = ("group", "kind", "order", "pk")
+        ordering = ("group", "order", "pk")
         verbose_name = "host source"
 
     def __str__(self):
-        return f"{self.group} {self.kind} {self.model}"
+        return f"{self.group} {self.model}"
 
     def get_absolute_url(self):
         return self.group.get_absolute_url()
 
     def copy_fields(self):
-        return {"kind": self.kind, "order": self.order, "model": self.model, "conditions": list(self.conditions or []),
-                "host_name_field": self.host_name_field, "mac_fields": list(self.mac_fields or []), "ip_field": self.ip_field}
+        return {"order": self.order, "model": self.model, "conditions": list(self.conditions or []),
+                "host_name_field": self.host_name_field, "hosts": [dict(h) for h in self.hosts or []]}
 
 
 def host_config() -> HostConfig:

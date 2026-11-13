@@ -70,10 +70,12 @@
 <p>Page <b>DHCP-CFG › Hosts and MAC addresses</b> (work in progress – grows step by step). Everything is set by clicking:</p>
 <ol><li><b>Table location</b> – the <b>table subdirectory</b> (full path shown, e.g. <code>/opt/dhcp/TABLE/</code>).</li><li><b>Table source (groups)</b> – a tree: the object whose every item (e.g. Tenant group) gets two files <code>&lt;Name&gt;_Dynamic</code> and <code>&lt;Name&gt;_Static</code>, and the <b>name</b> field (built-in or custom field, usually Name). Turn off a group you do not want with the switch in the groups list.</li>
 <li><b>Groups (tables)</b> – a list like the pools: <b>On / Off</b> switch, number of objects, files with full path, sources, MAC counts and warnings. A group switched <b>off</b> still has its files, but without MAC addresses – base configuration only, so DHCP does not fail. <b>Set up</b> opens the group page.</li>
-<li><b>Group page</b> – both files (the suffix <code>_Dynamic</code> / <code>_Static</code> can be changed). Each file is built from one or <b>more sources</b> (<b>Add source</b>). A source = object (e.g. Tenant, Device), <b>conditions</b> on an internal field or custom field (which objects; like on Subnets), host name field, MAC fields (at most 3) and IP:
-<ul><li><b>Dynamic</b>: MAC addresses of the objects; optionally "Leave out objects with IP in field" – an object with a static IP belongs to Static.</li>
-<li><b>Static</b>: the static IP field; an object without IP is left out; several MACs get <code>NAME_1</code>, <code>NAME_2</code>…</li></ul>
-Below each file is the result (hosts, MAC, IP), warnings are at the top (invalid MAC or IP, MAC in both files; a duplicate MAC or IP is only a warning, the host is kept). <b>Copy settings</b> copies the sources of another group.</li></ol>
+<li><b>Group page</b> – at the top the summary <b>"N hosts will not get into DHCP"</b> (no MAC, no IP, invalid MAC/IP, name not allowed, same host name) and the warnings; both expand on click. The group is turned on / off only in the groups list.
+<ul><li><b>Host sources</b> (<b>Add source</b>): object (e.g. Tenant, Device), <b>conditions</b> on an internal field or custom field (which objects; like on Subnets) and the host name field.</li>
+<li><b>Hosts of one object</b> (at most 3): every row = <b>MAC field</b> + <b>IP field</b> (optional). A row <b>without IP</b> goes to <code>_Dynamic</code> (class match). A row <b>with IP</b> goes to <code>_Static</code> (host block); the <b>Also into class</b> switch puts the same MAC into <code>_Dynamic</code> too, so the device gets an IP in another pool (otherwise MismatchClient). Every field can be used once. Column <b>Goes to</b>: Dynamic / Static / Static + Dynamic.</li>
+<li>Names: one row = <code>NAME</code>, more rows = <code>NAME_1</code>, <code>NAME_2</code>… by row order. Two host blocks with the same name are never made; a duplicate MAC or IP is only a warning.</li>
+<li><b>Files</b>: path, suffix (<code>_Dynamic</code> / <code>_Static</code>, editable) and host count; the MAC/IP list expands on click.</li></ul>
+<b>Copy settings</b> copies the sources of another group.</li></ol>
 <p>Next step: the code of both files (like the pool code), storing them and including them in dhcpd.conf.</p>
 
 <h2>10. Troubleshooting</h2>

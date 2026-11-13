@@ -8,7 +8,7 @@ from django.views import View
 from ..i18n import t, tmsg
 from ..models import DHCPPath, PluginSettings, settings_obj
 from ..source_fields import distinct_values, field_options, get_model, source_label, source_models
-from .logic import MAX_MAC_FIELDS, build_group, groups_overview, source_info
+from .logic import MAX_HOSTS, build_group, groups_overview, source_info
 from .models import HostGroup, HostSource, host_config
 
 
@@ -98,8 +98,11 @@ class HostsInlineView(LoginRequiredMixin, View):
         return redirect(f"{url}?edit={edit}#c{edit}" if edit is not None else f"{url}#{anchor}")
 
 
+LOST_REASONS = ("no_mac", "no_ip", "bad_mac", "bad_ip", "bad_name", "dup_name")
+
+
 class HostGroupView(LoginRequiredMixin, View):
-    """One group: its two files, each built from its own sources (object, conditions, MAC, IP)."""
+    """One group: its sources (object, conditions, host rows MAC + IP) and the two files they make."""
 
     def get(self, request, pk):
         if not request.user.has_perm("netbox_isc_dhcp.view_hostconfig"):
@@ -110,29 +113,40 @@ class HostGroupView(LoginRequiredMixin, View):
         open_src, edit = request.GET.get("src", ""), request.GET.get("edit", "")
         built = build_group(hg)
         st = settings_obj()
+        sources = []
+        for src in hg.sources.all():
+            info = source_info(src, int(edit) if edit.isdigit() and open_src == str(src.pk) else None)
+            opts = field_options(info["model"])
+            labels = {o["key"]: o["label"] for o in opts}
+            rows = []
+            for i, r in enumerate(src.hosts or [], 1):
+                ok = r.get("mac") in labels and (not r.get("ip") or r["ip"] in labels)
+                target = "static_dyn" if r.get("ip") and r.get("dyn") else "static" if r.get("ip") else "dynamic"
+                rows.append({"index": i - 1, "n": i, "mac": labels.get(r.get("mac"), r.get("mac")), "ip": labels.get(r.get("ip"), r.get("ip")) if r.get("ip") else "",
+                             "dyn": bool(r.get("dyn")), "ok": ok, "target": target, "target_text": t("hosts.to_" + target)})
+            used = {r.get("mac") for r in src.hosts or []} | {r.get("ip") for r in src.hosts or [] if r.get("ip")}
+            info.update({"label": source_label(src.model), "opts": opts, "free": [o for o in opts if o["key"] not in used],
+                         "need_texts": _need_texts(info["need"]), "rows": rows, "can_add": len(src.hosts or []) < MAX_HOSTS,
+                         "host_name_label": labels.get(src.host_name_field, ""), "used_fields": [c["field"] for c in info["conditions"]],
+                         "names_hint": t("hosts.names_hint1") if len(rows) <= 1 else t("hosts.names_hintn", n=len(rows))})
+            sources.append(info)
         files = []
         for kind in ("dynamic", "static"):
-            sources = []
-            for src in hg.sources.filter(kind=kind):
-                info = source_info(src, int(edit) if edit.isdigit() and open_src == str(src.pk) else None)
-                order = {k: i for i, k in enumerate(src.mac_fields or [], 1)}
-                opts = [dict(o, order=order.get(o["key"], 0)) for o in field_options(info["model"])]
-                labels = {o["key"]: o["label"] for o in opts}
-                info.update({"label": source_label(src.model), "opts": opts, "need_texts": _need_texts(info["need"]),
-                             "mac_sel": sorted([o for o in opts if o["order"]], key=lambda o: o["order"]),
-                             "host_name_label": labels.get(src.host_name_field, ""), "ip_label": labels.get(src.ip_field, ""),
-                             "used_fields": [c["field"] for c in info["conditions"]]})
-                sources.append(info)
             b = built[kind]
-            rows = ([(h.name, m, "") for h in b["hosts"] for m in h.macs] if kind == "dynamic" else
-                    [(h.name if len(h.macs) == 1 else f"{h.name}_{i}", m, h.ip) for h in b["hosts"] for i, m in enumerate(h.macs, 1)])
+            rows = [(r[0], r[1], r[2] if kind == "static" else "") for r in b["rows"]]
             files.append({"kind": kind, "name": hg.file_name(kind), "suffix": hg.dynamic_suffix if kind == "dynamic" else hg.static_suffix,
-                          "sources": sources, "built": b, "rows": rows[:500], "more": max(0, len(rows) - 500)})
+                          "rows": rows[:500], "count": len(rows), "more": max(0, len(rows) - 500),
+                          "count_text": t("hosts.hosts_count", n=len(rows))})
+        lc = built["lost_counts"]
+        lost_parts = [f"{lc[k]}× {t('hosts.lost_' + k)}" for k in LOST_REASONS if lc.get(k)]
         others = [g for g in HostGroup.objects.filter(group_model=hg.group_model).exclude(pk=hg.pk) if g.sources.exists()]
         return render(request, "netbox_isc_dhcp/hosts/group.html", {
-            "hg": hg, "group_obj": group_obj, "files": files, "source_groups": _source_groups(),
-            "warnings": [tmsg(w) for w in built["warnings"]], "others": others,
-            "table_dir": st.table_dir if st else None, "mac_fields_title": t("hosts.mac_fields", n=MAX_MAC_FIELDS),
+            "hg": hg, "group_obj": group_obj, "files": files, "sources": sources, "source_groups": _source_groups(),
+            "warnings": [tmsg(w) for w in built["warnings"]], "others": others, "objects": built["objects"],
+            "lost": [(h, t("hosts.lost_" + r), v) for h, r, v in built["lost"]],
+            "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
+            "warn_title": t("hosts.warn_title", n=len(built["warnings"])),
+            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS),
         })
 
 
@@ -157,12 +171,11 @@ class HostGroupInlineView(LoginRequiredMixin, View):
             else:
                 setattr(hg, field, value)
         elif field == "src_add":
-            kind = request.POST.get("kind")
-            if kind not in ("dynamic", "static") or value not in models_ok:
+            if value not in models_ok:
                 err = t("hosts.err_object")
             else:
-                last = hg.sources.filter(kind=kind).order_by("-order").first()
-                src = HostSource.objects.create(group=hg, kind=kind, model=value, order=(last.order if last else 0) + 10)
+                last = hg.sources.order_by("-order").first()
+                src = HostSource.objects.create(group=hg, model=value, order=(last.order if last else 0) + 10)
         elif field == "copy_from":
             other = HostGroup.objects.filter(pk=int(value) if value.isdigit() else 0, group_model=hg.group_model).first()
             if other is None:
@@ -182,26 +195,34 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                 if value not in models_ok:
                     err = t("hosts.err_object")
                 elif value != src.model:  # fields belong to the old object type
-                    src.model, src.conditions, src.mac_fields, src.ip_field, src.host_name_field = value, [], [], "", "name"
+                    src.model, src.conditions, src.hosts, src.host_name_field = value, [], [], "name"
             elif field == "host_name_field":
                 if value not in keys:
                     err = t("hosts.err_field")
                 else:
                     src.host_name_field = value
-            elif field == "ip_field":
-                if value and value not in keys:
+            elif field == "row_add":
+                rows = list(src.hosts or [])
+                mac, ip = request.POST.get("mac", ""), request.POST.get("ip", "")
+                used = {r.get("mac") for r in rows} | {r.get("ip") for r in rows if r.get("ip")}
+                if len(rows) >= MAX_HOSTS:
+                    err = t("hosts.err_max_rows", n=MAX_HOSTS)
+                elif mac not in keys or (ip and ip not in keys) or mac == ip:
                     err = t("hosts.err_field")
+                elif mac in used or (ip and ip in used):
+                    err = t("hosts.err_used")
                 else:
-                    src.ip_field = value
-            elif field == "mac_fields":
-                picked = [k for k in request.POST.getlist("value") if k]
-                if len(picked) > MAX_MAC_FIELDS:
-                    err = t("hosts.err_max_macs", n=MAX_MAC_FIELDS)
-                elif any(k not in keys for k in picked):
-                    err = t("hosts.err_field")
-                else:  # keep the order in which the fields were ticked
-                    old = [k for k in src.mac_fields or [] if k in picked]
-                    src.mac_fields = old + [k for k in picked if k not in old]
+                    rows.append({"mac": mac, "ip": ip, "dyn": bool(ip) and request.POST.get("dyn") == "1"})
+                    src.hosts = rows
+            elif field in ("row_del", "row_dyn"):
+                rows = list(src.hosts or [])
+                i = request.POST.get("row", "")
+                if i.isdigit() and int(i) < len(rows):
+                    if field == "row_del":
+                        rows.pop(int(i))
+                    elif rows[int(i)].get("ip"):
+                        rows[int(i)] = dict(rows[int(i)], dyn=not rows[int(i)].get("dyn"))
+                    src.hosts = rows
             elif field.startswith("cond_"):
                 model = get_model(src.model)
                 conds = list(src.conditions or [])

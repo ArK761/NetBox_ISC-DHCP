@@ -1,10 +1,10 @@
 """Hosts: read groups (DHCP classes) and MAC/IP objects from any NetBox object type."""
 from django.db import models
 
-from ..dhcp_tables import _SAFE_NAME, Tenant, natural_key, normalize_ip, normalize_mac
+from ..dhcp_tables import _SAFE_NAME, natural_key, normalize_ip, normalize_mac
 from ..source_fields import _custom_field, build_q, distinct_values, field_options, get_model, is_active, label_for
 
-MAX_MAC_FIELDS = 3
+MAX_HOSTS = 3
 
 
 def _scalar(obj):
@@ -108,7 +108,7 @@ def related_count(group_obj):
 
 
 def source_info(src, open_row=None) -> dict:
-    """One source for the page: object, conditions, what is still missing."""
+    """One source for the page: object, conditions, host rows, what is still missing."""
     mm = get_model(src.model)
     keys = {o["key"] for o in field_options(mm)}
     conds = [c for c in src.conditions or [] if c.get("field")]
@@ -118,93 +118,113 @@ def source_info(src, open_row=None) -> dict:
     else:
         if not any(is_active(c) for c in conds):
             need.append("cond")
-        if not [k for k in src.mac_fields or [] if k in keys]:
+        if not host_rows(src, keys):
             need.append("mac")
-        if src.kind == "static" and src.ip_field not in keys:
-            need.append("ip")
     return {"src": src, "model": mm, "need": need, "conditions": condition_rows(mm, conds, open_row) if mm else []}
 
 
-def prepare_hosts(raw, static):
-    """raw: (name, [mac values], ip). Duplicate MAC / IP are only warnings (dhcpd accepts them);
-    left out: invalid MAC / IP / name and, in the static file, a second host block with the same name."""
-    hosts, warnings, mac_owners, ip_owners, blocks = [], [], {}, {}, set()
-    for name, mac_values, ip_value in sorted(raw, key=lambda r: natural_key(r[0])):
-        macs = []
-        for v in mac_values:
-            if v in (None, ""):
-                continue
-            m = normalize_mac(v)
-            if m is None:
-                warnings.append(f"{name}: invalid MAC '{v}' skipped")
-            elif m not in macs:
-                macs.append(m)
-        if not macs:
-            continue
-        if not _SAFE_NAME.match(name):
-            warnings.append(f"{name}: tenant name has characters not allowed in DHCP host names, skipped")
-            continue
-        ip = None
-        if static:
-            ip = normalize_ip(ip_value)
-            if ip is None:
-                warnings.append(f"{name}: invalid IP '{ip_value}', tenant skipped")
-                continue
-            names = [name] if len(macs) == 1 else [f"{name}_{i}" for i in range(1, len(macs) + 1)]
-            if blocks & set(names):
-                warnings.append(f"{name}: host name already used in this file, skipped")
-                continue
-            blocks.update(names)
-            ip_owners.setdefault(ip, []).append(name)
-        for m in macs:
-            mac_owners.setdefault(m, []).append(name)
-        hosts.append(Tenant(name, tuple(macs), ip))
-    for m, owners in mac_owners.items():
-        if len(owners) > 1:
-            warnings.append(f"duplicate MAC {m}: {', '.join(owners)}")
-    for i, owners in ip_owners.items():
-        if len(owners) > 1:
-            warnings.append(f"duplicate IP {i}: {', '.join(owners)}")
-    return hosts, warnings
+def host_rows(src, keys) -> list[dict]:
+    """Usable host rows of a source: MAC field exists; IP field exists or is empty."""
+    out = []
+    for r in (src.hosts or [])[:MAX_HOSTS]:
+        if r.get("mac") in keys and (not r.get("ip") or r["ip"] in keys):
+            out.append({"mac": r["mac"], "ip": r.get("ip") or "", "dyn": bool(r.get("dyn"))})
+    return out
+
+
+def _empty(v):
+    return v in (None, "")
 
 
 def build_group(hg) -> dict:
-    """Both files of a group from all their sources: hosts, warnings, counts."""
-    out = {"objects": 0, "warnings": [], "has_sources": False}
-    macs_of = {}
-    for kind in ("dynamic", "static"):
-        raw, objects, no_ip, with_ip, configured = [], 0, 0, 0, 0
-        for src in hg.sources.filter(kind=kind):
-            out["has_sources"] = True
-            info = source_info(src)
-            if info["need"]:
+    """Both files of a group from all its sources.
+    dynamic rows: (host, mac, object name); static rows: (host, mac, ip, object name);
+    lost: hosts that do not get into DHCP (host, reason, value); warnings: duplicate MAC / IP (never a reason to leave out)."""
+    dyn, sta, lost = [], [], []
+    objects, configured = 0, 0
+    for src in hg.sources.all():
+        info = source_info(src)
+        if info["need"]:
+            continue
+        configured += 1
+        mm, keys = info["model"], {o["key"] for o in field_options(info["model"])}
+        rows = host_rows(src, keys)
+        hname = src.host_name_field if src.host_name_field in keys else ""
+        active = [c for c in src.conditions if c.get("field") and is_active(c)]
+        for o in mm.objects.filter(build_q(mm, active)):
+            objects += 1
+            base = name_of(o, hname)
+            if not _SAFE_NAME.match(base):
+                lost.append((base, "bad_name", ""))
                 continue
-            configured += 1
-            mm, keys = info["model"], {o["key"] for o in field_options(info["model"])}
-            macs = [k for k in src.mac_fields if k in keys]
-            hname = src.host_name_field if src.host_name_field in keys else ""
-            active = [c for c in src.conditions if c.get("field") and is_active(c)]
-            ipf = src.ip_field if src.ip_field in keys else ""
-            for o in mm.objects.filter(build_q(mm, active)):
-                objects += 1
-                ip = read_value(o, ipf) if ipf else None
-                if kind == "static" and ip in (None, ""):
-                    no_ip += 1
+            any_mac, own = False, []
+            for idx, r in enumerate(rows, 1):
+                host = base if len(rows) == 1 else f"{base}_{idx}"
+                mv = read_value(o, r["mac"])
+                ipv = read_value(o, r["ip"]) if r["ip"] else None
+                if _empty(mv):
+                    if r["ip"] and not _empty(ipv):  # IP without its MAC
+                        own.append((host, "no_mac", ""))
                     continue
-                if kind == "dynamic" and ip not in (None, ""):  # has a static IP: belongs to the static file
-                    with_ip += 1
+                any_mac = True
+                m = normalize_mac(mv)
+                if m is None:
+                    own.append((host, "bad_mac", str(mv)))
                     continue
-                ip = ip if kind == "static" else None
-                raw.append((name_of(o, hname), [read_value(o, k) for k in macs], ip))
-        hosts, warn = prepare_hosts(raw, kind == "static")
-        macs_of[kind] = {m: t.name for t in hosts for m in t.macs}
-        out[kind] = {"hosts": hosts, "macs": sum(len(t.macs) for t in hosts), "objects": objects, "no_ip": no_ip, "with_ip": with_ip,
-                     "skipped": objects - no_ip - with_ip - len(hosts), "configured": configured}
-        out["objects"] += objects
-        out["warnings"] += [f"{hg.file_name(kind)}: {w}" for w in warn]
-    out["skipped"] = out["dynamic"]["skipped"] + out["static"]["skipped"]
-    out["source_labels"] = sorted({str(get_model(x.model)._meta.verbose_name).capitalize() for x in hg.sources.all() if get_model(x.model)})
-    out["source_count"] = hg.sources.count()
-    for m in sorted(set(macs_of["dynamic"]) & set(macs_of["static"])):
-        out["warnings"].append(f"duplicate MAC {m} in both files: {macs_of['dynamic'][m]}, {macs_of['static'][m]}")
-    return out
+                if not r["ip"]:
+                    dyn.append((host, m, base))
+                    continue
+                ip = None if _empty(ipv) else normalize_ip(ipv)
+                if ip is None:
+                    if r["dyn"]:  # still gets an address from the class
+                        dyn.append((host, m, base))
+                    else:
+                        own.append((host, "no_ip" if _empty(ipv) else "bad_ip", "" if _empty(ipv) else str(ipv)))
+                    continue
+                sta.append((host, m, ip, base))
+                if r["dyn"]:
+                    dyn.append((host, m, base))
+            if not any_mac and not own:
+                own.append((base, "no_mac", ""))
+            lost += own
+    dyn.sort(key=lambda r: natural_key(r[0]))
+    sta.sort(key=lambda r: natural_key(r[0]))
+    static, seen = [], set()
+    for r in sta:  # dhcpd refuses two host blocks with the same name
+        if r[0] in seen:
+            lost.append((r[0], "dup_name", ""))
+            continue
+        seen.add(r[0])
+        static.append(r)
+    warnings = []
+    for kind, rows in (("dynamic", dyn), ("static", static)):
+        owners = {}
+        for r in rows:
+            owners.setdefault(r[1], []).append(r[0])
+        for m, names in owners.items():
+            if len(set(names)) > 1:
+                warnings.append(f"{hg.file_name(kind)}: duplicate MAC {m}: {', '.join(names)}")
+    ips = {}
+    for r in static:
+        ips.setdefault(r[2], []).append(r[0])
+    for i, names in ips.items():
+        if len(names) > 1:
+            warnings.append(f"{hg.file_name('static')}: duplicate IP {i}: {', '.join(names)}")
+    dobj, sobj = {}, {}
+    for r in dyn:
+        dobj.setdefault(r[1], set()).add(r[2])
+    for r in static:
+        sobj.setdefault(r[1], set()).add(r[3])
+    for m in sorted(set(dobj) & set(sobj)):
+        if dobj[m] != sobj[m]:  # the same MAC of different objects (own MAC in both files is wanted)
+            warnings.append(f"duplicate MAC {m} in both files: {', '.join(sorted(dobj[m] | sobj[m], key=natural_key))}")
+    lost.sort(key=lambda r: natural_key(r[0]))
+    counts = {}
+    for _, reason, _ in lost:
+        counts[reason] = counts.get(reason, 0) + 1
+    srcs = list(hg.sources.all())
+    return {"objects": objects, "configured": configured, "has_sources": bool(srcs),
+            "dynamic": {"rows": dyn, "macs": len(dyn)}, "static": {"rows": static, "macs": len(static)},
+            "lost": lost, "lost_counts": counts, "skipped": len(lost), "warnings": warnings,
+            "source_labels": sorted({str(get_model(x.model)._meta.verbose_name).capitalize() for x in srcs if get_model(x.model)}),
+            "source_count": len(srcs)}
