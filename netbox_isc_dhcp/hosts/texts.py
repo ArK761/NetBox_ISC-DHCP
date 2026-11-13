@@ -36,6 +36,7 @@ TR = {
     "hosts.need_ip": ("pole s IP", "IP field"),
     "hosts.err_suffix": ("Prípona smie mať len písmená, číslice a _ . -", "The suffix may only contain letters, digits and _ . -"),
     "hosts.source": ("Zdroj", "Source"),
+    "hosts.collapse": ("zbaliť", "collapse"),
     "hosts.sources": ("zdrojov", "sources"),
     "hosts.conditions_src": ("Podmienky – ktoré objekty", "Conditions – which objects"),
     "hosts.no_cond_src": ("Pridajte podmienku – bez nej sa nevyberie žiadny objekt (na všetky použite Vybrať všetky).", "Add a condition – without one no object is chosen (use Select all for all)."),

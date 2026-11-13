@@ -17,10 +17,10 @@
     {% for c in s.conditions %}
       <li class="list-group-item isc-cond" id="s{{ s.src.pk }}c{{ c.index }}" data-field="{{ c.field }}">
         <div class="d-flex justify-content-between align-items-start gap-2">
-          <div class="flex-grow-1"><a href="{% if c.open %}?#s{{ s.src.pk }}{% else %}?src={{ s.src.pk }}&edit={{ c.index }}#s{{ s.src.pk }}c{{ c.index }}{% endif %}" class="d-flex align-items-center gap-3 text-reset text-decoration-none isc-cond-toggle" title="{% tr 'lbl.click_edit' %}">
+          <div class="flex-grow-1"><a href="{% if c.open %}?#s{{ s.src.pk }}{% else %}?src={{ s.src.pk }}&edit={{ c.index }}#s{{ s.src.pk }}c{{ c.index }}{% endif %}" class="d-flex align-items-center gap-3 text-reset text-decoration-none isc-cond-toggle{% if c.open %} isc-open{% endif %}"{% if not c.open %} title="{% tr 'lbl.click_edit' %}"{% endif %}>
               <i class="mdi {% if c.open %}mdi-chevron-up{% else %}mdi-chevron-down{% endif %} text-muted"></i>
               <strong class="d-inline-block" style="min-width:11rem">{{ c.label }}</strong>
-              {% if c.ticked %}<span class="badge {% if c.mode == 'exclude' %}text-bg-danger{% else %}text-bg-success{% endif %}">{% if c.mode == 'exclude' %}<i class="mdi mdi-cancel"></i> {% tr "hosts.exclude_short" %}{% else %}<i class="mdi mdi-check"></i> {% tr "hosts.accept_short" %}{% endif %}</span>
+              {% if c.open %}<span class="small text-muted">{% tr "hosts.collapse" %}</span>{% elif c.ticked %}<span class="badge {% if c.mode == 'exclude' %}text-bg-danger{% else %}text-bg-success{% endif %}">{% if c.mode == 'exclude' %}<i class="mdi mdi-cancel"></i> {% tr "hosts.exclude_short" %}{% else %}<i class="mdi mdi-check"></i> {% tr "hosts.accept_short" %}{% endif %}</span>
               <code class="isc-cond-sum">{{ c.summary }}</code>{% else %}<span class="text-muted fst-italic">{% tr "hosts.nothing_ticked" %}</span>{% endif %}</a>
             {% if c.open %}<form method="post" action="{{ inline_url }}" class="mt-2">{% csrf_token %}<input type="hidden" name="row" value="{{ c.index }}"><input type="hidden" name="src" value="{{ s.src.pk }}">
               <div class="d-flex flex-wrap gap-3 align-items-center">
