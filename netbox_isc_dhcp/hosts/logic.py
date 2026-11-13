@@ -175,10 +175,13 @@ def build_group(hg) -> dict:
                     dyn.append((host, m, base))
                     continue
                 ip = None if _empty(ipv) else normalize_ip(ipv)
-                if ip is None:  # no (valid) IP -> cannot be static, goes to the dynamic class
-                    dyn.append((host, m, base))
-                    if not _empty(ipv):
-                        bad_ip.append(f"{host}: invalid IP '{ipv}', host only in the dynamic file")
+                if ip is None:  # no (valid) IP: cannot be static; only "also into class" puts it into the dynamic file
+                    if r["dyn"]:
+                        dyn.append((host, m, base))
+                        if not _empty(ipv):
+                            bad_ip.append(f"{host}: invalid IP '{ipv}', host only in the dynamic file")
+                    else:
+                        own.append((host, "no_ip" if _empty(ipv) else "bad_ip", "" if _empty(ipv) else str(ipv)))
                     continue
                 sta.append((host, m, ip, base))
                 if r["dyn"]:

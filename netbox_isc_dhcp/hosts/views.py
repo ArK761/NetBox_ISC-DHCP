@@ -126,6 +126,9 @@ class HostGroupView(LoginRequiredMixin, View):
                              "dyn": bool(r.get("dyn")), "ok": ok, "target": target, "target_text": t("hosts.to_" + target)})
             used = {r.get("mac") for r in src.hosts or []} | {r.get("ip") for r in src.hosts or [] if r.get("ip")}
             info.update({"label": source_label(src.model), "opts": opts, "free": [o for o in opts if o["key"] not in used],
+                         "mac_opts": [(o["key"], o["label"] + (f" ({t('hosts.used_row', n=n)})" if n else "")) for o in opts
+                                      for n in [next((i for i, r in enumerate(src.hosts or [], 1) if r.get("mac") == o["key"]), 0)]
+                                      if o["key"] not in {r.get("ip") for r in src.hosts or []}],
                          "need_texts": _need_texts(info["need"]), "rows": rows, "can_add": len(src.hosts or []) < MAX_HOSTS,
                          "host_name_label": labels.get(src.host_name_field, ""), "used_fields": [c["field"] for c in info["conditions"]],
                          "names_hint": t("hosts.names_hint1") if len(rows) <= 1 else t("hosts.names_hintn", n=len(rows))})
@@ -204,12 +207,17 @@ class HostGroupInlineView(LoginRequiredMixin, View):
             elif field == "row_add":
                 rows = list(src.hosts or [])
                 mac, ip = request.POST.get("mac", ""), request.POST.get("ip", "")
-                used = {r.get("mac") for r in rows} | {r.get("ip") for r in rows if r.get("ip")}
+                labels = {o["key"]: o["label"] for o in field_options(get_model(src.model))}
+                same = next((n for n, r in enumerate(rows, 1) if r.get("mac") == mac), None)
                 if len(rows) >= MAX_HOSTS:
                     err = t("hosts.err_max_rows", n=MAX_HOSTS)
                 elif mac not in keys or (ip and ip not in keys) or mac == ip:
                     err = t("hosts.err_field")
-                elif mac in used or (ip and ip in used):
+                elif same is not None:  # the same MAC field twice = duplicate hosts
+                    r = rows[same - 1]
+                    kind = "dyn_used" if not r.get("ip") else "both_used" if r.get("dyn") else "static_used"
+                    err = t("hosts.err_" + kind, field=labels.get(mac, mac), n=same)
+                elif ip and ip in {r.get("ip") for r in rows} | {r.get("mac") for r in rows}:
                     err = t("hosts.err_used")
                 else:
                     rows.append({"mac": mac, "ip": ip, "dyn": bool(ip) and request.POST.get("dyn") == "1"})

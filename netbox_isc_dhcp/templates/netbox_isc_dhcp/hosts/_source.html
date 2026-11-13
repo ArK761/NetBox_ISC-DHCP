@@ -65,15 +65,15 @@
           <td><i class="mdi mdi-ethernet opacity-50"></i> <strong>{{ r.mac }}</strong></td>
           <td>{% if r.ip %}<i class="mdi mdi-ip-network-outline opacity-50"></i> <strong>{{ r.ip }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}</td>
           <td>{% if r.ip %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="row_dyn"><input type="hidden" name="src" value="{{ s.src.pk }}"><input type="hidden" name="row" value="{{ r.index }}">
-              <button class="btn btn-link p-0 border-0 isc-dyn" title="{% tr 'hosts.dyn_toggle' %}"><i class="mdi {% if r.dyn %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-3"></i></button></form>{% else %}<span class="isc-dyn-lock" title="{% tr 'hosts.dyn_lock' %}"><i class="mdi mdi-toggle-switch text-success fs-3 opacity-50"></i><i class="mdi mdi-lock-outline small opacity-50"></i></span>{% endif %}</td>
+              <button class="btn btn-link p-0 border-0 isc-dyn" title="{% tr 'hosts.dyn_toggle' %}"><i class="mdi {% if r.dyn %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-3"></i></button></form>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
           <td><span class="isc-target isc-t-{{ r.target }}">{{ r.target_text }}</span></td>
           <td class="text-end"><form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="row_del"><input type="hidden" name="src" value="{{ s.src.pk }}"><input type="hidden" name="row" value="{{ r.index }}">
               <button class="btn btn-sm btn-outline-danger isc-row-del" title="{% tr 'hosts.delete' %}"><i class="mdi mdi-trash-can-outline"></i></button></form></td></tr>{% endfor %}</table>
       {% else %}<div class="text-warning small mb-2"><i class="mdi mdi-alert-outline"></i> {% tr "hosts.no_rows" %}</div>{% endif %}
       {% if s.can_add %}<form method="post" action="{{ inline_url }}" class="d-flex flex-wrap gap-2 align-items-center isc-row-add">{% csrf_token %}<input type="hidden" name="field" value="row_add"><input type="hidden" name="src" value="{{ s.src.pk }}">
-        <select name="mac" class="form-select form-select-sm" style="max-width:15rem" required><option value="">{% tr "hosts.col_mac_field" %}…</option>{% for o in s.free %}<option value="{{ o.key }}">{{ o.label }}</option>{% endfor %}</select>
-        <select name="ip" class="form-select form-select-sm" style="max-width:15rem"><option value="">{% tr "hosts.ip_none" %}</option>{% for o in s.free %}<option value="{{ o.key }}">{{ o.label }}</option>{% endfor %}</select>
-        <label class="small text-nowrap"><input type="checkbox" name="dyn" value="1"> {% tr "hosts.dyn_add" %}</label>
+        <select name="mac" class="form-select form-select-sm" style="max-width:15rem" required><option value="">{% tr "hosts.col_mac_field" %}…</option>{% for k, l in s.mac_opts %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select>
+        <select name="ip" class="form-select form-select-sm" style="max-width:15rem" onchange="this.form.querySelector('.isc-dyn-add').style.display=this.value?'':'none'"><option value="">{% tr "hosts.ip_none" %}</option>{% for o in s.free %}<option value="{{ o.key }}">{{ o.label }}</option>{% endfor %}</select>
+        <label class="small text-nowrap isc-dyn-add" style="display:none"><input type="checkbox" name="dyn" value="1"> {% tr "hosts.dyn_add" %}</label>
         <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus"></i> {% tr "hosts.add_row" %}</button></form>{% endif %}
     </div></div>
   </div>
