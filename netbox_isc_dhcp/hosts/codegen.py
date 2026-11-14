@@ -1,10 +1,15 @@
 """Content of the group files: Jinja code (shared for all groups) rendered with the hosts of one group."""
 from types import SimpleNamespace
 
-from ..dhcp_tables import default_table_template
 from ..renderer import RenderError, render
 
-DEFAULT_DYNAMIC = default_table_template()  # owner's class format (golden-tested)
+DEFAULT_DYNAMIC = '''class "{{ class_name }}" {
+       match hardware;
+                         }
+{% for p in pairs %}
+subclass "{{ class_name }}" 1:{{ p.mac }}; ## {{ p.host }} ##
+{% endfor %}
+'''
 
 DEFAULT_STATIC = '''{% for h in hosts %}
 host {{ h.host }} {

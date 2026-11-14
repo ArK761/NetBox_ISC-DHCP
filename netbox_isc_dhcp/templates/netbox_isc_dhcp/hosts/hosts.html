@@ -63,6 +63,36 @@
     </table></div>
   </div>
 
+
+  {# ---- code templates ---- #}
+  {% url 'plugins:netbox_isc_dhcp:hosts_inline' as tpl_url %}
+  <div class="card mb-3" id="isc-tpls">
+    <h5 class="card-header d-flex align-items-center"><span class="isc-step">4</span><i class="mdi mdi-code-braces me-2"></i>{% tr "hosts.tpl_card" %}</h5>
+    <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "hosts.tpl_hint" %}</div>
+    <div class="isc-card-hint pt-0"><i class="mdi mdi-information-outline"></i> {% tr "hosts.tpl_names_hint" %}</div>
+    {% for x in tpls %}
+    <details class="isc-file isc-code px-3 py-2 isc-tpl" id="t{{ x.t.pk }}" data-kind="{{ x.t.kind }}"{% if x.draft %} open{% endif %}>
+      <summary class="d-flex align-items-center gap-2 py-1"><i class="mdi {% if x.t.kind == 'dynamic' %}mdi-file-outline{% else %}mdi-file-lock-outline{% endif %} fs-5 opacity-75"></i>
+        <span class="badge {% if x.t.kind == 'dynamic' %}isc-t-dynamic{% else %}isc-t-static{% endif %} isc-target">{{ x.t.get_kind_display }}</span>
+        <strong>{{ x.t.name }}</strong> <span class="small text-muted">{{ x.used_text }}</span>
+        {% if x.draft %}<span class="badge text-bg-danger">{% tr "hosts.code_draft" %}</span>{% endif %}
+        <span class="small text-muted ms-2">{% tr "lbl.click_edit" %}</span> <span class="small text-warning"><i class="mdi mdi-alert"></i> {% tr "hosts.code_expert" %}</span></summary>
+      <div class="alert alert-warning d-block py-2 my-2 small"><i class="mdi mdi-alert"></i> <strong>{% tr "hosts.code_warn_title" %}</strong> {% tr "hosts.code_warn" %}</div>
+      <form method="post" action="{{ tpl_url }}">{% csrf_token %}<input type="hidden" name="tpl" value="{{ x.t.pk }}">
+        <input name="name" value="{{ x.t.name }}" class="form-control form-control-sm mb-2" style="max-width:24rem" required>
+        <div class="isc-hint mb-2">{% tr "hosts.code_vars" %}: <code>{{ x.vars }}</code></div>
+        <div class="isc-ed-wrap"><textarea name="code" rows="14" class="form-control font-monospace code-editor" spellcheck="false" wrap="off">{{ x.code }}</textarea></div>
+        <div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-primary isc-tpl-save" name="field" value="tpl_save">{% tr "lbl.save" %}</button>
+          <button class="btn btn-sm btn-outline-danger ms-auto isc-tpl-del" name="field" value="tpl_del" formnovalidate><i class="mdi mdi-trash-can-outline"></i> {% tr "hosts.delete" %}</button></div>
+      </form>
+    </details>
+    {% endfor %}
+    <form method="post" action="{{ tpl_url }}" class="d-flex flex-wrap gap-2 p-3 border-top" id="isc-tpl-add">{% csrf_token %}<input type="hidden" name="field" value="tpl_add">
+      <input name="value" class="form-control form-control-sm" style="max-width:20rem" placeholder="{% tr 'hosts.tpl_name' %}" required>
+      <select name="kind" class="form-select form-select-sm" style="max-width:10rem"><option value="dynamic">Dynamic</option><option value="static">Static</option></select>
+      <button class="btn btn-sm btn-primary"><i class="mdi mdi-plus"></i> {% tr "hosts.tpl_add" %}</button></form>
+  </div>
+  {% include "netbox_isc_dhcp/_code_editor.html" %}
   {% endif %}
 </div></div>
 {% endblock %}

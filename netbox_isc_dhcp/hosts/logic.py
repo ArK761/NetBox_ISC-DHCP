@@ -2,7 +2,24 @@
 from django.db import models
 
 from ..dhcp_tables import _SAFE_NAME, natural_key, normalize_ip, normalize_mac
-from ..source_fields import _custom_field, build_q, distinct_values, field_options, get_model, is_active, label_for
+from django.utils import translation
+
+from .. import source_fields as _sf
+from ..source_fields import _custom_field, build_q, distinct_values, get_model, is_active
+
+
+def _english(fn):
+    """NetBox has no Slovak (a browser in Czech shows Czech names): object and field names of NetBox are shown in English."""
+    def wrapper(*a, **kw):
+        with translation.override("en"):
+            return fn(*a, **kw)
+    return wrapper
+
+
+en_field_options = field_options = _english(_sf.field_options)
+en_source_label = _english(_sf.source_label)
+en_source_models = _english(_sf.source_models)
+label_for = _english(_sf.label_for)
 
 MAX_HOSTS = 3
 
@@ -78,7 +95,10 @@ def groups_overview(cfg, open_row=None) -> dict:
         name = name_of(g, gname)
         hg = existing.get(g.pk)
         if hg is None:
-            hg = HostGroup.objects.create(group_model=cfg.group_model, group_pk=g.pk, name=name[:200])
+            from .models import HostCodeTemplate
+            hg = HostGroup.objects.create(group_model=cfg.group_model, group_pk=g.pk, name=name[:200],
+                                          dynamic_template=HostCodeTemplate.objects.filter(kind="dynamic").first(),
+                                          static_template=HostCodeTemplate.objects.filter(kind="static").first())
         elif hg.name != name[:200]:
             hg.name = name[:200]
             hg.save(update_fields=["name"])

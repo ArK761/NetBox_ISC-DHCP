@@ -30,6 +30,27 @@ class HostConfig(models.Model):
         return not (self.dynamic_code if kind == "dynamic" else self.static_code)
 
 
+class HostCodeTemplate(models.Model):
+    """Library of file codes (Hosts page); a group picks one per file and may edit it locally."""
+
+    KINDS = (("dynamic", "Dynamic"), ("static", "Static"))
+
+    name = models.CharField(max_length=100)
+    kind = models.CharField(max_length=10, choices=KINDS)
+    code = models.TextField(blank=True, default="")
+
+    class Meta:
+        app_label = "netbox_isc_dhcp"
+        ordering = ("kind", "name")
+        verbose_name = "code template"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_isc_dhcp:hosts") + f"#t{self.pk}"
+
+
 class HostGroup(models.Model):
     """One group (e.g. tenant group WorkStation) = two files: <name><dynamic_suffix> and <name><static_suffix>,
     each built from its own sources (HostSource)."""
@@ -40,6 +61,8 @@ class HostGroup(models.Model):
     enabled = models.BooleanField(default=True, help_text="Off: both files are still made, but without MAC addresses (base content only).")
     dynamic_suffix = models.CharField(max_length=50, default="_Dynamic", help_text="File name = group name + this suffix (hosts without IP).")
     static_suffix = models.CharField(max_length=50, default="_Static", help_text="File name = group name + this suffix (hosts with static IP).")
+    dynamic_template = models.ForeignKey(HostCodeTemplate, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    static_template = models.ForeignKey(HostCodeTemplate, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     dynamic_code = models.TextField(blank=True, default="", help_text="Jinja code of the _Dynamic file of this group (empty = default).")
     static_code = models.TextField(blank=True, default="", help_text="Jinja code of the _Static file of this group (empty = default).")
 
@@ -54,12 +77,23 @@ class HostGroup(models.Model):
     def get_absolute_url(self):
         return reverse("plugins:netbox_isc_dhcp:hosts_group", kwargs={"pk": self.pk})
 
-    def code(self, kind):
+    def template(self, kind):
+        return self.dynamic_template if kind == "dynamic" else self.static_template
+
+    def base_code(self, kind):
+        """Code of the chosen template (or the built-in default)."""
         from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC
+        tpl = self.template(kind)
+        if tpl is not None and tpl.code:
+            return tpl.code
+        return DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC
+
+    def code(self, kind):
         own = self.dynamic_code if kind == "dynamic" else self.static_code
-        return own or (DEFAULT_DYNAMIC if kind == "dynamic" else DEFAULT_STATIC)
+        return own or self.base_code(kind)
 
     def is_default(self, kind):
+        """No local change: the file uses its template as it is."""
         return not (self.dynamic_code if kind == "dynamic" else self.static_code)
 
     @property
@@ -96,10 +130,6 @@ class HostSource(models.Model):
 
     def get_absolute_url(self):
         return self.group.get_absolute_url()
-
-    def copy_fields(self):
-        return {"order": self.order, "model": self.model, "conditions": list(self.conditions or []),
-                "host_name_field": self.host_name_field, "hosts": [dict(h) for h in self.hosts or []]}
 
 
 def host_config() -> HostConfig:
