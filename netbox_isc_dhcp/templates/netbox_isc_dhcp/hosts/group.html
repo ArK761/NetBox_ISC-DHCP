@@ -50,6 +50,7 @@
             <input name="value" value="{{ f.suffix }}" class="form-control form-control-sm" style="max-width:12rem"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <span class="ms-auto small text-muted">{% if f.kind == 'dynamic' %}{% tr "hosts.dyn_hint" %}{% else %}{% tr "hosts.static_hint" %}{% endif %}</span>
       </div>
+      <div class="px-3 pt-2 small isc-inc" data-inc="{{ f.included|default:'' }}">{% if not f.path %}<span class="text-warning"><i class="mdi mdi-alert-outline"></i> {% tr "hosts.inc_nodir" %}</span>{% elif f.included == "plugin" %}<span class="text-success"><i class="mdi mdi-check-circle-outline"></i> {% tr "hosts.inc_plugin" %}</span> <code>include "{{ f.path }}";</code>{% elif f.included == "static" %}<span class="text-success"><i class="mdi mdi-check-circle-outline"></i> {% tr "hosts.inc_static" %}</span> <code>include "{{ f.path }}";</code>{% else %}<span class="text-danger"><i class="mdi mdi-close-circle-outline"></i> {% tr "hosts.inc_no" %}</span>{% endif %}</div>
       {% if f.kind == "dynamic" %}<div class="px-3 pt-2 isc-usage">{% for u in usage %}
         <details class="isc-box {% if u.used %}isc-box-ok{% else %}isc-box-warning{% endif %} mx-0 my-1" data-class="{{ u.name }}" data-used="{{ u.used|yesno:'1,0' }}"><summary>
           <i class="mdi {% if u.used %}mdi-check-circle-outline text-success{% else %}mdi-alert-outline text-warning{% endif %}"></i> <strong>{{ u.title }}</strong>{% if u.summary %} <span class="small ms-1">{{ u.summary }}</span>{% endif %}</summary>

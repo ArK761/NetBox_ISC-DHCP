@@ -60,3 +60,18 @@ def usage_of(names, refs) -> list[dict]:
                      "subnets": sum({(u["where"], u["name"]): u["subnets"] for u in live if u["where"] != "static"}.values()),
                      "in_static": any(u["where"] == "static" for u in uses)})
     return rows
+
+
+_INC = re.compile(r'^\s*include\s+"([^"]+)"\s*;', re.M)
+
+
+def included_paths() -> dict:
+    """{full path: "plugin" | "static"} of every include in dhcpd.conf (plugin include lines + static part)."""
+    from ..models import BaseConfig
+    from ..services import table_includes
+
+    out = {p: "plugin" for p in table_includes()[0]}
+    for b in BaseConfig.objects.all():
+        for p in _INC.findall(_strip_comments(b.static_text)):
+            out.setdefault(p, "static")
+    return out

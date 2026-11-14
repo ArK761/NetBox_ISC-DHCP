@@ -10,7 +10,7 @@ from ..models import DHCPPath, PluginSettings, settings_obj
 from ..source_fields import distinct_values, field_options, get_model, source_label, source_models
 from ..views import _editor_vars
 from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC, code_errors, render_files
-from .usage import defined_classes, references, usage_of
+from .usage import defined_classes, included_paths, references, usage_of
 from .logic import MAX_HOSTS, build_group, groups_overview, source_info
 from .models import HostGroup, HostSource, host_config
 
@@ -156,8 +156,9 @@ class HostGroupView(LoginRequiredMixin, View):
             sources.append(info)
         drafts = request.session.get(f"hosts_code_draft_{hg.pk}", {})
         rendered = render_files(hg, built, {k: hg.code(k) for k in ("dynamic", "static")})
-        files = []
+        files, incl = [], included_paths()
         for kind in ("dynamic", "static"):
+            full = f"{st.table_dir.path}/{hg.file_name(kind)}" if st and st.table_dir else ""
             b = built[kind]
             rows = [(r[0], r[1], r[2] if kind == "static" else "") for r in b["rows"]]
             files.append({"kind": kind, "name": hg.file_name(kind), "suffix": hg.dynamic_suffix if kind == "dynamic" else hg.static_suffix,
@@ -165,7 +166,8 @@ class HostGroupView(LoginRequiredMixin, View):
                           "count_text": t("hosts.hosts_count", n=len(rows)), "cfg_text": rendered[kind][0],
                           "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n"),
                           "code": drafts.get(kind, hg.code(kind)), "draft": kind in drafts, "default": hg.is_default(kind),
-                          "vars": t("hosts.code_vars_" + kind)})
+                          "vars": t("hosts.code_vars_" + kind), "path": full,
+                          "included": incl.get(full) if full else None})
         usage = _usage_rows(usage_of(defined_classes(rendered["dynamic"][0]), references()))
         lc = built["lost_counts"]
         lost_parts = [f"{lc[k]}× {t('hosts.lost_' + k)}" for k in LOST_REASONS if lc.get(k)]
