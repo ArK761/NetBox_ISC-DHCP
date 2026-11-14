@@ -32,6 +32,7 @@ def _usage_rows(rows):
         r["title"] = t("hosts.class_used", name=r["name"]) if r["used"] else t("hosts.class_unused", name=r["name"])
         r["summary"] = t("hosts.used_subnets", n=r["subnets"]) + (" · dhcpd.conf" if r["in_static"] else "") if r["used"] else ""
         for u in r["uses"]:
+            u["modes"] = sorted(u["mode"].split(" / "))
             u["label"] = {"pool": t("hosts.use_pool", name=u["name"], n=u["subnets"]), "override": t("hosts.use_override", name=u["name"]),
                           "static": t("hosts.use_static")}[u["where"]] + ("" if u["enabled"] else " – " + t("hosts.pool_off"))
     return rows
