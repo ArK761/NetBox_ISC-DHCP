@@ -7,12 +7,31 @@ from django.views import View
 
 from ..i18n import t, tmsg
 from ..models import DHCPPath, PluginSettings, settings_obj
-from ..source_fields import distinct_values, field_options, get_model, source_label, source_models
+from ..source_fields import distinct_values, field_options as _field_options, get_model, source_label, source_models
 from ..views import _editor_vars
 from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC, code_errors, render_files
 from .usage import defined_classes, included_paths, references, usage_of
 from .logic import MAX_HOSTS, build_group, groups_overview, source_info
 from .models import HostGroup, HostSource, host_config
+
+
+_CS_SK = (("Primární", "Primárna"), ("primární", "primárna"), ("Název", "Názov"), ("Nájemce", "Nájomca"), ("Zařízení", "Zariadenie"),
+          ("Skupina nájemců", "Skupina nájomcov"), ("Popis", "Popis"), ("Stav", "Stav"))
+
+
+def field_options(model):
+    """NetBox has no Slovak; its Czech field names are shown in Slovak when the plugin language is Slovak."""
+    from ..i18n import current_language
+    opts = _field_options(model)
+    if current_language() != "sk":
+        return opts
+    out = []
+    for o in opts:
+        label = o["label"]
+        for cs, sk in _CS_SK:
+            label = label.replace(cs, sk)
+        out.append(dict(o, label=label))
+    return out
 
 
 def _source_groups():
@@ -254,7 +273,7 @@ class HostGroupInlineView(LoginRequiredMixin, View):
             elif field == "row_add":
                 rows = list(src.hosts or [])
                 mac, ip = request.POST.get("mac", ""), request.POST.get("ip", "")
-                noip = ip[1:] if ip.startswith("!") else ""
+                noip = ip if ip and request.POST.get("noip") == "1" else ""
                 ip = "" if noip else ip
                 labels = {o["key"]: o["label"] for o in field_options(get_model(src.model))}
                 same = next((n for n, r in enumerate(rows, 1) if r.get("mac") == mac), None)
@@ -280,6 +299,26 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                     err = t("hosts.err_field")
                 else:
                     rows[int(i)] = dict(rows[int(i)], hn=value)
+                    src.hosts = rows
+            elif field == "row_noip":
+                rows = list(src.hosts or [])
+                i = request.POST.get("row", "")
+                if i.isdigit() and int(i) < len(rows):
+                    r = rows[int(i)]
+                    labels = {o["key"]: o["label"] for o in field_options(get_model(src.model))}
+                    others = [(n, x) for n, x in enumerate(rows, 1) if x is not r and x.get("mac") == r.get("mac")]
+                    if r.get("ip"):  # static -> only objects without IP (dynamic)
+                        clash = next((n for n, x in others if not x.get("ip") or x.get("dyn")), None)
+                        if clash:
+                            err = t("hosts.err_dyn_used", field=labels.get(r["mac"], r["mac"]), n=clash)
+                        else:
+                            rows[int(i)] = dict(r, noip=r["ip"], ip="", dyn=False)
+                    elif r.get("noip"):  # back to static
+                        clash = next((n for n, x in others if x.get("ip")), None)
+                        if clash:
+                            err = t("hosts.err_static_used", field=labels.get(r["mac"], r["mac"]), n=clash)
+                        else:
+                            rows[int(i)] = dict(r, ip=r["noip"], noip="")
                     src.hosts = rows
             elif field in ("row_del", "row_dyn"):
                 rows = list(src.hosts or [])
