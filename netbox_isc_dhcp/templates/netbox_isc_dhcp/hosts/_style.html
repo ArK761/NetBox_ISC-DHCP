@@ -47,4 +47,13 @@
   .isc-mode { display: inline-block; font-family: var(--tblr-font-monospace, monospace); font-size: .75rem; padding: .05rem .45rem; border-radius: .3rem; margin-left: .3rem; font-weight: 600; }
   .isc-mode-allow { background: rgba(250,204,21,.18); color: #facc15; }
   .isc-mode-deny { background: rgba(214,57,57,.2); color: #f87171; }
+  .isc-solo > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: .5rem; padding-left: 1.6rem; }
+  .isc-solo > summary::-webkit-details-marker { display: none; }
+  .isc-solo-arrow { transition: transform .15s; transform: rotate(-90deg); }
+  .isc-solo[open] .isc-solo-arrow { transform: none; }
+  .isc-solo-tree { list-style: none; margin: .35rem 0 0 2.15rem; padding: 0; }
+  .isc-solo-tree li { position: relative; padding: .2rem 0 .2rem 1.4rem; }
+  .isc-solo-tree li::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid rgba(128,128,128,.45); }
+  .isc-solo-tree li:last-child::before { bottom: 50%; }
+  .isc-solo-tree li::after { content: ""; position: absolute; left: 0; top: 50%; width: 1rem; border-top: 1px solid rgba(128,128,128,.45); }
 </style>

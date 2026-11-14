@@ -75,11 +75,8 @@
       <summary class="d-flex align-items-center gap-2 py-1"><i class="mdi {% if x.t.kind == 'dynamic' %}mdi-file-outline{% else %}mdi-file-lock-outline{% endif %} fs-5 opacity-75"></i>
         <span class="badge {% if x.t.kind == 'dynamic' %}isc-t-dynamic{% else %}isc-t-static{% endif %} isc-target">{{ x.t.get_kind_display }}</span>
         <strong>{{ x.t.name }}</strong> <span class="small text-muted">{{ x.used_text }}</span>
-        {% if x.solo %}<span class="badge text-bg-warning isc-tpl-solo">{{ x.solo_text }}</span>{% endif %}
         {% if x.draft %}<span class="badge text-bg-danger">{% tr "hosts.code_draft" %}</span>{% endif %}
         <span class="small text-muted ms-2">{% tr "lbl.click_edit" %}</span> <span class="small text-warning"><i class="mdi mdi-alert"></i> {% tr "hosts.code_expert" %}</span></summary>
-      {% if x.solo %}<div class="isc-box isc-box-warning small my-2">{% tr "hosts.tpl_solo_hint" %}
-        {% for g in x.solo %}<a href="{{ g.get_absolute_url }}" class="badge text-bg-warning text-decoration-none ms-1">{{ g.name }}</a>{% endfor %}</div>{% endif %}
       <div class="alert alert-warning d-block py-2 my-2 small"><i class="mdi mdi-alert"></i> <strong>{% tr "hosts.code_warn_title" %}</strong> {% tr "hosts.code_warn" %}</div>
       <form method="post" action="{{ tpl_url }}">{% csrf_token %}<input type="hidden" name="tpl" value="{{ x.t.pk }}">
         <input name="name" value="{{ x.t.name }}" class="form-control form-control-sm mb-2" style="max-width:24rem" required>
@@ -89,6 +86,12 @@
           <button class="btn btn-sm btn-outline-danger ms-auto isc-tpl-del" name="field" value="tpl_del" formnovalidate><i class="mdi mdi-trash-can-outline"></i> {% tr "hosts.delete" %}</button></div>
       </form>
     </details>
+    {% if x.solo %}<details class="isc-solo px-3 pb-2">
+      <summary><i class="mdi mdi-chevron-down isc-solo-arrow"></i><span class="badge text-bg-warning isc-tpl-solo">{{ x.solo_text }}</span>
+        <span class="small text-muted">{% tr "hosts.tpl_solo_hint" %}</span></summary>
+      <ul class="isc-solo-tree">{% for g in x.solo %}<li><a href="{{ g.get_absolute_url }}"><i class="mdi mdi-folder-outline"></i> {{ g.name }}</a>
+        <span class="small text-muted">→ {{ g.name }}{% if x.t.kind == 'dynamic' %}{{ g.dynamic_suffix }}{% else %}{{ g.static_suffix }}{% endif %}</span></li>{% endfor %}</ul>
+    </details>{% endif %}
     {% endfor %}
     <form method="post" action="{{ tpl_url }}" class="d-flex flex-wrap gap-2 p-3 border-top" id="isc-tpl-add">{% csrf_token %}<input type="hidden" name="field" value="tpl_add">
       <input name="value" class="form-control form-control-sm" style="max-width:20rem" placeholder="{% tr 'hosts.tpl_name' %}" required>
