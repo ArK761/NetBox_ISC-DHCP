@@ -152,6 +152,8 @@ TR = {
     "hosts.col_ip_field": ("Pole IP", "IP field"),
     "hosts.col_dyn": ("Aj do class", "Also into class"),
     "hosts.col_target": ("Kam ide", "Goes to"),
+    "hosts.noip_group": ("! = len objekty BEZ IP v poli (Dynamic)", "! = only objects WITHOUT IP in the field (Dynamic)"),
+    "hosts.noip_hint": ("Len objekty, ktoré v tomto poli nemajú hodnotu.", "Only objects without a value in this field."),
     "hosts.ip_none": ("— bez IP —", "— no IP —"),
     "hosts.add_row": ("Pridať hosta", "Add host"),
     "hosts.no_rows": ("Zatiaľ žiadny host – vyberte pole MAC (a IP).", "No host yet – pick a MAC field (and IP)."),

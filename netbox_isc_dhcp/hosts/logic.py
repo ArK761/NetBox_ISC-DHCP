@@ -130,6 +130,7 @@ def host_rows(src, keys) -> list[dict]:
         if r.get("mac") in keys and (not r.get("ip") or r["ip"] in keys):
             hn = r.get("hn") or "name"
             out.append({"mac": r["mac"], "ip": r.get("ip") or "", "dyn": bool(r.get("dyn")),
+                        "noip": r.get("noip") if not r.get("ip") and r.get("noip") in keys else "",
                         "hn": hn if hn in ("name", "host", "none") or hn in keys else "name"})
     return out
 
@@ -169,6 +170,8 @@ def build_group(hg) -> dict:
                         own.append((host, "no_mac", ""))
                     continue
                 any_mac = True
+                if r["noip"] and not _empty(read_value(o, r["noip"])):  # "! field": only objects WITHOUT a value there
+                    continue
                 m = normalize_mac(mv)
                 if m is None:
                     own.append((host, "bad_mac", str(mv)))

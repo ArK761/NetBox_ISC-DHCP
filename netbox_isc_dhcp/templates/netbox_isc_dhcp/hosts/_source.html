@@ -63,7 +63,7 @@
         {% for r in s.rows %}<tr class="isc-row{% if not r.ok %} text-danger{% endif %}" data-target="{{ r.target }}">
           <td><span class="isc-rn">{{ r.n }}</span></td>
           <td><i class="mdi mdi-ethernet opacity-50"></i> <strong>{{ r.mac }}</strong></td>
-          <td>{% if r.ip %}<i class="mdi mdi-ip-network-outline opacity-50"></i> <strong>{{ r.ip }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td>{% if r.ip %}<i class="mdi mdi-ip-network-outline opacity-50"></i> <strong>{{ r.ip }}</strong>{% elif r.noip %}<span class="isc-noip" title="{% tr 'hosts.noip_hint' %}"><strong class="text-danger">!</strong> {{ r.noip }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
           <td>{% if r.ip %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="row_dyn"><input type="hidden" name="src" value="{{ s.src.pk }}"><input type="hidden" name="row" value="{{ r.index }}">
               <button class="btn btn-link p-0 border-0 isc-dyn" title="{% tr 'hosts.dyn_toggle' %}"><i class="mdi {% if r.dyn %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-3"></i></button></form>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
           <td class="isc-hn">{% if r.ip %}<details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><span class="small">{{ r.hn_text }}</span> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
@@ -77,7 +77,8 @@
       {% else %}<div class="text-warning small mb-2"><i class="mdi mdi-alert-outline"></i> {% tr "hosts.no_rows" %}</div>{% endif %}
       {% if s.can_add %}<form method="post" action="{{ inline_url }}" class="d-flex flex-wrap gap-2 align-items-center isc-row-add">{% csrf_token %}<input type="hidden" name="field" value="row_add"><input type="hidden" name="src" value="{{ s.src.pk }}">
         <select name="mac" class="form-select form-select-sm" style="max-width:15rem" required><option value="">{% tr "hosts.col_mac_field" %}…</option>{% for k, l in s.mac_opts %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select>
-        <select name="ip" class="form-select form-select-sm" style="max-width:15rem" onchange="this.form.querySelector('.isc-dyn-add').style.display=this.value?'':'none'"><option value="">{% tr "hosts.ip_none" %}</option>{% for o in s.free %}<option value="{{ o.key }}">{{ o.label }}</option>{% endfor %}</select>
+        <select name="ip" class="form-select form-select-sm" style="max-width:15rem" onchange="this.form.querySelector('.isc-dyn-add').style.display=(this.value&&this.value[0]!='!')?'':'none'"><option value="">{% tr "hosts.ip_none" %}</option>{% for o in s.free %}<option value="{{ o.key }}">{{ o.label }}</option>{% endfor %}
+          <optgroup label="{% tr 'hosts.noip_group' %}">{% for o in s.opts %}<option value="!{{ o.key }}">! {{ o.label }}</option>{% endfor %}</optgroup></select>
         <label class="small text-nowrap isc-dyn-add" style="display:none"><input type="checkbox" name="dyn" value="1"> {% tr "hosts.dyn_add" %}</label>
         <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus"></i> {% tr "hosts.add_row" %}</button></form>{% endif %}
     </div></div>

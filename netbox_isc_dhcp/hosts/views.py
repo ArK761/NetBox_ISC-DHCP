@@ -142,7 +142,7 @@ class HostGroupView(LoginRequiredMixin, View):
             for i, r in enumerate(src.hosts or [], 1):
                 ok = r.get("mac") in labels and (not r.get("ip") or r["ip"] in labels)
                 target = "static_dyn" if r.get("ip") and r.get("dyn") else "static" if r.get("ip") else "dynamic"
-                rows.append({"index": i - 1, "n": i, "mac": labels.get(r.get("mac"), r.get("mac")), "ip": labels.get(r.get("ip"), r.get("ip")) if r.get("ip") else "",
+                rows.append({"index": i - 1, "n": i, "mac": labels.get(r.get("mac"), r.get("mac")), "ip": labels.get(r.get("ip"), r.get("ip")) if r.get("ip") else "", "noip": labels.get(r.get("noip"), r.get("noip")) if r.get("noip") else "",
                              "dyn": bool(r.get("dyn")), "ok": ok, "target": target, "target_text": t("hosts.to_" + target),
                              "hn": r.get("hn") or "name", "hn_text": {"name": t("hosts.hn_name"), "host": t("hosts.hn_host"), "none": t("hosts.hn_none")}.get(r.get("hn") or "name", labels.get(r.get("hn"), r.get("hn")))})
             used = {r.get("mac") for r in src.hosts or []} | {r.get("ip") for r in src.hosts or [] if r.get("ip")}
@@ -254,11 +254,13 @@ class HostGroupInlineView(LoginRequiredMixin, View):
             elif field == "row_add":
                 rows = list(src.hosts or [])
                 mac, ip = request.POST.get("mac", ""), request.POST.get("ip", "")
+                noip = ip[1:] if ip.startswith("!") else ""
+                ip = "" if noip else ip
                 labels = {o["key"]: o["label"] for o in field_options(get_model(src.model))}
                 same = next((n for n, r in enumerate(rows, 1) if r.get("mac") == mac), None)
                 if len(rows) >= MAX_HOSTS:
                     err = t("hosts.err_max_rows", n=MAX_HOSTS)
-                elif mac not in keys or (ip and ip not in keys) or mac == ip:
+                elif mac not in keys or (ip and ip not in keys) or (noip and noip not in keys) or mac == ip:
                     err = t("hosts.err_field")
                 elif same is not None and (bool(ip) == bool(rows[same - 1].get("ip")) or rows[same - 1].get("dyn")
                                            or (ip and request.POST.get("dyn") == "1")):
@@ -269,7 +271,7 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                 elif ip and ip in {r.get("ip") for r in rows} | {r.get("mac") for r in rows if r.get("mac") != mac}:
                     err = t("hosts.err_used")
                 else:
-                    rows.append({"mac": mac, "ip": ip, "dyn": bool(ip) and request.POST.get("dyn") == "1"})
+                    rows.append({"mac": mac, "ip": ip, "dyn": bool(ip) and request.POST.get("dyn") == "1", "noip": noip})
                     src.hosts = rows
             elif field == "row_hn":
                 rows = list(src.hosts or [])
