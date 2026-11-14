@@ -55,6 +55,8 @@ TR = {
                        "Prepared file codes. In a group you pick a template for each file and may still edit it locally for that group only."),
     "hosts.tpl_names_hint": ("Static: ak má jeden objekt viac MAC (viac riadkov s IP), host bloky dostanú názvy NAME_1, NAME_2, NAME_3 (podľa riadku); pri jednej MAC len NAME. h.host = tento názov, h.name = vždy základné meno.",
                              "Static: when one object has several MACs (several rows with IP), host blocks are named NAME_1, NAME_2, NAME_3 (by row); with one MAC just NAME. h.host = this name, h.name = always the base name."),
+    "hosts.tpl_solo": ("+{n} lokálne upravené", "+{n} locally edited"),
+    "hosts.tpl_solo_hint": ("Skupiny s vlastnou úpravou tejto šablóny (zmena šablóny sa ich netýka):", "Groups with their own edit of this template (template changes do not affect them):"),
     "hosts.tpl_used": ("použitá v {n} skupinách", "used in {n} groups"),
     "hosts.tpl_add": ("Pridať šablónu", "Add template"),
     "hosts.tpl_name": ("Názov šablóny", "Template name"),

@@ -32,8 +32,10 @@ def _tpl_rows(request):
     drafts = request.session.get("hosts_tpl_draft", {})
     out = []
     for tp in HostCodeTemplate.objects.all():
-        used = HostGroup.objects.filter(**{tp.kind + "_template": tp}).count()
-        out.append({"t": tp, "code": drafts.get(str(tp.pk), tp.code), "draft": str(tp.pk) in drafts, "used": used,
+        groups = list(HostGroup.objects.filter(**{tp.kind + "_template": tp}).order_by("name"))
+        used = len(groups)
+        solo = [g for g in groups if not g.is_default(tp.kind)]
+        out.append({"solo": solo, "solo_text": t("hosts.tpl_solo", n=len(solo)) if solo else "", "t": tp, "code": drafts.get(str(tp.pk), tp.code), "draft": str(tp.pk) in drafts, "used": used,
                     "used_text": t("hosts.tpl_used", n=used), "vars": t("hosts.code_vars_" + tp.kind)})
     return out
 
