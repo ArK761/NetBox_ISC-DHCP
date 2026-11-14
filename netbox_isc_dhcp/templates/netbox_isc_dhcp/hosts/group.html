@@ -50,6 +50,11 @@
             <input name="value" value="{{ f.suffix }}" class="form-control form-control-sm" style="max-width:12rem"><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <span class="ms-auto small text-muted">{% if f.kind == 'dynamic' %}{% tr "hosts.dyn_hint" %}{% else %}{% tr "hosts.static_hint" %}{% endif %}</span>
       </div>
+      {% if f.kind == "dynamic" %}<div class="px-3 pt-2 isc-usage">{% for u in usage %}
+        <details class="isc-box {% if u.used %}isc-box-ok{% else %}isc-box-warning{% endif %} mx-0 my-1" data-class="{{ u.name }}" data-used="{{ u.used|yesno:'1,0' }}"><summary>
+          <i class="mdi {% if u.used %}mdi-check-circle-outline text-success{% else %}mdi-alert-outline text-warning{% endif %}"></i> <strong>{{ u.title }}</strong>{% if u.summary %} <span class="small ms-1">{{ u.summary }}</span>{% endif %}</summary>
+          <div class="isc-box-body small">{% if u.uses %}<ul class="mb-1">{% for x in u.uses %}<li>{% if x.where == "pool" or x.where == "override" %}<a href="{% url 'plugins:netbox_isc_dhcp:pooltemplate' pk=x.pk %}">{{ x.label }}</a>{% else %}<a href="{% url 'plugins:netbox_isc_dhcp:baseconfig_list' %}">{{ x.label }}</a>{% endif %} <code>{{ x.mode }} members of "{{ u.name }}"</code></li>{% endfor %}</ul>{% endif %}
+            <span class="text-muted">{% tr "hosts.usage_hint" %}</span></div></details>{% endfor %}</div>{% endif %}
       <details class="isc-hosts isc-codeed px-3 pt-2"{% if f.draft %} open{% endif %}><summary><span class="badge {% if f.draft %}text-bg-danger{% elif f.default %}text-bg-secondary{% else %}text-bg-warning{% endif %} isc-code-state"><i class="mdi mdi-code-braces"></i> {% tr "hosts.code_label" %} · {% if f.draft %}{% tr "hosts.code_draft" %}{% elif f.default %}{% tr "hosts.code_default" %}{% else %}{% tr "hosts.code_edited" %}{% endif %}</span>
           <span class="small text-muted ms-1">{% tr "lbl.click_edit" %}</span>
           <span class="small text-warning ms-2 isc-expert"><i class="mdi mdi-alert"></i> {% tr "hosts.code_expert" %}</span></summary>

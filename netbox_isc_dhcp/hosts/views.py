@@ -10,6 +10,7 @@ from ..models import DHCPPath, PluginSettings, settings_obj
 from ..source_fields import distinct_values, field_options, get_model, source_label, source_models
 from ..views import _editor_vars
 from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC, code_errors, render_files
+from .usage import defined_classes, references, usage_of
 from .logic import MAX_HOSTS, build_group, groups_overview, source_info
 from .models import HostGroup, HostSource, host_config
 
@@ -26,6 +27,16 @@ def _need_texts(need):
     return [t(keys[n]) for n in need]
 
 
+def _usage_rows(rows):
+    for r in rows:
+        r["title"] = t("hosts.class_used", name=r["name"]) if r["used"] else t("hosts.class_unused", name=r["name"])
+        r["summary"] = t("hosts.used_subnets", n=r["subnets"]) + (" · dhcpd.conf" if r["in_static"] else "") if r["used"] else ""
+        for u in r["uses"]:
+            u["label"] = {"pool": t("hosts.use_pool", name=u["name"], n=u["subnets"]), "override": t("hosts.use_override", name=u["name"]),
+                          "static": t("hosts.use_static")}[u["where"]] + ("" if u["enabled"] else " – " + t("hosts.pool_off"))
+    return rows
+
+
 class HostsView(LoginRequiredMixin, View):
     """Table source (groups), table directory and the list of groups (like the pools list)."""
 
@@ -35,8 +46,14 @@ class HostsView(LoginRequiredMixin, View):
         cfg = host_config()
         edit = request.GET.get("edit", "")
         ov = groups_overview(cfg, int(edit) if edit.isdigit() else None)
+        refs = references() if ov["groups"] else {}
         for r in ov["groups"]:
             r["warnings"] = [tmsg(w) for w in r["warnings"]]
+            text = render_files(r["hg"], r, {k: r["hg"].code(k) for k in ("dynamic", "static")})["dynamic"][0]
+            u = usage_of(defined_classes(text), refs)
+            main = u[0] if u else None
+            r["usage"] = {"ok": bool(main and main["used"]), "unused": [x["name"] for x in u if not x["used"]],
+                          "text": (t("hosts.used_subnets", n=main["subnets"]) if main and main["subnets"] else t("hosts.used_static")) if main and main["used"] else t("hosts.not_used")}
         gfields = field_options(ov["group_model"])
         st = settings_obj()
         return render(request, "netbox_isc_dhcp/hosts/hosts.html", {
@@ -148,6 +165,7 @@ class HostGroupView(LoginRequiredMixin, View):
                           "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n"),
                           "code": drafts.get(kind, hg.code(kind)), "draft": kind in drafts, "default": hg.is_default(kind),
                           "vars": t("hosts.code_vars_" + kind)})
+        usage = _usage_rows(usage_of(defined_classes(rendered["dynamic"][0]), references()))
         lc = built["lost_counts"]
         lost_parts = [f"{lc[k]}× {t('hosts.lost_' + k)}" for k in LOST_REASONS if lc.get(k)]
         others = [g for g in HostGroup.objects.filter(group_model=hg.group_model).exclude(pk=hg.pk) if g.sources.exists()]
@@ -156,7 +174,7 @@ class HostGroupView(LoginRequiredMixin, View):
             "warnings": [tmsg(w) for w in built["warnings"]], "others": others, "objects": built["objects"],
             "lost": [(h, t("hosts.lost_" + r), v) for h, r, v in built["lost"]],
             "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
-            "warn_title": t("hosts.warn_title", n=len(built["warnings"])),
+            "warn_title": t("hosts.warn_title", n=len(built["warnings"])), "usage": usage,
             "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "editor_vars": _editor_vars(),
         })
 
