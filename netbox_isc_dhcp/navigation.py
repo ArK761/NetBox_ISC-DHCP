@@ -37,6 +37,8 @@ menu = PluginMenu(
                 _open_item("pluginsettings", "menu.plugin"),
                 PluginMenuItem(link="plugins:netbox_isc_dhcp:dhcp_hub", link_text=t_lazy("menu.dhcp"),
                                permissions=["netbox_isc_dhcp.view_baseconfig"]),
+                PluginMenuItem(link="plugins:netbox_isc_dhcp:audit", link_text=t_lazy("menu.audit"),
+                               permissions=["netbox_isc_dhcp.view_auditevent"]),
             ),
         ),
     ),

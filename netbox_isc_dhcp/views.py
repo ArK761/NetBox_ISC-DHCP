@@ -128,9 +128,21 @@ _crud(DHCPGroup, forms.DHCPGroupForm, tables.DHCPGroupTable)
 _crud(DNSServer, forms.DNSServerForm, tables.DNSServerTable)
 
 
+def _server_rows():
+    from .export.models import DHCPServer
+    from .export.servers import resolve
+
+    out = []
+    for srv in DHCPServer.objects.all():
+        ips, err = resolve(srv.address)
+        out.append({"s": srv, "ips": ips, "err": err})
+    return out
+
+
 # --- Plugin settings: language, dhcpd.conf path, base path and subdirectories ---
 _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
       extra_context=lambda request, instance: {
+          "servers": _server_rows(),
           "subdirs": DHCPPath.objects.all(),
           "dir_rows": [("table_dir", "lbl.table_dir", instance.table_dir), ("subnet_dir", "lbl.subnet_dir2", instance.subnet_dir)],
           "path_rows": [

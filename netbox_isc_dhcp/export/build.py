@@ -5,6 +5,7 @@ import ipaddress
 from django.db import transaction
 from django.utils import timezone
 
+from . import audit
 from .models import ExportFile
 
 
@@ -14,7 +15,9 @@ def _put(key, area, path, text):
     row = ExportFile.objects.filter(key=key).first()
     if row and row.sha256 == sha and row.path == path:
         return False
-    ExportFile.objects.filter(path=path).exclude(key=key).delete()
+    for other in ExportFile.objects.filter(path=path).exclude(key=key):
+        _del(other)
+    audit.record(path, "update" if row else "add", row.content if row else "", text, row.sha256 if row else "", sha)
     if row is None:
         row = ExportFile(key=key)
     row.area, row.path, row.content, row.sha256, row.size, row.updated = area, path, text, sha, len(text.encode()), timezone.now()
@@ -22,8 +25,16 @@ def _put(key, area, path, text):
     return True
 
 
+def _del(row):
+    audit.record(row.path, "delete", row.content, "", row.sha256, "")
+    row.delete()
+
+
 def _drop(**flt):
-    return ExportFile.objects.filter(**flt).delete()[0] > 0
+    rows = list(ExportFile.objects.filter(**flt))
+    for r in rows:
+        _del(r)
+    return bool(rows)
 
 
 # ---- TABLE ------------------------------------------------------------------------------------------
@@ -61,7 +72,7 @@ def regen_group(hg, state=None):
             changed |= _put(key, "table", f"{st.table_dir.path}/{name}", text)
     for row in ExportFile.objects.filter(key__startswith=f"group:{hg.pk}:"):
         if row.key not in keep:
-            row.delete()
+            _del(row)
             changed = True
     return changed
 
@@ -77,7 +88,7 @@ def regen_tables():
         seen.add(hg.pk)
     for row in ExportFile.objects.filter(area="table"):
         if int(row.key.split(":")[1]) not in seen:
-            row.delete()
+            _del(row)
             changed = True
     return changed
 
@@ -163,7 +174,7 @@ def regen_subnets(prefix_pks=None, pool_pk=None):
         rows = rows.filter(key__in=[f"subnet:{p}" for p in prefix_pks])
     for row in rows:
         if row.key not in keep:
-            row.delete()
+            _del(row)
             changed = True
     return changed
 
@@ -194,15 +205,23 @@ def regen_conf():
 
     text = build_base_config(cfg)[0]
     path = f"{st.config_path.rstrip('/')}/{cfg.name}"
-    ExportFile.objects.filter(area="conf").exclude(path=path).delete()
+    for other in ExportFile.objects.filter(area="conf").exclude(path=path):
+        _del(other)
     return _put("conf", "conf", path, text)
 
 
-def regen_all():
+def regen_all(cause="regenerate all", always=True):
+    audit.start()
     with transaction.atomic():
         regen_tables()
         regen_subnets()
         regen_conf()
+    return audit.finish(cause, always=always)
+
+
+def manifest_hash():
+    rows = ExportFile.objects.order_by("area", "path").values_list("path", "sha256")
+    return hashlib.sha256("".join(f"{p} {s}\n" for p, s in rows).encode()).hexdigest()
 
 
 def manifest():

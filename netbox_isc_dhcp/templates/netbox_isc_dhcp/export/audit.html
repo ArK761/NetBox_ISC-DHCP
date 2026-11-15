@@ -1,0 +1,34 @@
+{% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
+{% block title %}{% tr "aud.title" %}{% endblock %}
+{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}{% include "netbox_isc_dhcp/hosts/_style.html" %}
+<style>
+  .isc-aud td { vertical-align: top; }
+  .isc-aud .isc-ch { font-family: var(--tblr-font-monospace, monospace); font-size: .8rem; }
+  .isc-diff { background: #0d1117; color: #c9d1d9; border-radius: .35rem; padding: .4rem .6rem; font-size: .75rem; white-space: pre; overflow-x: auto; max-height: 22rem; margin: .25rem 0 .5rem; }
+  .isc-act-add { color: var(--tblr-success, #2fb344); } .isc-act-update { color: var(--tblr-warning, #f59f00); } .isc-act-delete { color: var(--tblr-danger, #d63939); }
+</style>
+<div class="row"><div class="col-12">
+  <div class="card mb-3">
+    <h5 class="card-header d-flex align-items-center"><i class="mdi mdi-clipboard-text-clock-outline me-2"></i>{% tr "aud.title" %} <span class="badge text-bg-secondary ms-2">{{ total }}</span></h5>
+    <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "aud.hint" %}</div>
+    <div class="px-3 pb-3 d-flex gap-2">{% for k, l in kinds %}<a class="btn btn-sm {% if k == kind %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?kind={{ k }}">{{ l }}</a>{% endfor %}</div>
+    <div class="table-responsive"><table class="table table-sm mb-0 isc-aud">
+      <thead><tr><th>{% tr "aud.time" %}</th><th>{% tr "aud.kind" %}</th><th>{% tr "aud.who" %}</th><th>{% tr "aud.cause" %}</th><th class="text-end">{% tr "aud.duration" %}</th><th>{% tr "aud.files" %}</th></tr></thead>
+      {% for e in events %}<tr id="a{{ e.pk }}">
+        <td class="text-nowrap">{{ e.time|date:"Y-m-d H:i:s" }}</td>
+        <td>{% if e.kind == "regen" %}<span class="badge text-bg-info">{% tr "aud.regen" %}</span>{% elif e.kind == "download" %}<span class="badge text-bg-success">{% tr "aud.download" %}</span>{% else %}<span class="badge text-bg-warning">{% tr "aud.report" %}</span>{% endif %}</td>
+        <td class="text-nowrap">{% if e.user %}<i class="mdi mdi-account-outline"></i> {{ e.user }}{% else %}<span class="text-muted">{% tr "aud.system" %}</span>{% endif %}{% if e.client_ip %}<div class="small text-muted">{{ e.client_ip }}</div>{% endif %}</td>
+        <td class="small">{{ e.cause }}{% if e.manifest_hash %}<div class="text-muted">hash <code>{{ e.manifest_hash|slice:":12" }}</code></div>{% endif %}</td>
+        <td class="text-end text-nowrap">{% if e.kind == "regen" %}{{ e.duration_ms }} ms{% endif %}</td>
+        <td>{% if e.changes %}<details><summary class="small">
+            {% if e.n_add %}<span class="isc-act-add">+{{ e.n_add }}</span> {% endif %}{% if e.n_upd %}<span class="isc-act-update">~{{ e.n_upd }}</span> {% endif %}{% if e.n_del %}<span class="isc-act-delete">−{{ e.n_del }}</span> {% endif %}{% if e.n_dl %}<span>↓{{ e.n_dl }}</span>{% endif %}</summary>
+          {% for c in e.changes %}<div class="isc-ch"><span class="isc-act-{{ c.action }}">{% if c.action == "add" %}+{% elif c.action == "update" %}~{% elif c.action == "delete" %}−{% else %}↓{% endif %}</span> {{ c.path }}{% if c.old or c.new %} <span class="text-muted">{{ c.old|default:"·" }} → {{ c.new|default:"·" }}</span>{% endif %}</div>
+            {% if c.diff %}<div class="isc-diff">{{ c.diff }}</div>{% endif %}{% endfor %}</details>
+          {% elif e.kind == "regen" %}<span class="small text-muted">{% tr "aud.no_change" %}</span>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="6" class="text-muted">{% tr "aud.none" %}</td></tr>{% endfor %}
+    </table></div>
+    <div class="p-3 d-flex gap-2">{% if page > 1 %}<a class="btn btn-sm btn-outline-secondary" href="?kind={{ kind }}&p={{ page|add:'-1' }}">← {% tr "aud.prev" %}</a>{% endif %}
+      {% if has_next %}<a class="btn btn-sm btn-outline-secondary" href="?kind={{ kind }}&p={{ page|add:'1' }}">{% tr "aud.next" %} →</a>{% endif %}</div>
+  </div>
+</div></div>
+{% endblock %}
