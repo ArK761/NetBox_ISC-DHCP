@@ -56,6 +56,7 @@ class SubnetConfig(NetBoxModel):
     gateway_mode = models.CharField(max_length=10, default="first", choices=(("first", "First usable IP"), ("last", "Last usable IP")),
                                     help_text="Gateway of every subnet (global).")
     include_subnets = models.BooleanField(default=False, help_text="Write include lines of the subnet files (<network>_CFG) into dhcpd.conf.")
+    include_each = models.BooleanField(default=False, help_text="Control the include per pool (PoolTemplate.include).")
 
     class Meta:
         ordering = ("name",)
@@ -70,6 +71,7 @@ class PoolTemplate(NetBoxModel):
 
     name = models.CharField(max_length=100, unique=True, help_text="Pool type value, e.g. WorkStation.")
     enabled = models.BooleanField(default=True, verbose_name="Generate")
+    include = models.BooleanField(default=True, help_text="Subnets of this pool are included in dhcpd.conf (when controlled per pool).")
     template = models.TextField(blank=True, default=default_pool_template, help_text="Jinja template of the subnet file.")
     suitable = models.JSONField(default=list, blank=True, help_text="Prefix lengths the code works for (computed).")
     allow_override = models.BooleanField(default=False, verbose_name="Allow individual changes")

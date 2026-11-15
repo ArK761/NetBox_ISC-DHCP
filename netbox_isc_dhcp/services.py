@@ -39,7 +39,7 @@ def table_includes() -> tuple[list[str], list[str]]:
     live = set(gm.objects.values_list("pk", flat=True))
     paths, bad = [], []
     for hg in HostGroup.objects.filter(group_model=cfg.group_model).order_by("name"):
-        if hg.group_pk not in live:
+        if hg.group_pk not in live or (cfg.include_each and not hg.include):
             continue
         for kind in ("dynamic", "static"):
             name = hg.file_name(kind)
@@ -68,7 +68,7 @@ def subnet_prefixes() -> list[str]:
     out = []
     for value, name in _pool_names(model, qs, key):
         pt = pools.get(name)
-        if pt is None or not pt.enabled:
+        if pt is None or not pt.enabled or (cfg.include_each and not pt.include):
             continue
         for obj in qs.filter(_field_q(model, key["field"], [value])):
             pfx = str(getattr(obj, "prefix", ""))

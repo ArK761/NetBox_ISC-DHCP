@@ -134,8 +134,8 @@ class HostsInlineView(LoginRequiredMixin, View):
                     tp.save()
                     messages.success(request, t("hosts.code_saved"))
             request.session["hosts_tpl_draft"] = drafts
-        elif field == "include_tables":
-            cfg.include_tables = value == "1"
+        elif field in ("include_tables", "include_each"):
+            setattr(cfg, field, value == "1")
             cfg.save()
         elif field == "table_dir":
             st = settings_obj() or PluginSettings.objects.create()
@@ -258,6 +258,8 @@ class HostGroupInlineView(LoginRequiredMixin, View):
         err, anchor, edit = "", "isc-files", None
         if field == "enabled":
             hg.enabled = value == "1"
+        elif field == "include":
+            hg.include = value == "1"
         elif field in ("dynamic_suffix", "static_suffix"):
             import re
             if not re.fullmatch(r"[A-Za-z0-9_.-]{1,50}", value):

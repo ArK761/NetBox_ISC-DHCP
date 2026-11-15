@@ -289,8 +289,8 @@ class SubnetConfigInlineView(View):
             row.pop("value", None)
         elif action == "gateway_mode" and value in ("first", "last"):
             obj.gateway_mode = value
-        elif action == "include_subnets":
-            obj.include_subnets = value == "1"
+        elif action in ("include_subnets", "include_each"):
+            setattr(obj, action, value == "1")
         elif action == "subnet_dir":
             from .models import settings_obj
 
@@ -560,6 +560,11 @@ class PoolTemplateInlineView(View):
             return redirect(f"{url}?p={p}" if p.isdigit() else url)
         elif field == "enabled":
             obj.enabled = request.POST.get("value") == "1"
+        elif field == "include":
+            obj.include = request.POST.get("value") == "1"
+            obj.save()
+            nxt = request.POST.get("next", "")
+            return redirect(nxt if nxt.startswith("/plugins/isc-dhcp/") else obj.get_absolute_url())
         elif field == "allow_override":
             obj.allow_override = request.POST.get("value") == "1"
         elif field == "range":

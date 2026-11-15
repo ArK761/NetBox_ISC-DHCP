@@ -11,6 +11,7 @@ class HostConfig(models.Model):
     dynamic_code = models.TextField(blank=True, default="", help_text="Jinja code of every <name>_Dynamic file (empty = default).")
     static_code = models.TextField(blank=True, default="", help_text="Jinja code of every <name>_Static file (empty = default).")
     include_tables = models.BooleanField(default=False, help_text="Write include lines of all group files into dhcpd.conf.")
+    include_each = models.BooleanField(default=False, help_text="Control the include per group (HostGroup.include).")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
@@ -60,6 +61,7 @@ class HostGroup(models.Model):
     group_pk = models.PositiveBigIntegerField()
     name = models.CharField(max_length=200, blank=True, default="", help_text="Table name (last seen value of the name field).")
     enabled = models.BooleanField(default=True, help_text="Off: both files are still made, but without MAC addresses (base content only).")
+    include = models.BooleanField(default=True, help_text="Files of this group are included in dhcpd.conf (when the main switch on Hosty is on).")
     dynamic_suffix = models.CharField(max_length=50, default="_Dynamic", help_text="File name = group name + this suffix (hosts without IP).")
     static_suffix = models.CharField(max_length=50, default="_Static", help_text="File name = group name + this suffix (hosts with static IP).")
     dynamic_template = models.ForeignKey(HostCodeTemplate, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
