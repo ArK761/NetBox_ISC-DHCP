@@ -51,19 +51,29 @@
           <i class="mdi {% if u.used %}mdi-check-circle-outline text-success{% else %}mdi-alert-outline text-warning{% endif %}"></i> <strong>{{ u.title }}</strong>{% if u.summary %} <span class="small ms-1">{{ u.summary }}</span>{% endif %}</summary>
           <div class="isc-box-body small">{% if u.uses %}<ul class="mb-1">{% for x in u.uses %}<li>{% if x.where == "pool" or x.where == "override" %}<a href="{% url 'plugins:netbox_isc_dhcp:pooltemplate' pk=x.pk %}">{{ x.label }}</a>{% else %}<a href="{% url 'plugins:netbox_isc_dhcp:baseconfig_list' %}">{{ x.label }}</a>{% endif %} {% for m in x.modes %}<span class="isc-mode isc-mode-{{ m }}">{{ m }} members of "{{ u.name }}"</span>{% endfor %}</li>{% endfor %}</ul>{% endif %}
             <span class="text-muted">{% tr "hosts.usage_hint" %}</span></div></details>{% endfor %}</div>{% endif %}
-      <details class="isc-hosts isc-codeed px-3 pt-2"{% if f.draft %} open{% endif %}><summary><span class="badge {% if f.draft %}text-bg-danger{% elif f.default %}text-bg-secondary{% else %}text-bg-warning{% endif %} isc-code-state"><i class="mdi mdi-code-braces"></i> {% tr "hosts.tpl_label" %}: {{ f.tpl.name|default:"—" }} · {% if f.draft %}{% tr "hosts.code_draft" %}{% elif f.default %}{% tr "hosts.tpl_as_is" %}{% else %}{% tr "hosts.tpl_local" %}{% endif %}</span>
+      <details class="isc-hosts isc-codeed px-3 pt-2"{% if f.draft %} open{% endif %}><summary><span class="badge {% if f.draft %}text-bg-danger{% elif f.local %}text-bg-warning{% else %}text-bg-secondary{% endif %} isc-code-state"><i class="mdi mdi-code-braces"></i> {% if f.local %}{% tr "hosts.own_label" %}: {{ f.local.name }}{% else %}{% tr "hosts.tpl_label" %}: {{ f.tpl.name|default:"—" }}{% endif %}{% if f.draft %} · {% tr "hosts.code_draft" %}{% endif %}</span>
           <span class="small text-muted ms-1">{% tr "lbl.click_edit" %}</span>
           <span class="small text-warning ms-2 isc-expert"><i class="mdi mdi-alert"></i> {% tr "hosts.code_expert" %}</span></summary>
         <form method="post" action="{{ inline_url }}" class="d-flex gap-2 my-2 isc-tpl-pick" style="max-width:34rem">{% csrf_token %}<input type="hidden" name="field" value="tpl_{{ f.kind }}">
-          <select name="value" class="form-select form-select-sm">{% for x in f.tpls %}<option value="{{ x.pk }}"{% if f.tpl and x.pk == f.tpl.pk %} selected{% endif %}>{{ x.name }}</option>{% endfor %}</select>
+          <select name="value" class="form-select form-select-sm"><optgroup label="{% tr 'hosts.opt_templates' %}">{% for x in f.tpls %}<option value="t{{ x.pk }}"{% if not f.local and f.tpl and x.pk == f.tpl.pk %} selected{% endif %}>{{ x.name }}</option>{% endfor %}</optgroup>
+            {% if f.locals %}<optgroup label="{% tr 'hosts.opt_locals' %}">{% for x in f.locals %}<option value="c{{ x.pk }}"{% if f.local and x.pk == f.local.pk %} selected{% endif %}>{{ x.name }}</option>{% endfor %}</optgroup>{% endif %}</select>
           <button class="btn btn-sm btn-outline-primary text-nowrap">{% tr "lbl.save" %}</button></form>
+        {% if f.locals %}<div class="isc-own-list small my-2"><span class="text-muted">{% tr "hosts.own_list" %}:</span>
+          {% for x in f.locals %}<span class="isc-own{% if f.local and x.pk == f.local.pk %} isc-own-on{% endif %}"><i class="mdi mdi-code-braces"></i> {{ x.name }}
+            {% if f.local and x.pk == f.local.pk %}<span class="text-success">· {% tr "hosts.own_used" %}</span>{% else %}<span class="text-muted">· {% tr "hosts.own_unused" %}</span>
+            <form method="post" action="{{ inline_url }}" class="d-inline">{% csrf_token %}<input type="hidden" name="field" value="code_del_{{ f.kind }}"><input type="hidden" name="value" value="{{ x.pk }}"><button class="btn btn-link btn-sm p-0 text-danger isc-own-del" title="{% tr 'hosts.delete' %}"><i class="mdi mdi-trash-can-outline"></i></button></form>{% endif %}</span>{% endfor %}</div>{% endif %}
         <div class="alert alert-warning d-block py-2 my-2 small"><i class="mdi mdi-alert"></i> <strong>{% tr "hosts.code_warn_title" %}</strong> {% tr "hosts.code_warn" %}</div>
         {% if f.kind == "static" %}<div class="isc-hint my-2"><i class="mdi mdi-information-outline"></i> {% tr "hosts.tpl_names_hint" %}</div>{% endif %}
         <div class="isc-hint my-2">{% tr "hosts.code_vars" %}: <code>{{ f.vars }}</code></div>
-        <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="code_{{ f.kind }}">
+        <form method="post" action="{{ inline_url }}" class="isc-code-form">{% csrf_token %}<input type="hidden" name="field" value="code_{{ f.kind }}">
+          <input name="name" value="{{ f.draft_name }}" class="form-control form-control-sm mb-2" style="max-width:24rem" placeholder="{% tr 'hosts.code_name' %}" maxlength="100" required>
           <div class="isc-ed-wrap"><textarea name="value" rows="16" class="form-control font-monospace code-editor" spellcheck="false" wrap="off">{{ f.code }}</textarea></div>
-          <div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-primary isc-code-save">{% tr "lbl.save" %}</button>
-            {% if not f.default or f.draft %}<button class="btn btn-sm btn-outline-secondary" name="field" value="code_reset_{{ f.kind }}">{% tr "hosts.tpl_reset" %}</button>{% endif %}</div></form>
+          <label class="isc-confirm d-flex gap-2 align-items-start mt-2 small text-warning"><input type="checkbox" name="confirm" value="1" class="form-check-input mt-0" required>
+            <span><i class="mdi mdi-alert"></i> {{ f.confirm }}</span></label>
+          <div class="d-flex gap-2 mt-2">{% if f.local %}<button class="btn btn-sm btn-primary isc-code-save" name="mode" value="save">{% tr "hosts.save_own" %}</button>
+            <button class="btn btn-sm btn-outline-primary isc-code-new" name="mode" value="new">{% tr "hosts.save_new" %}</button>
+            {% else %}<button class="btn btn-sm btn-primary isc-code-save" name="mode" value="new">{% tr "hosts.save_as_own" %}</button>{% endif %}
+            {% if f.draft %}<button class="btn btn-sm btn-outline-secondary ms-auto" name="field" value="code_drop_{{ f.kind }}" formnovalidate>{% tr "hosts.draft_drop" %}</button>{% endif %}</div></form>
       </details>
       <details class="isc-hosts isc-cfg px-3 pt-2"{% if f.cfg_error %} open{% endif %}><summary><span class="badge {% if f.cfg_error %}text-bg-danger{% else %}text-bg-info{% endif %}"><i class="mdi mdi-file-code-outline"></i> {% tr "hosts.show_cfg" %}</span>
           {% if f.cfg_error %}<span class="small text-danger ms-1">{% tr "hosts.cfg_error" %}</span>{% else %}<span class="small text-muted ms-1">{{ f.lines }} {% tr "hosts.cfg_lines" %}</span>{% endif %}</summary>

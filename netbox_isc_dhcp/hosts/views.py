@@ -13,7 +13,7 @@ from ..views import _editor_vars
 from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC, code_errors, render_files
 from .usage import defined_classes, included_paths, references, usage_of
 from .logic import MAX_HOSTS, build_group, groups_overview, source_info
-from .models import HostCodeTemplate, HostGroup, HostSource, host_config
+from .models import HostCodeTemplate, HostGroup, HostGroupCode, HostSource, host_config
 
 
 def _source_groups():
@@ -215,6 +215,8 @@ class HostGroupView(LoginRequiredMixin, View):
                           "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n"),
                           "code": drafts.get(kind, hg.code(kind)), "draft": kind in drafts, "default": hg.is_default(kind),
                           "tpl": hg.template(kind), "tpls": HostCodeTemplate.objects.filter(kind=kind),
+                          "local": hg.local(kind), "confirm": t("hosts.confirm_own") if hg.local(kind) else t("hosts.confirm_tpl", name=hg.template(kind).name if hg.template(kind) else "—"), "locals": list(hg.codes.filter(kind=kind)),
+                          "draft_name": drafts.get(kind + "_name", hg.local(kind).name if hg.local(kind) else ""),
                           "vars": t("hosts.code_vars_" + kind), "path": full,
                           "included": incl.get(full) if full else None})
         usage = _usage_rows(usage_of(defined_classes(rendered["dynamic"][0]), references()))
@@ -253,28 +255,57 @@ class HostGroupInlineView(LoginRequiredMixin, View):
         elif field in ("tpl_dynamic", "tpl_static"):
             kind = field.split("_")[1]
             anchor = "isc-file-" + kind
-            tpl = HostCodeTemplate.objects.filter(pk=int(value) if value.isdigit() else 0, kind=kind).first()
-            if tpl is None:
-                err = t("hosts.err_tpl")
+            num = int(value[1:]) if value[1:].isdigit() else 0
+            if value.startswith("c") and hg.codes.filter(pk=num, kind=kind).exists():
+                setattr(hg, kind + "_local", hg.codes.get(pk=num))
+            elif value.startswith("t") and HostCodeTemplate.objects.filter(pk=num, kind=kind).exists():
+                setattr(hg, kind + "_template", HostCodeTemplate.objects.get(pk=num))
+                setattr(hg, kind + "_local", None)  # own codes stay stored, just unused
             else:
-                setattr(hg, kind + "_template", tpl)
-        elif field in ("code_dynamic", "code_static", "code_reset_dynamic", "code_reset_static"):
+                err = t("hosts.err_tpl")
+        elif field in ("code_dynamic", "code_static"):
             kind = field.rsplit("_", 1)[1]
             anchor = "isc-file-" + kind
             key = f"hosts_code_draft_{hg.pk}"
             drafts = dict(request.session.get(key, {}))
-            code = "" if field.startswith("code_reset") else request.POST.get("value", "").replace("\r\n", "\n")
-            if code.strip() == hg.base_code(kind).strip():
-                code = ""
-            bad = code_errors(code) if code else ""
-            if bad:
-                drafts[kind] = code
+            code = request.POST.get("value", "").replace("\r\n", "\n")
+            name = request.POST.get("name", "").strip()[:100]
+            loc = hg.local(kind)
+            new = request.POST.get("mode") == "new" or loc is None
+            clash = hg.codes.filter(kind=kind, name=name).exclude(pk=None if new else loc.pk).exists()
+            bad = code_errors(code)
+            if not request.POST.get("confirm"):
+                err = t("hosts.err_confirm")
+            elif not name:
+                err = t("hosts.err_code_name")
+            elif clash:
+                err = t("hosts.err_code_clash", name=name)
+            elif bad:
                 err = t("hosts.code_err", err=tmsg(bad))
+            if err:
+                drafts[kind], drafts[kind + "_name"] = code, name
             else:
                 drafts.pop(kind, None)
-                setattr(hg, kind + "_code", code)
+                drafts.pop(kind + "_name", None)
+                if new:
+                    loc = HostGroupCode.objects.create(group=hg, kind=kind, name=name, code=code)
+                else:
+                    loc.name, loc.code = name, code
+                    loc.save()
+                setattr(hg, kind + "_local", loc)
                 messages.success(request, t("hosts.code_saved"))
             request.session[key] = drafts
+        elif field in ("code_del_dynamic", "code_del_static", "code_drop_dynamic", "code_drop_static"):
+            kind = field.rsplit("_", 1)[1]
+            anchor = "isc-file-" + kind
+            if field.startswith("code_drop"):
+                request.session[f"hosts_code_draft_{hg.pk}"] = {}
+            else:
+                c = hg.codes.filter(pk=int(value) if value.isdigit() else 0, kind=kind).first()
+                if c is None or c == hg.local(kind):
+                    err = t("hosts.err_code_used")
+                else:
+                    c.delete()
         elif field == "src_add":
             if value not in models_ok:
                 err = t("hosts.err_object")
