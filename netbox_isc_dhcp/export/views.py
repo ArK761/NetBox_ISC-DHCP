@@ -21,7 +21,7 @@ def _client_allowed(request):
     from .servers import allowed_ips
 
     ips = set(settings.PLUGINS_CONFIG.get("netbox_isc_dhcp", {}).get("allowed_client_ips", []) or []) | allowed_ips()
-    return request.META.get("REMOTE_ADDR", "") in ips
+    return audit.client_ip(request) in ips
 
 
 class ManifestView(View):

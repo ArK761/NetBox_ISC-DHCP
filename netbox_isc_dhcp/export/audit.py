@@ -28,15 +28,29 @@ def record(path, action, old_text, new_text, old_sha="", new_sha=""):
     ch.append({"path": path, "action": action, "old": old_sha[:12], "new": new_sha[:12], "diff": diff})
 
 
+_LOCAL = {"127.0.0.1", "::1"}
+
+
+def client_ip(request):
+    """Real client IP. Behind the local reverse proxy (Apache/nginx on the same host) take X-Forwarded-For / X-Real-IP;
+    from any other address the header is ignored (cannot be spoofed from outside)."""
+    ip = request.META.get("REMOTE_ADDR", "")
+    if ip in _LOCAL:
+        fwd = request.META.get("HTTP_X_FORWARDED_FOR", "") or request.META.get("HTTP_X_REAL_IP", "")
+        if fwd:
+            return fwd.split(",")[-1].strip()  # the proxy appends the address it saw as the last entry
+    return ip
+
+
 def current_user():
     try:
         from netbox.context import current_request
 
         req = current_request.get()
         if req is not None and getattr(req, "user", None) is not None and req.user.is_authenticated:
-            return req.user.username, req.META.get("REMOTE_ADDR", "")
+            return req.user.username, client_ip(req)
         if req is not None:
-            return "", req.META.get("REMOTE_ADDR", "")
+            return "", client_ip(req)
     except Exception:
         pass
     return "", ""
@@ -62,7 +76,7 @@ def download(request, path=None):
     """Manifest fetch = new event; file fetches of the same client are added to its latest event (30 min)."""
     from . import build
 
-    ip = request.META.get("REMOTE_ADDR", "")
+    ip = client_ip(request)
     user = request.user.username if request.user.is_authenticated else ""
     now = timezone.now()
     if path is None:

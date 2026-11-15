@@ -9,10 +9,14 @@ from . import audit
 from .models import ExportFile
 
 
-def _put(key, area, path, text):
-    """Store (or update) one file; returns True when its content changed."""
+_NO = object()
+
+
+def _put(key, area, path, text, row=_NO):
+    """Store (or update) one file; returns True when its content changed. `row` = the existing row if already loaded."""
     sha = hashlib.sha256(text.encode()).hexdigest()
-    row = ExportFile.objects.filter(key=key).first()
+    if row is _NO:
+        row = ExportFile.objects.filter(key=key).first()
     if row and row.sha256 == sha and row.path == path:
         return False
     for other in ExportFile.objects.filter(path=path).exclude(key=key):
@@ -157,6 +161,7 @@ def regen_subnets(prefix_pks=None, pool_pk=None):
     else:
         todo = plan.keys() if prefix_pks is None else [p for p in prefix_pks if p in plan]
     keep = set()
+    loaded = {r.key: r for r in ExportFile.objects.filter(area="subnet", key__in=[f"subnet:{p}" for p in todo])}
     for pk in todo:
         obj, pt, code, own = plan[pk]
         pfx, text = _render_subnet(obj, pt, code, own, args)
@@ -165,7 +170,7 @@ def regen_subnets(prefix_pks=None, pool_pk=None):
             continue
         key = f"subnet:{pk}"
         keep.add(key)
-        changed |= _put(key, "subnet", f"{st.subnet_dir.path}/{inc[0].file}", text)
+        changed |= _put(key, "subnet", f"{st.subnet_dir.path}/{inc[0].file}", text, loaded.get(key))
     rows = ExportFile.objects.filter(area="subnet")
     if pool_pk is not None:  # this pool's subnets + rows whose subnet is no longer in any included pool
         stale = {f"subnet:{p}" for p in todo} | {r.key for r in rows if int(r.key.split(":")[1]) not in plan}
