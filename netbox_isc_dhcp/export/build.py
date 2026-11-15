@@ -12,12 +12,14 @@ from .models import ExportFile
 _NO = object()
 
 
-def _put(key, area, path, text, row=_NO):
+def _put(key, area, path, text, row=_NO, src_hash=""):
     """Store (or update) one file; returns True when its content changed. `row` = the existing row if already loaded."""
     sha = hashlib.sha256(text.encode()).hexdigest()
     if row is _NO:
         row = ExportFile.objects.filter(key=key).first()
     if row and row.sha256 == sha and row.path == path:
+        if src_hash and row.src_hash != src_hash:
+            ExportFile.objects.filter(pk=row.pk).update(src_hash=src_hash)
         return False
     for other in ExportFile.objects.filter(path=path).exclude(key=key):
         _del(other)
@@ -25,6 +27,7 @@ def _put(key, area, path, text, row=_NO):
     if row is None:
         row = ExportFile(key=key)
     row.area, row.path, row.content, row.sha256, row.size, row.updated = area, path, text, sha, len(text.encode()), timezone.now()
+    row.src_hash = src_hash
     row.save()
     return True
 
@@ -147,6 +150,25 @@ def _args():
     return a
 
 
+def _args_fingerprint(args, st):
+    import json
+
+    from .. import __version__
+
+    data = {"v": __version__, "dns": args["dns"], "gw": args["gateway_mode"], "snip": args["snippets"],
+            "site": repr(args["site"]), "cls": sorted(args["known_classes"]), "inv": sorted(args["invalid"]), "dir": st.subnet_dir.path}
+    return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _subnet_fingerprint(base, obj, pt, code, own):
+    import json
+
+    lo, hi = pt.allowed_range()
+    data = [base, str(getattr(obj, "prefix", "")), getattr(obj, "custom_field_data", {}) or {},
+            str(getattr(obj, "last_updated", "")), code, own, lo, hi]
+    return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
+
+
 def regen_subnets(prefix_pks=None, pool_pk=None):
     """All subnets, only the given prefix objects (pks), or only one pool (+ stale rows)."""
     from ..base_config import subnet_includes
@@ -162,15 +184,21 @@ def regen_subnets(prefix_pks=None, pool_pk=None):
         todo = plan.keys() if prefix_pks is None else [p for p in prefix_pks if p in plan]
     keep = set()
     loaded = {r.key: r for r in ExportFile.objects.filter(area="subnet", key__in=[f"subnet:{p}" for p in todo])}
+    base = _args_fingerprint(args, st) if plan else ""
     for pk in todo:
         obj, pt, code, own = plan[pk]
+        key = f"subnet:{pk}"
+        fp = _subnet_fingerprint(base, obj, pt, code, own)
+        old = loaded.get(key)
+        if old is not None and old.src_hash == fp:  # nothing it is made from changed: keep as is
+            keep.add(key)
+            continue
         pfx, text = _render_subnet(obj, pt, code, own, args)
         inc = subnet_includes([pfx])
         if text is None or not inc:
             continue
-        key = f"subnet:{pk}"
         keep.add(key)
-        changed |= _put(key, "subnet", f"{st.subnet_dir.path}/{inc[0].file}", text, loaded.get(key))
+        changed |= _put(key, "subnet", f"{st.subnet_dir.path}/{inc[0].file}", text, old, fp)
     rows = ExportFile.objects.filter(area="subnet")
     if pool_pk is not None:  # this pool's subnets + rows whose subnet is no longer in any included pool
         stale = {f"subnet:{p}" for p in todo} | {r.key for r in rows if int(r.key.split(":")[1]) not in plan}

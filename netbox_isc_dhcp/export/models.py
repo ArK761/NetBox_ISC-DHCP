@@ -11,6 +11,7 @@ class ExportFile(models.Model):
     key = models.CharField(max_length=100, unique=True, help_text="What the file is made from: conf, group:<pk>:<kind>, subnet:<prefix pk>.")
     content = models.TextField(blank=True, default="")
     sha256 = models.CharField(max_length=64)
+    src_hash = models.CharField(max_length=64, blank=True, default="", help_text="Fingerprint of the inputs; same -> not recomputed.")
     size = models.PositiveIntegerField(default=0)
     updated = models.DateTimeField()
 
