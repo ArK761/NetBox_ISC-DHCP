@@ -21,6 +21,7 @@
       <span class="small">{% tr "exp.total_hash" %}: <code id="isc-exp-hash">{{ m.hash|slice:":16" }}…</code></span>
       {% if last %}<span class="small text-muted">{% tr "exp.last" %}: {{ last|date:"Y-m-d H:i:s" }}</span>{% endif %}
       <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_isc_dhcp:export_manifest' %}" target="_blank"><i class="mdi mdi-code-json"></i> {% tr "exp.manifest" %}</a>
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_isc_dhcp:export_plan' %}" target="_blank" id="isc-plan-link"><i class="mdi mdi-robot-outline"></i> {% tr "exp.plan" %}</a>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:export_regen' %}" class="m-0">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary"><i class="mdi mdi-refresh"></i> {% tr "exp.regen" %}</button></form>
     </div>
   </div>

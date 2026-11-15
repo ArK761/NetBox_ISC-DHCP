@@ -111,6 +111,7 @@ TR = {
     "exp.regenerated": ("Všetky súbory boli znova vygenerované.", "All files were regenerated."),
     "exp.empty": ("Zatiaľ žiadne súbory. Zapnite „Zaradiť do dhcpd.conf“ na stránkach Hosty a Subnety a nastavte cestu k dhcpd.conf v Nastaveniach pluginu.", "No files yet. Turn on “Include in dhcpd.conf” on the Hosts and Subnets pages and set the dhcpd.conf path in plugin settings."),
     "exp.first": ("Po prvej inštalácii kliknite na „Pregenerovať všetko“ (súbory sa inak vytvoria pri prvej zmene).", "After the first installation click “Regenerate all” (otherwise the files are created on the first change)."),
+    "exp.plan": ("Plán pre agenta (JSON)", "Plan for the agent (JSON)"),
     "exp.show": ("Zobraziť obsah", "Show content"),
     "exp.access": ("Manifest a súbory si bez prihlásenia stiahnu len DHCP servery z CFG pluginu (IP alebo FQDN); prihlásený admin ich vidí vždy.", "Without login only the DHCP servers from the plugin settings (IP or FQDN) can download the manifest and files; a logged-in admin always can."),
     "exp.col_file": ("Súbor", "File"),
