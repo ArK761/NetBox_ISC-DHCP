@@ -81,7 +81,7 @@
       </details>
       <details class="isc-hosts px-3 pb-3 pt-2"><summary><span class="badge {% if f.count %}text-bg-primary{% else %}text-bg-secondary{% endif %} isc-count" data-n="{{ f.count }}">{{ f.count_text }}</span> <span class="small text-muted ms-1">{% tr "hosts.result" %}</span></summary>
         {% if f.sections %}<input type="search" class="form-control form-control-sm mt-2 isc-hsearch" style="max-width:22rem" placeholder="{% tr 'hosts.search_hosts' %}">
-        <div class="small text-muted isc-hsearch-n mt-1"></div>{% endif %}
+        <div class="small text-muted isc-hsearch-n mt-1"></div><div class="isc-hsnip"></div>{% endif %}
         {% for x in f.sections %}<details class="isc-sec-list mt-2"><summary><span class="isc-rownum">{{ x.idx }}</span> <strong>{{ x.field }}</strong>{% if x.multi %} <span class="small text-muted">#{{ x.src }}</span>{% endif %}
             <span class="badge text-bg-secondary ms-1">{{ x.count_text }}</span></summary>
           <div class="mt-1" style="max-height:24rem;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>{% tr "hosts.col_host" %}</th><th>MAC</th>{% if f.kind == 'static' %}<th>IP</th>{% endif %}</tr></thead>
@@ -96,6 +96,56 @@
 </div></div>
 {% include "netbox_isc_dhcp/_code_editor.html" %}
 <script>
+function esc(t) { return t.replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+function snip(box, q) {
+  var to = box.querySelector('.isc-hsnip'); to.innerHTML = '';
+  var file = box.closest('.isc-file'), pre = file && file.querySelector('.isc-cfg-pre');
+  if (!q || !pre) return;
+  var stat = file.id === 'isc-file-static', lines = pre.textContent.split('\n'), cls = [], cur = '';
+  lines.forEach(function (l, i) {
+    var m = l.match(/^\s*(?:sub)?class\s+"([^"]+)"/);
+    if (m && /^\s*class/.test(l)) cur = m[1];
+    cls.push(m ? m[1] : cur);
+  });
+  var pcs = {}, order = [];
+  box.querySelectorAll('.isc-sec-list tr').forEach(function (tr) {
+    var td = tr.querySelectorAll('td'); if (td.length < 2 || tr.style.display === 'none') return;
+    var n = td[0].textContent.trim(), mac = td[1].textContent.trim().toLowerCase();
+    if (!pcs[n]) { pcs[n] = []; order.push(n); }
+    if (pcs[n].indexOf(mac) < 0) pcs[n].push(mac);
+  });
+  order.slice(0, 10).forEach(function (n) {
+    var macs = pcs[n], hit = {};
+    lines.forEach(function (l, i) {
+      var low = l.toLowerCase();
+      if (!macs.some(function (m) { return low.indexOf(m) >= 0; })) return;
+      if (stat) {
+        var a = i, b = i;
+        while (a > 0 && !/^\s*host\s/.test(lines[a])) a--;
+        while (b < lines.length - 1 && lines[b].indexOf('}') < 0) b++;
+        for (var k = a; k <= b; k++) hit[k] = 1;
+      } else hit[i] = 1;
+    });
+    var idx = Object.keys(hit).map(Number).sort(function (a, b) { return a - b; });
+    var groups = [], g = null;
+    idx.forEach(function (i) { if (!g || g.name !== cls[i]) { g = {name: cls[i], rows: []}; groups.push(g); } g.rows.push(i); });
+    var re = new RegExp('(' + macs.map(function (m) { return m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|') + ')', 'gi');
+    var row = function (i) { return '<div><span class="isc-ln">' + (i + 1) + '</span>' + esc(lines[i]).replace(re, '<mark>$1</mark>') + '</div>'; };
+    var gap = '<div><span class="isc-ln"></span>…</div>';
+    var h = '<div class="isc-snip"><div class="isc-snip-h">CFG ' + esc(n) + ' (' + macs.length + ' MAC, ' + idx.length + ' {{ lines_label }})</div>';
+    groups.forEach(function (gr) {
+      if (gr.name) {
+        h += '<div class="mt-1"><span class="badge text-bg-info">class "' + esc(gr.name) + '"</span></div>';
+        var head = lines.findIndex(function (l) { return new RegExp('^\\s*class\\s+"' + gr.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"').test(l); });
+        if (head >= 0 && gr.rows.indexOf(head) < 0) { h += row(head); if (gr.rows[0] > head + 1) h += gap; }
+      }
+      gr.rows.forEach(function (i, k) { if (k && i > gr.rows[k - 1] + 1) h += gap; h += row(i); });
+    });
+    if (!idx.length) h += '<div class="text-muted">—</div>';
+    to.insertAdjacentHTML('beforeend', h + '</div>');
+  });
+  if (order.length > 10) to.insertAdjacentHTML('beforeend', '<div class="small text-muted">… +' + (order.length - 10) + '</div>');
+}
 document.querySelectorAll('.isc-hsearch').forEach(function (inp) {
   var box = inp.parentElement, out = box.querySelector('.isc-hsearch-n');
   inp.addEventListener('input', function () {
@@ -112,6 +162,7 @@ document.querySelectorAll('.isc-hsearch').forEach(function (inp) {
       total += n;
     });
     out.textContent = q ? total + ' {{ found_label }}' : '';
+    snip(box, q);
   });
 });
 </script>

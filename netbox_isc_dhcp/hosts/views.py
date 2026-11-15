@@ -237,7 +237,7 @@ class HostGroupView(LoginRequiredMixin, View):
             "lost": [(h, t("hosts.lost_" + r), v) for h, r, v in built["lost"]],
             "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
             "warn_title": t("hosts.warn_title", n=len(built["warnings"])), "usage": usage,
-            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "found_label": t("hosts.found_n"), "editor_vars": _editor_vars(),
+            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "found_label": t("hosts.found_n"), "lines_label": t("hosts.snip_lines"), "editor_vars": _editor_vars(),
         })
 
 
