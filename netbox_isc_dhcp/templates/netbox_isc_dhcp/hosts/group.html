@@ -80,10 +80,12 @@
         {% if f.cfg_error %}<div class="alert alert-danger d-block mt-2 mb-0 small">{{ f.cfg_error }}</div>{% else %}<pre class="isc-cfg-pre mt-2 mb-0">{{ f.cfg_text }}</pre>{% endif %}
       </details>
       <details class="isc-hosts px-3 pb-3 pt-2"><summary><span class="badge {% if f.count %}text-bg-primary{% else %}text-bg-secondary{% endif %} isc-count" data-n="{{ f.count }}">{{ f.count_text }}</span> <span class="small text-muted ms-1">{% tr "hosts.result" %}</span></summary>
-        {% if f.rows %}<div class="mt-2" style="max-height:24rem;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>{% tr "hosts.col_host" %}</th><th>MAC</th>{% if f.kind == 'static' %}<th>IP</th>{% endif %}</tr></thead>
-          {% for n, m, ip in f.rows %}<tr><td>{{ n }}</td><td><code>{{ m }}</code></td>{% if f.kind == 'static' %}<td><code>{{ ip }}</code></td>{% endif %}</tr>{% endfor %}</table></div>
-          {% if f.more %}<div class="small text-muted">… +{{ f.more }}</div>{% endif %}
-        {% else %}<div class="text-muted mt-2">—</div>{% endif %}
+        {% for x in f.sections %}<details class="isc-sec-list mt-2"><summary><span class="isc-rownum">{{ x.idx }}</span> <strong>{{ x.field }}</strong>{% if x.multi %} <span class="small text-muted">#{{ x.src }}</span>{% endif %}
+            <span class="badge text-bg-secondary ms-1">{{ x.count_text }}</span></summary>
+          <div class="mt-1" style="max-height:24rem;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>{% tr "hosts.col_host" %}</th><th>MAC</th>{% if f.kind == 'static' %}<th>IP</th>{% endif %}</tr></thead>
+            {% for n, m, ip in x.rows %}<tr><td>{{ n }}</td><td><code>{{ m }}</code></td>{% if f.kind == 'static' %}<td><code>{{ ip }}</code></td>{% endif %}</tr>{% endfor %}</table></div>
+          {% if x.more %}<div class="small text-muted">… +{{ x.more }}</div>{% endif %}</details>
+        {% empty %}<div class="text-muted mt-2">—</div>{% endfor %}
       </details>
     </div>
     {% endfor %}

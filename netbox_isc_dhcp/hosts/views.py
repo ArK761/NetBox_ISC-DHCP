@@ -209,8 +209,17 @@ class HostGroupView(LoginRequiredMixin, View):
             full = f"{st.table_dir.path}/{hg.file_name(kind)}" if st and st.table_dir else ""
             b = built[kind]
             rows = [(r[0], r[1], r[2] if kind == "static" else "") for r in b["rows"]]
+            org, secs = built["origin"][kind], {}
+            for r in b["rows"]:
+                o = org.get((r[0], r[1]), (0, 0, ""))
+                secs.setdefault(o, []).append((r[2] if kind == "dynamic" else r[3], r[1], r[2] if kind == "static" else ""))
+            sections = [{"idx": k[1], "field": k[2], "src": k[0], "rows": v[:500], "more": max(0, len(v) - 500),
+                         "count_text": t("hosts.hosts_count", n=len(v))} for k, v in sorted(secs.items(), key=lambda x: (x[0][0], x[0][1]))]
+            multi_src = len({x["src"] for x in sections}) > 1
+            for x in sections:
+                x["multi"] = multi_src
             files.append({"kind": kind, "name": hg.file_name(kind), "suffix": hg.dynamic_suffix if kind == "dynamic" else hg.static_suffix,
-                          "rows": rows[:500], "count": len(rows), "more": max(0, len(rows) - 500),
+                          "sections": sections, "count": len(rows), "more": max(0, len(rows) - 500),
                           "count_text": t("hosts.hosts_count", n=len(rows)), "cfg_text": rendered[kind][0],
                           "cfg_error": tmsg(rendered[kind][1]) if rendered[kind][1] else "", "lines": rendered[kind][0].count("\n"),
                           "code": drafts.get(kind, hg.code(kind)), "draft": kind in drafts, "default": hg.is_default(kind),

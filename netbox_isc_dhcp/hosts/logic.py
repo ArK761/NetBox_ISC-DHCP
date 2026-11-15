@@ -165,6 +165,7 @@ def build_group(hg) -> dict:
     lost: hosts that do not get into DHCP (host, reason, value); warnings: duplicate MAC / IP (never a reason to leave out)."""
     dyn, sta, lost, bad_ip = [], [], [], []
     objects, configured = 0, 0
+    origin = {"dynamic": {}, "static": {}}  # (host, mac) -> (source pk, row number, MAC field label): only for the page lists
     for src in hg.sources.all():
         info = source_info(src)
         if info["need"]:
@@ -172,6 +173,7 @@ def build_group(hg) -> dict:
         configured += 1
         mm, keys = info["model"], {o["key"] for o in field_options(info["model"])}
         rows = host_rows(src, keys)
+        flabels = {o["key"]: o["label"] for o in en_field_options(mm)}
         hname = src.host_name_field if src.host_name_field in keys else ""
         active = [c for c in src.conditions if c.get("field") and is_active(c)]
         for o in mm.objects.filter(build_q(mm, active)):
@@ -196,13 +198,16 @@ def build_group(hg) -> dict:
                 if m is None:
                     own.append((host, "bad_mac", str(mv)))
                     continue
+                org = (src.pk, idx, flabels.get(r["mac"], r["mac"]))
                 if not r["ip"]:
                     dyn.append((host, m, base))
+                    origin["dynamic"][(host, m)] = org
                     continue
                 ip = None if _empty(ipv) else normalize_ip(ipv)
                 if ip is None:  # no (valid) IP: cannot be static; only "also into class" puts it into the dynamic file
                     if r["dyn"]:
                         dyn.append((host, m, base))
+                        origin["dynamic"][(host, m)] = org
                         if not _empty(ipv):
                             bad_ip.append(f"{host}: invalid IP '{ipv}', host only in the dynamic file")
                     else:
@@ -218,8 +223,10 @@ def build_group(hg) -> dict:
                         bad_ip.append(f"{host}: host-name '{hostname}' has characters not allowed, option host-name left out")
                         hostname = None
                 sta.append((host, m, ip, base, hostname))
+                origin["static"][(host, m)] = org
                 if r["dyn"]:
                     dyn.append((host, m, base))
+                    origin["dynamic"][(host, m)] = org
             if not any_mac and not own:
                 own.append((base, "no_mac", ""))
             lost += own
@@ -261,6 +268,6 @@ def build_group(hg) -> dict:
     srcs = list(hg.sources.all())
     return {"objects": objects, "configured": configured, "has_sources": bool(srcs),
             "dynamic": {"rows": dyn, "macs": len(dyn)}, "static": {"rows": static, "macs": len(static)},
-            "lost": lost, "lost_counts": counts, "skipped": len(lost), "warnings": warnings,
+            "origin": origin, "lost": lost, "lost_counts": counts, "skipped": len(lost), "warnings": warnings,
             "source_labels": sorted({str(get_model(x.model)._meta.verbose_name).capitalize() for x in srcs if get_model(x.model)}),
             "source_count": len(srcs)}
