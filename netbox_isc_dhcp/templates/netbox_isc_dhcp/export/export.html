@@ -30,7 +30,7 @@
         <a href="{% url 'plugins:netbox_isc_dhcp:export_file' path=f.r.path|slice:'1:' %}" target="_blank" title="{% tr 'exp.show' %}">{{ f.name }}</a>
         <span class="small text-muted ms-2">{{ f.r.size|filesizeformat }}</span> <span class="isc-fsha ms-2">{{ f.r.sha256|slice:":12" }}</span>
         <span class="small text-muted ms-2">{{ f.r.updated|date:"Y-m-d H:i:s" }}</span></li>{% endfor %}</ul>
-    </details>{% empty %}<div class="text-muted">{% tr "exp.empty" %}</div>{% endfor %}
+    </details>{% empty %}<div class="text-muted">{% tr "exp.empty" %}</div><div class="text-warning small mt-2"><i class="mdi mdi-refresh"></i> {% tr "exp.first" %}</div>{% endfor %}
   </div></div>
 </div></div>
 {% endblock %}

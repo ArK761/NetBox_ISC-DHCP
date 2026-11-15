@@ -156,18 +156,3 @@ def _connect():
 
 _connect()
 
-
-def _after_migrate(sender, **kwargs):
-    """First fill (and refresh after every plugin update) so includes never point to missing files."""
-    if getattr(sender, "name", "") != "netbox_isc_dhcp":
-        return
-    try:
-        from . import build
-        build.regen_all(cause=__import__("netbox_isc_dhcp.i18n", fromlist=["t"]).t("aud.c_migrate"), always=False)
-    except Exception:
-        log.exception("export regeneration after migrate failed")
-
-
-from django.db.models.signals import post_migrate  # noqa: E402
-
-post_migrate.connect(_after_migrate, dispatch_uid="isc_dhcp_export_migrate")
