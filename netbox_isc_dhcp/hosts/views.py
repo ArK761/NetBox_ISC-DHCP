@@ -230,7 +230,8 @@ class HostGroupView(LoginRequiredMixin, View):
                           "local": hg.local(kind), "confirm": t("hosts.confirm_own") if hg.local(kind) else t("hosts.confirm_tpl", name=hg.template(kind).name if hg.template(kind) else "—"), "locals": list(hg.codes.filter(kind=kind)),
                           "draft_name": drafts.get(kind + "_name", hg.local(kind).name if hg.local(kind) else ""),
                           "vars": t("hosts.code_vars_" + kind), "path": full,
-                          "included": incl.get(full) if full else None})
+                          "included": incl.get(full) if full else None,
+                          "empty": not rendered[kind][1] and not rendered[kind][0].strip()})
         usage = _usage_rows(usage_of(defined_classes(rendered["dynamic"][0]), references()))
         lc = built["lost_counts"]
         lost_parts = [f"{lc[k]}× {t('hosts.lost_' + k)}" for k in LOST_REASONS if lc.get(k)]

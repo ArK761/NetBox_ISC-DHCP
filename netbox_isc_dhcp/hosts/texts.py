@@ -84,6 +84,7 @@ TR = {
     "hosts.snip_hide": ("Skryť CFG", "Hide CFG"),
     "hosts.include_tables": ("Zapísať include riadky súborov všetkých skupín (_Dynamic aj _Static) do dhcpd.conf", "Write include lines of all group files (_Dynamic and _Static) into dhcpd.conf"),
     "hosts.include_tables_hint": ("Vypnuté = v dhcpd.conf nie sú žiadne súbory skupín. Zapnuté = všetky súbory, ktoré plugin vytvorí; ak je zapnuté aj „Riadiť jednotlivo“, len skupiny zapnuté v zozname.", "Off = no group files in dhcpd.conf. On = all files the plugin creates; with “Control individually” on, only groups switched on in the list."),
+    "hosts.inc_empty": ("Prázdny súbor – do dhcpd.conf sa nezaradí (nie je čo načítať).", "Empty file – not included in dhcpd.conf (nothing to load)."),
     "hosts.tpl_used": ("použitá v {n} skupinách", "used in {n} groups"),
     "hosts.tpl_add": ("Pridať šablónu", "Add template"),
     "hosts.tpl_name": ("Názov šablóny", "Template name"),

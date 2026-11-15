@@ -25,7 +25,8 @@ def dhcp_prefixes(cfg) -> list[str]:
 
 def table_includes() -> tuple[list[str], list[str]]:
     """Full paths of the group files (<name>_Dynamic, <name>_Static) when 'include into dhcpd.conf' is ticked on Hosty."""
-    from .hosts.logic import _SAFE_NAME, get_model
+    from .hosts.codegen import render_files
+    from .hosts.logic import _SAFE_NAME, build_group, get_model
     from .hosts.models import HostConfig, HostGroup
 
     st, cfg = settings_obj(), HostConfig.objects.first()
@@ -41,8 +42,12 @@ def table_includes() -> tuple[list[str], list[str]]:
     for hg in HostGroup.objects.filter(group_model=cfg.group_model).order_by("name"):
         if hg.group_pk not in live or (cfg.include_each and not hg.include):
             continue
+        rendered = render_files(hg, build_group(hg), {k: hg.code(k) for k in ("dynamic", "static")})
         for kind in ("dynamic", "static"):
             name = hg.file_name(kind)
+            text, err = rendered[kind]
+            if err or not text.strip():  # owner: an empty (or failing) file is never included
+                continue
             if _SAFE_NAME.match(hg.name or "") and is_safe_name(name):
                 paths.append(f"{st.table_dir.path}/{name}")
             else:
