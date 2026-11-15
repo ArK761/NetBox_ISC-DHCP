@@ -18,14 +18,14 @@ def server_for(request):
     return None
 
 
-def make_plan(have: dict, server, file_url, report_url, manifest_hash):
-    """have = {path: sha256} on the server. Returns the ordered steps (empty when nothing to do)."""
+def make_plan(have: dict, server, file_url, report_url, manifest_hash, mode="plan"):
+    """have = {path: sha256} on the server. plan = only changes (empty when nothing to do), export = everything."""
     from ..models import base_path
 
     rows = list(ExportFile.objects.order_by("area", "path").values("path", "area", "sha256", "size"))
     want = {r["path"]: r for r in rows}
     dirs = sorted({r["path"].rsplit("/", 1)[0] for r in rows if r["area"] != "conf"})
-    download = [r for r in rows if have.get(r["path"]) != r["sha256"]]
+    download = list(rows) if mode == "export" else [r for r in rows if have.get(r["path"]) != r["sha256"]]
     delete = sorted(p for p in have if p not in want and p.rsplit("/", 1)[0] in dirs)  # only inside the managed dirs
     if not download and not delete:
         return []
@@ -44,3 +44,15 @@ def make_plan(have: dict, server, file_url, report_url, manifest_hash):
     for i, s in enumerate(steps, 1):
         s["step"] = i
     return steps
+
+
+def waiting_for(server, manifest_hash):
+    """Staged rollout: the enabled servers before this one (by order) that have not reported OK for this hash."""
+    from ..models import settings_obj
+    from .models import DHCPServer
+
+    st = settings_obj()
+    if not (st and st.staged_rollout) or server is None:
+        return []
+    before = DHCPServer.objects.filter(enabled=True, order__lt=server.order)
+    return [s.name for s in before if not (s.last_result == "ok" and s.last_hash == manifest_hash)]

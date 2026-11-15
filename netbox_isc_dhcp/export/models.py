@@ -60,6 +60,7 @@ class DHCPServer(models.Model):
     name = models.CharField(max_length=100)
     address = models.CharField(max_length=255, help_text="IP address or FQDN of the DHCP server.")
     enabled = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=1, help_text="Rollout order (1 = first).")
     test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test; {conf} = path of dhcpd.conf.")
     restart_cmd = models.CharField(max_length=255, default="systemctl restart isc-dhcp-server", help_text="Restart of the DHCP service.")
     backup_dir = models.CharField(max_length=255, blank=True, default="", help_text="Backup directory (empty = <base path>/bck).")
@@ -70,7 +71,7 @@ class DHCPServer(models.Model):
     class Meta:
         app_label = "netbox_isc_dhcp"
         verbose_name = "DHCP server"
-        ordering = ("name",)
+        ordering = ("order", "name")
 
     def __str__(self):
         return self.name

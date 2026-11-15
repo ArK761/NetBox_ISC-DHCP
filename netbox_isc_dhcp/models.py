@@ -253,6 +253,9 @@ class PluginSettings(NetBoxModel):
                                   help_text="Default subdirectory of tenant table files.")
     subnet_dir = models.ForeignKey("DHCPPath", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
                                    help_text="Subdirectory of the subnet (prefix) files.")
+    agent_mode = models.CharField(max_length=10, default="plan", choices=(("plan", "Plan"), ("export", "Export")),
+                                  help_text="For all DHCP servers: plan = only changes, export = download everything.")
+    staged_rollout = models.BooleanField(default=False, help_text="Servers get a new CFG one after another (by order): the next only after the previous reported OK.")
 
     class Meta:
         verbose_name_plural = "plugin settings"

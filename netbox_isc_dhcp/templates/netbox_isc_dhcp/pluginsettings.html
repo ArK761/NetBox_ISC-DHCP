@@ -64,11 +64,21 @@
   <div class="card mb-3" id="isc-servers">
     <h5 class="card-header"><i class="mdi mdi-server-network me-1"></i>{% tr "srv.title" %}</h5>
     <div class="card-body pb-2"><div class="small text-success"><i class="mdi mdi-information-outline"></i> {% tr "srv.hint" %}</div>
-      <div class="small text-muted mt-1"><i class="mdi mdi-robot-outline"></i> {{ agent_hint }}</div></div>
+      <div class="small text-muted mt-1"><i class="mdi mdi-robot-outline"></i> {{ agent_hint }}</div>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center mt-2" id="isc-agent-mode">{% csrf_token %}<input type="hidden" name="field" value="mode">
+        <strong class="small">{% tr "srv.mode" %}:</strong>
+        <select name="value" class="form-select form-select-sm" style="max-width:20rem" onchange="this.form.submit()">
+          <option value="plan"{% if object.agent_mode != "export" %} selected{% endif %}>{% tr "srv.mode_plan" %}</option>
+          <option value="export"{% if object.agent_mode == "export" %} selected{% endif %}>{% tr "srv.mode_export" %}</option></select></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-staged">{% csrf_token %}<input type="hidden" name="field" value="staged">
+        <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
+        <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
+          <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form></div>
     {% url 'plugins:netbox_isc_dhcp:servers_inline' as srv_url %}
     <table class="table table-sm mb-0">
-      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
       {% for x in servers %}<tr class="isc-srv">
+        <td><span class="badge text-bg-secondary">{{ x.s.order }}</span></td>
         <td colspan="2"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><strong>{{ x.s.name }}</strong> <code class="ms-2">{{ x.s.address }}</code> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
           <form method="post" action="{{ srv_url }}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="field" value="edit"><input type="hidden" name="pk" value="{{ x.s.pk }}">
             <input name="name" value="{{ x.s.name }}" class="form-control form-control-sm" required><input name="address" value="{{ x.s.address }}" class="form-control form-control-sm font-monospace" required>
@@ -78,6 +88,7 @@
             <form method="post" action="{{ srv_url }}" class="isc-srv-cmds">{% csrf_token %}<input type="hidden" name="field" value="cmds"><input type="hidden" name="pk" value="{{ x.s.pk }}">
               <label class="small">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ x.s.test_cmd }}" class="form-control form-control-sm font-monospace mb-1">
               <label class="small">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ x.s.restart_cmd }}" class="form-control form-control-sm font-monospace mb-1">
+              <label class="small">{% tr "srv.order" %}</label><input name="order" value="{{ x.s.order }}" type="number" min="1" max="99" class="form-control form-control-sm mb-1" style="max-width:6rem">
               <label class="small">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ x.s.backup_dir }}" class="form-control form-control-sm font-monospace mb-1">
               <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td>
         <td class="small">{% if x.s.last_report %}<span class="badge {% if x.s.last_result == 'ok' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ x.s.last_result }}</span>
@@ -87,7 +98,7 @@
           <button class="btn btn-link p-0 border-0 isc-srv-toggle"><i class="mdi {% if x.s.enabled %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-2"></i></button></form></td>
         <td class="text-end"><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="delete"><input type="hidden" name="pk" value="{{ x.s.pk }}">
           <button class="btn btn-sm btn-outline-danger isc-srv-del"><i class="mdi mdi-trash-can-outline"></i></button></form></td></tr>
-      {% empty %}<tr><td colspan="6" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="7" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
     </table>
     <form method="post" action="{{ srv_url }}" class="d-flex gap-2 p-3 border-top" id="isc-srv-add" style="max-width:40rem">{% csrf_token %}<input type="hidden" name="field" value="add">
       <input name="name" class="form-control form-control-sm" placeholder="{% tr 'srv.name' %}" required>

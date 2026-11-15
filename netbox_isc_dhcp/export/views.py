@@ -125,7 +125,8 @@ class ServersInlineView(LoginRequiredMixin, View):
                 messages.error(request, t("srv.err"))
                 return redirect("plugins:netbox_isc_dhcp:pluginsettings_list")
             if action == "add":
-                DHCPServer.objects.create(name=name, address=addr)
+                last = DHCPServer.objects.order_by("-order").first()
+                DHCPServer.objects.create(name=name, address=addr, order=(last.order + 1) if last else 1)
             elif srv:
                 srv.name, srv.address = name, addr
                 srv.save()
@@ -133,7 +134,21 @@ class ServersInlineView(LoginRequiredMixin, View):
             srv.test_cmd = request.POST.get("test_cmd", "").strip()[:255] or srv.test_cmd
             srv.restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or srv.restart_cmd
             srv.backup_dir = request.POST.get("backup_dir", "").strip()[:255]
+            o = request.POST.get("order", "")
+            srv.order = int(o) if o.isdigit() and 0 < int(o) < 100 else srv.order
             srv.save()
+        elif action == "mode":
+            from ..models import PluginSettings, settings_obj
+
+            st = settings_obj() or PluginSettings.objects.create()
+            st.agent_mode = "export" if request.POST.get("value") == "export" else "plan"
+            st.save()
+        elif action == "staged":
+            from ..models import PluginSettings, settings_obj
+
+            st = settings_obj() or PluginSettings.objects.create()
+            st.staged_rollout = request.POST.get("value") == "1"
+            st.save()
         elif action == "toggle" and srv:
             srv.enabled = not srv.enabled
             srv.save()
@@ -169,14 +184,28 @@ class PlanView(View):
         if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
             return HttpResponse(json.dumps({"error": "dhcpd.conf is not generated (plugin settings: dhcpd.conf path)", "steps": []}),
                                 status=409, content_type="application/json")
-        steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_file", kwargs={"path": quote(p.lstrip("/"))})),
-                          request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report")), mh)
+        from ..models import settings_obj
+
+        st = settings_obj()
+        mode = st.agent_mode if st else "plan"
+        from .agent import waiting_for
+
+        wait = waiting_for(server, mh)
+        if wait:  # staged rollout: earlier servers must report OK for this exact set first
+            return HttpResponse(json.dumps({"mode": mode, "hash": mh, "server": server.name, "wait_for": wait, "steps": []}, indent=1),
+                                content_type="application/json")
+        if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh:
+            steps = []  # export = everything, but only when the set changed since this server's last OK (no restart on every poll)
+        else:
+            steps = None
+        steps = steps if steps is not None else make_plan(have, server, lambda p: request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_file", kwargs={"path": quote(p.lstrip("/"))})),
+                          request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report")), mh, mode)
         if steps:
             AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
                                       user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,
-                                      cause=t("aud.plan", n=len(steps)),
+                                      cause=t("aud.plan_" + mode, n=len(steps)),
                                       changes=[{"path": x.get("path") or x.get("cmd") or ", ".join(x.get("paths", [])) or x.get("url", ""), "action": x["op"]} for x in steps])
-        return HttpResponse(json.dumps({"hash": mh, "server": server.name if server else None, "steps": steps}, indent=1), content_type="application/json")
+        return HttpResponse(json.dumps({"mode": mode, "hash": mh, "server": server.name if server else None, "steps": steps}, indent=1), content_type="application/json")
 
     def get(self, request):
         return self._plan(request, {})
