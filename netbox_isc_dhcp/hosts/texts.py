@@ -74,6 +74,8 @@ TR = {
     "hosts.own_unused": ("nepoužíva sa", "not used"),
     "hosts.own_used": ("používa sa", "in use"),
     "hosts.draft_drop": ("Zahodiť koncept", "Discard draft"),
+    "hosts.search_hosts": ("Hľadať meno, MAC alebo IP…", "Search name, MAC or IP…"),
+    "hosts.found_n": ("nájdených", "found"),
     "hosts.tpl_used": ("použitá v {n} skupinách", "used in {n} groups"),
     "hosts.tpl_add": ("Pridať šablónu", "Add template"),
     "hosts.tpl_name": ("Názov šablóny", "Template name"),

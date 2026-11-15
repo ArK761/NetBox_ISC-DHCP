@@ -80,6 +80,8 @@
         {% if f.cfg_error %}<div class="alert alert-danger d-block mt-2 mb-0 small">{{ f.cfg_error }}</div>{% else %}<pre class="isc-cfg-pre mt-2 mb-0">{{ f.cfg_text }}</pre>{% endif %}
       </details>
       <details class="isc-hosts px-3 pb-3 pt-2"><summary><span class="badge {% if f.count %}text-bg-primary{% else %}text-bg-secondary{% endif %} isc-count" data-n="{{ f.count }}">{{ f.count_text }}</span> <span class="small text-muted ms-1">{% tr "hosts.result" %}</span></summary>
+        {% if f.sections %}<input type="search" class="form-control form-control-sm mt-2 isc-hsearch" style="max-width:22rem" placeholder="{% tr 'hosts.search_hosts' %}">
+        <div class="small text-muted isc-hsearch-n mt-1"></div>{% endif %}
         {% for x in f.sections %}<details class="isc-sec-list mt-2"><summary><span class="isc-rownum">{{ x.idx }}</span> <strong>{{ x.field }}</strong>{% if x.multi %} <span class="small text-muted">#{{ x.src }}</span>{% endif %}
             <span class="badge text-bg-secondary ms-1">{{ x.count_text }}</span></summary>
           <div class="mt-1" style="max-height:24rem;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>{% tr "hosts.col_host" %}</th><th>MAC</th>{% if f.kind == 'static' %}<th>IP</th>{% endif %}</tr></thead>
@@ -93,4 +95,24 @@
   {% endif %}
 </div></div>
 {% include "netbox_isc_dhcp/_code_editor.html" %}
+<script>
+document.querySelectorAll('.isc-hsearch').forEach(function (inp) {
+  var box = inp.parentElement, out = box.querySelector('.isc-hsearch-n');
+  inp.addEventListener('input', function () {
+    var q = inp.value.trim().toLowerCase().replace(/[-.]/g, ':'), total = 0;
+    box.querySelectorAll('.isc-sec-list').forEach(function (d) {
+      var n = 0;
+      d.querySelectorAll('tbody tr, table tr:not(:first-child)').forEach(function (tr) {
+        if (tr.querySelector('th')) return;
+        var hit = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;
+        tr.style.display = hit ? '' : 'none'; if (hit) n++;
+      });
+      d.style.display = !q || n ? '' : 'none';
+      if (q) d.open = n > 0;
+      total += n;
+    });
+    out.textContent = q ? total + ' {{ found_label }}' : '';
+  });
+});
+</script>
 {% endblock %}

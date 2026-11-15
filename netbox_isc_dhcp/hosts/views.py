@@ -213,7 +213,7 @@ class HostGroupView(LoginRequiredMixin, View):
             for r in b["rows"]:
                 o = org.get((r[0], r[1]), (0, 0, ""))
                 secs.setdefault(o, []).append((r[2] if kind == "dynamic" else r[3], r[1], r[2] if kind == "static" else ""))
-            sections = [{"idx": k[1], "field": k[2], "src": k[0], "rows": v[:500], "more": max(0, len(v) - 500),
+            sections = [{"idx": k[1], "field": k[2], "src": k[0], "rows": v[:5000], "more": max(0, len(v) - 5000),
                          "count_text": t("hosts.hosts_count", n=len(v))} for k, v in sorted(secs.items(), key=lambda x: (x[0][0], x[0][1]))]
             multi_src = len({x["src"] for x in sections}) > 1
             for x in sections:
@@ -237,7 +237,7 @@ class HostGroupView(LoginRequiredMixin, View):
             "lost": [(h, t("hosts.lost_" + r), v) for h, r, v in built["lost"]],
             "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
             "warn_title": t("hosts.warn_title", n=len(built["warnings"])), "usage": usage,
-            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "editor_vars": _editor_vars(),
+            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "found_label": t("hosts.found_n"), "editor_vars": _editor_vars(),
         })
 
 
