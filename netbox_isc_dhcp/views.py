@@ -335,6 +335,7 @@ class DHCPHubView(LoginRequiredMixin, View):
             ("plugins:netbox_isc_dhcp:subnetconfig_list", "mdi-ip-network-outline", "menu.subnets", "hub.subnets"),
             ("plugins:netbox_isc_dhcp:hosts", "mdi-lan-connect", "menu.hosts", "hub.hosts"),
             ("plugins:netbox_isc_dhcp:variables", "mdi-variable", "menu.vars", "hub.vars"),
+            ("plugins:netbox_isc_dhcp:export", "mdi-file-tree-outline", "menu.export", "hub.export"),
         ]
         return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
 

@@ -24,35 +24,14 @@ def dhcp_prefixes(cfg) -> list[str]:
 
 
 def table_includes() -> tuple[list[str], list[str]]:
-    """Full paths of the group files (<name>_Dynamic, <name>_Static) when 'include into dhcpd.conf' is ticked on Hosty."""
-    from .hosts.codegen import render_files
-    from .hosts.logic import _SAFE_NAME, build_group, get_model
-    from .hosts.models import HostConfig, HostGroup
+    """Include paths of the group files = exactly the stored export files (owner rule)."""
+    from .export.build import stored_includes
+    from .hosts.models import HostConfig
 
     st, cfg = settings_obj(), HostConfig.objects.first()
-    if cfg is None or not cfg.include_tables:
-        return [], []
-    if not (st and st.table_dir):
+    if cfg is not None and cfg.include_tables and not (st and st.table_dir):
         return [], [t("warn.no_table_dir", n=1)]
-    gm = get_model(cfg.group_model)
-    if gm is None:
-        return [], []
-    live = set(gm.objects.values_list("pk", flat=True))
-    paths, bad = [], []
-    for hg in HostGroup.objects.filter(group_model=cfg.group_model).order_by("name"):
-        if hg.group_pk not in live or (cfg.include_each and not hg.include):
-            continue
-        rendered = render_files(hg, build_group(hg), {k: hg.code(k) for k in ("dynamic", "static")})
-        for kind in ("dynamic", "static"):
-            name = hg.file_name(kind)
-            text, err = rendered[kind]
-            if err or not text.strip():  # owner: an empty (or failing) file is never included
-                continue
-            if _SAFE_NAME.match(hg.name or "") and is_safe_name(name):
-                paths.append(f"{st.table_dir.path}/{name}")
-            else:
-                bad.append(name)
-    return paths, ([t("warn.bad_names", names=", ".join(bad))] if bad else [])
+    return stored_includes()[0], []
 
 
 def subnet_prefixes() -> list[str]:
@@ -83,15 +62,14 @@ def subnet_prefixes() -> list[str]:
 
 
 def subnet_includes_paths() -> tuple[list[str], list[str]]:
-    from .base_config import subnet_includes
+    """Include paths of the subnet files = exactly the stored export files."""
+    from .export.build import stored_includes
+    from .models import SubnetConfig
 
-    st = settings_obj()
-    pfx = subnet_prefixes()
-    if not pfx:
-        return [], []
-    if not (st and st.subnet_dir):
+    st, cfg = settings_obj(), SubnetConfig.objects.first()
+    if cfg is not None and cfg.include_subnets and not (st and st.subnet_dir):
         return [], [t("warn.no_subnet_dir")]
-    return [f"{st.subnet_dir.path}/{i.file}" for i in subnet_includes(pfx)], []
+    return stored_includes()[1], []
 
 
 def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:
@@ -102,8 +80,8 @@ def build_base_config(cfg: BaseConfig) -> tuple[str, list[str]]:
         warnings.insert(0, t("warn.no_base_path"))
     subs, w2 = subnet_includes_paths()
     warnings += w2
-    st_dir = st.subnet_dir.path if st and st.subnet_dir and subs else ""
-    text = render_base_config(cfg.static_text, tables, subnet_prefixes() if subs else [], subnet_dir=st_dir)
+    lines = [" ### MAC TABLE OR SUBCLASS ##"] + [f' include "{p}";' for p in tables] + ["### DHCP_POOL ###"] + [f' include "{p}";' for p in subs]
+    text = cfg.static_text.rstrip("\n") + "\n\n" + "\n".join(lines) + "\n"
     return text, warnings
 
 
@@ -189,6 +167,8 @@ def check_context() -> dict:
     cfg = BaseConfig.objects.first()
     site = site_definitions(cfg.static_text if cfg else "")
     classes = set(site["classes"])
-    for content in DHCPFile.objects.values_list("content", flat=True):
+    from .export.models import ExportFile
+
+    for content in list(DHCPFile.objects.values_list("content", flat=True)) + list(ExportFile.objects.filter(area="table").values_list("content", flat=True)):
         classes |= set(_re.findall(r'\bclass\s+"([^"]+)"', content or ""))
     return {"site": site, "known_classes": classes, "invalid": invalid_variables()}

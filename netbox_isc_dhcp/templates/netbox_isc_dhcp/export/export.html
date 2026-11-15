@@ -1,0 +1,36 @@
+{% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
+{% block title %}{% tr "exp.title" %}{% endblock %}
+{% block breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:dhcp_hub' %}">{% tr "menu.dhcp" %}</a></li>{% endblock breadcrumbs %}
+{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}{% include "netbox_isc_dhcp/hosts/_style.html" %}
+<style>
+  .isc-ftree { list-style: none; margin: 0; padding: 0 0 0 1.4rem; }
+  .isc-ftree li { position: relative; padding: .15rem 0 .15rem 1.2rem; }
+  .isc-ftree li::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid rgba(128,128,128,.45); }
+  .isc-ftree li:last-child::before { bottom: 50%; }
+  .isc-ftree li::after { content: ""; position: absolute; left: 0; top: 50%; width: .9rem; border-top: 1px solid rgba(128,128,128,.45); }
+  .isc-fdir > summary { cursor: pointer; font-weight: 600; padding: .35rem 0; }
+  .isc-fsha { font-size: .75rem; color: var(--tblr-secondary-color, #888); }
+</style>
+<div class="row"><div class="col-12">
+  <div class="card mb-3">
+    <h5 class="card-header d-flex align-items-center"><i class="mdi mdi-file-tree-outline me-2"></i>{% tr "exp.title" %}
+      <span class="badge text-bg-primary ms-2">{{ files_text }}</span></h5>
+    <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "exp.hint" %}</div>
+    <div class="isc-card-hint pt-0"><i class="mdi mdi-shield-lock-outline"></i> {% tr "exp.access" %}</div>
+    <div class="px-3 pb-3 d-flex flex-wrap gap-3 align-items-center">
+      <span class="small">{% tr "exp.total_hash" %}: <code id="isc-exp-hash">{{ m.hash|slice:":16" }}…</code></span>
+      {% if last %}<span class="small text-muted">{% tr "exp.last" %}: {{ last|date:"Y-m-d H:i:s" }}</span>{% endif %}
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'plugins:netbox_isc_dhcp:export_manifest' %}" target="_blank"><i class="mdi mdi-code-json"></i> {% tr "exp.manifest" %}</a>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:export_regen' %}" class="m-0">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary"><i class="mdi mdi-refresh"></i> {% tr "exp.regen" %}</button></form>
+    </div>
+  </div>
+  <div class="card mb-3"><div class="card-body" id="isc-exp-tree">
+    {% for d in dirs %}<details class="isc-fdir" open><summary><i class="mdi mdi-folder-outline text-warning"></i> {{ d.dir }}/ <span class="badge text-bg-secondary ms-1">{{ d.files|length }}</span> <span class="small text-muted">{{ d.size|filesizeformat }}</span></summary>
+      <ul class="isc-ftree">{% for f in d.files %}<li id="f{{ f.r.pk }}"><i class="mdi mdi-file-document-outline opacity-75"></i>
+        <a href="{% url 'plugins:netbox_isc_dhcp:export_file' path=f.r.path|slice:'1:' %}" target="_blank" title="{% tr 'exp.show' %}">{{ f.name }}</a>
+        <span class="small text-muted ms-2">{{ f.r.size|filesizeformat }}</span> <span class="isc-fsha ms-2">{{ f.r.sha256|slice:":12" }}</span>
+        <span class="small text-muted ms-2">{{ f.r.updated|date:"Y-m-d H:i:s" }}</span></li>{% endfor %}</ul>
+    </details>{% empty %}<div class="text-muted">{% tr "exp.empty" %}</div>{% endfor %}
+  </div></div>
+</div></div>
+{% endblock %}

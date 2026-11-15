@@ -1,4 +1,4 @@
-__version__ = "0.22.1"
+__version__ = "0.23.0"
 
 try:
     from netbox.plugins import PluginConfig
@@ -18,6 +18,7 @@ class ISCDHCPConfig(PluginConfig):
     def ready(self):
         super().ready()
         from . import signals  # noqa: F401  (connects the regeneration signals)
+        from .export import signals as _exp  # noqa: F401  (stored export files)
         from netbox.registry import registry
 
         # No changelog / journal tabs anywhere in this plugin.

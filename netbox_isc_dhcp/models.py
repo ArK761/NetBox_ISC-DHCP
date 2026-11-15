@@ -286,4 +286,5 @@ class DNSServer(NetBoxModel):
                 raise ValidationError({"active": t("err.max_dns", n=MAX_ACTIVE_DNS)})
 
 
+from .export.models import ExportFile  # noqa: E402,F401
 from .hosts.models import HostCodeTemplate, HostConfig, HostGroup, HostGroupCode, HostSource  # noqa: E402,F401  (hosts package models)
