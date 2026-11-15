@@ -55,6 +55,7 @@ class SubnetConfig(NetBoxModel):
     conditions = models.JSONField(default=list, blank=True, help_text="Fields of the object and the accepted values (all must match).")
     gateway_mode = models.CharField(max_length=10, default="first", choices=(("first", "First usable IP"), ("last", "Last usable IP")),
                                     help_text="Gateway of every subnet (global).")
+    include_subnets = models.BooleanField(default=False, help_text="Write include lines of the subnet files (<network>_CFG) into dhcpd.conf.")
 
     class Meta:
         ordering = ("name",)

@@ -18,6 +18,12 @@
               {% for d in subdirs %}<option value="{{ d.pk }}"{% if subnet_dir and subnet_dir.pk == d.pk %} selected{% endif %}>{{ d.name }} ({{ d.path }})</option>{% endfor %}</select>
             <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <a class="ms-2 small" href="{% url 'plugins:netbox_isc_dhcp:pluginsettings_list' %}"><i class="mdi mdi-folder-plus-outline"></i> {% tr "lbl.add_subdir" %}</a></td></tr>
+      <tr id="isc-inc-subnets"><th scope="row">{% tr "lbl.include_conf" %}</th><td>
+        <form method="post" action="{{ inline_url }}" class="d-flex align-items-center gap-2">{% csrf_token %}<input type="hidden" name="field" value="include_subnets">
+          <input type="hidden" name="value" value="{% if object.include_subnets %}0{% else %}1{% endif %}">
+          <label class="form-check form-switch m-0"><input class="form-check-input isc-inc-box" type="checkbox"{% if object.include_subnets %} checked{% endif %} onchange="this.form.submit()">
+            <span class="form-check-label">{% tr "lbl.include_subnets" %}</span></label></form>
+        <div class="small text-muted mt-1">{% tr "lbl.include_subnets_hint" %}</div></td></tr>
     </table>
     <div class="card-body border-top">
       <strong class="d-block mb-2">{% tr "lbl.conditions" %}</strong>

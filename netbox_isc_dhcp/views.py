@@ -289,6 +289,8 @@ class SubnetConfigInlineView(View):
             row.pop("value", None)
         elif action == "gateway_mode" and value in ("first", "last"):
             obj.gateway_mode = value
+        elif action == "include_subnets":
+            obj.include_subnets = value == "1"
         elif action == "subnet_dir":
             from .models import settings_obj
 
@@ -312,12 +314,14 @@ class SubnetConfigInlineView(View):
 
 def _baseconfig_context(request, instance):
     from .models import settings_obj
-    from .services import table_includes
+    from .services import subnet_includes_paths, table_includes
 
     st = settings_obj()
     includes, warnings = table_includes()
+    subs, w2 = subnet_includes_paths()
+    warnings = warnings + w2
     path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
-    return {"file_path": path, "includes": includes, "include_warnings": warnings}
+    return {"file_path": path, "includes": includes, "subnet_includes": subs, "include_warnings": warnings}
 
 
 # --- DHCP-CFG hub: the menu item that leads to all DHCP configuration parts ------

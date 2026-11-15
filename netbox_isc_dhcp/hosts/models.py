@@ -10,6 +10,7 @@ class HostConfig(models.Model):
     group_conditions = models.JSONField(default=list, blank=True, help_text="Conditions [{field, values, mode include|exclude}] filtering the groups (none = all).")
     dynamic_code = models.TextField(blank=True, default="", help_text="Jinja code of every <name>_Dynamic file (empty = default).")
     static_code = models.TextField(blank=True, default="", help_text="Jinja code of every <name>_Static file (empty = default).")
+    include_tables = models.BooleanField(default=False, help_text="Write include lines of all group files into dhcpd.conf.")
 
     class Meta:
         app_label = "netbox_isc_dhcp"

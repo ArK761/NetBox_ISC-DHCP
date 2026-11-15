@@ -134,6 +134,9 @@ class HostsInlineView(LoginRequiredMixin, View):
                     tp.save()
                     messages.success(request, t("hosts.code_saved"))
             request.session["hosts_tpl_draft"] = drafts
+        elif field == "include_tables":
+            cfg.include_tables = value == "1"
+            cfg.save()
         elif field == "table_dir":
             st = settings_obj() or PluginSettings.objects.create()
             st.table_dir_id = int(value) if value.isdigit() and DHCPPath.objects.filter(pk=int(value)).exists() else None

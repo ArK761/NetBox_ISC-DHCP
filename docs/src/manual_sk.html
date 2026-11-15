@@ -25,6 +25,7 @@
 <h2>5. Základný dhcpd.conf</h2>
 <ul><li><b>Statická časť</b> – globálne nastavenia DHCP servera (authoritative, lease časy, logovanie, primárny subnet). <b>Musí ju napísať používateľ sám</b>; plugin ju nemení.</li>
 <li><b>Dynamická časť</b> – plugin do nej zapisuje <b>výhradne riadky INCLUDE</b> (cesty k súborom tabuliek a subnetov), nikdy časti konfigurácie.</li>
+<li><b>Zaradiť do dhcpd.conf</b> – include riadky sa zapisujú až po zaškrtnutí prepínača: pre súbory skupín na stránke <b>Hosty a MAC adresy</b> (karta 1, všetky skupiny, <code>_Dynamic</code> aj <code>_Static</code>), pre subnety na stránke <b>Subnety</b> (len pooly so zapnutým generovaním a len kompatibilné subnety). Vypnuté = v dhcpd.conf nie je nič. Zoznamy sú na stránke dhcpd.conf, rozbaľujú sa kliknutím.</li>
 <li>Záložka <b>Náhľad</b> ukáže celý výsledný súbor.</li></ul>
 
 <h2>6. DNS servery</h2>

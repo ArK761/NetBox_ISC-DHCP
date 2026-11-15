@@ -25,6 +25,7 @@
 <h2>5. Base dhcpd.conf</h2>
 <ul><li><b>Static part</b> – global DHCP server settings (authoritative, lease times, logging, primary subnet). <b>It must be written by the user</b>; the plugin never changes it.</li>
 <li><b>Dynamic part</b> – the plugin writes <b>only INCLUDE lines</b> into it (paths of table and subnet files), never configuration.</li>
+<li><b>Include in dhcpd.conf</b> – include lines are written only when the switch is ticked: for group files on the <b>Hosts and MAC addresses</b> page (card 1, all groups, both <code>_Dynamic</code> and <code>_Static</code>), for subnets on the <b>Subnets</b> page (only pools with generation on and only compatible subnets). Off = nothing in dhcpd.conf. The lists are on the dhcpd.conf page, they expand on click.</li>
 <li>The <b>Preview</b> tab shows the whole resulting file.</li></ul>
 
 <h2>6. DNS servers</h2>

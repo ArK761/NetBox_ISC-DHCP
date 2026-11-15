@@ -16,6 +16,12 @@
           <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
         <a class="small" href="{% url 'plugins:netbox_isc_dhcp:pluginsettings_list' %}"><i class="mdi mdi-folder-plus-outline"></i> {% tr "lbl.add_subdir" %}</a></div>
       <div class="isc-hint mt-1">{% tr "hosts.table_dir_hint" %}</div></div>
+    <div class="isc-sec" id="isc-inc-tables"><div class="isc-sec-title">{% tr "lbl.include_conf" %}</div>
+      <div><form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="include_tables">
+        <input type="hidden" name="value" value="{% if cfg.include_tables %}0{% else %}1{% endif %}">
+        <label class="form-check form-switch m-0"><input class="form-check-input isc-inc-box" type="checkbox"{% if cfg.include_tables %} checked{% endif %} onchange="this.form.submit()">
+          <span class="form-check-label">{% tr "hosts.include_tables" %}</span></label></form>
+      <div class="isc-hint mt-1">{% tr "hosts.include_tables_hint" %}</div></div></div>
   </div>
   <div class="card mb-3" id="isc-src-group">
     <h5 class="card-header d-flex align-items-center"><span class="isc-step">2</span><i class="mdi mdi-table-multiple me-2"></i>{% tr "hosts.src_group" %}</h5>
