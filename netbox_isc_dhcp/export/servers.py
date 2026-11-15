@@ -5,7 +5,8 @@ import socket
 
 from django.core.cache import cache
 
-_FQDN = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+# hostname / FQDN; underscores allowed (common in internal DNS, e.g. dhcp_1)
+_FQDN = re.compile(r"^(?=.{1,253}\.?$)([A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.)*[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?\.?$")
 CACHE_KEY = "isc_dhcp_server_ips"
 
 
