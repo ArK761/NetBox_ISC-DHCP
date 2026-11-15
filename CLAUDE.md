@@ -77,7 +77,7 @@ downloads changed files by hash and reloads dhcpd. Pages are unauthenticated but
   DONE v0.19.2: Hosty card 4: per template collapsible tree (arrow) of groups using own code (info only).
   DONE v0.20.0: HostGroupCode (migration 0028): a group keeps SEVERAL named own codes per file (name unique per group+kind); picker = global templates + own codes; dynamic_local/static_local FK = the used one (None = template). Switching to a template never deletes own code; only unused own code can be deleted. Save needs 'Rozumiem' checkbox (err_confirm); editing a template in the group saves a NEW own code. Old dynamic_code/static_code moved to own code 'Lokálne upravený' (fields unused).
   DONE v0.20.1: group page Výsledok list = plain object name + MAC (no _1/_2), split per host row (MAC field) in collapsible sections (built['origin']); display only, CFG unaffected.
-  DONE v0.20.2/3: result list search box (name/MAC/IP, client JS) + CFG excerpt per found PC (all its MACs, lines grouped by class with the class line, static = whole host block, MAC highlighted, max 10 PCs).
+  DONE v0.20.2/3: result list search box (name/MAC/IP, client JS) + CFG excerpt per found PC (all its MACs, lines grouped by class with the class line, static = whole host block, MAC highlighted, max 10 PCs); v0.20.4: excerpt only on button "Zobraziť CFG nájdených" below the result list.
   LAST (owner, at the very end): full check of generated CFG per ISC dhcpd 4.4 manual (kb.isc.org/docs/isc-dhcp-44-manual-pages-dhcpd), extend isc_rules.py.
   NEXT hosts: code _Table/_StaticTable per group (like pools), generate + store files, includes in dhcpd.conf, replace old DHCPGroup pages.
   OLD-NEXT hosts: class table with code _Table/_StaticTable per class (like pools), generate files, includes.

@@ -81,13 +81,15 @@
       </details>
       <details class="isc-hosts px-3 pb-3 pt-2"><summary><span class="badge {% if f.count %}text-bg-primary{% else %}text-bg-secondary{% endif %} isc-count" data-n="{{ f.count }}">{{ f.count_text }}</span> <span class="small text-muted ms-1">{% tr "hosts.result" %}</span></summary>
         {% if f.sections %}<input type="search" class="form-control form-control-sm mt-2 isc-hsearch" style="max-width:22rem" placeholder="{% tr 'hosts.search_hosts' %}">
-        <div class="small text-muted isc-hsearch-n mt-1"></div><div class="isc-hsnip"></div>{% endif %}
+        <div class="small text-muted isc-hsearch-n mt-1"></div>{% endif %}
         {% for x in f.sections %}<details class="isc-sec-list mt-2"><summary><span class="isc-rownum">{{ x.idx }}</span> <strong>{{ x.field }}</strong>{% if x.multi %} <span class="small text-muted">#{{ x.src }}</span>{% endif %}
             <span class="badge text-bg-secondary ms-1">{{ x.count_text }}</span></summary>
           <div class="mt-1" style="max-height:24rem;overflow:auto"><table class="table table-sm mb-0"><thead><tr><th>{% tr "hosts.col_host" %}</th><th>MAC</th>{% if f.kind == 'static' %}<th>IP</th>{% endif %}</tr></thead>
             {% for n, m, ip in x.rows %}<tr><td>{{ n }}</td><td><code>{{ m }}</code></td>{% if f.kind == 'static' %}<td><code>{{ ip }}</code></td>{% endif %}</tr>{% endfor %}</table></div>
           {% if x.more %}<div class="small text-muted">… +{{ x.more }}</div>{% endif %}</details>
         {% empty %}<div class="text-muted mt-2">—</div>{% endfor %}
+        {% if f.sections %}<button type="button" class="btn btn-sm btn-info mt-2 isc-hsnip-btn" style="display:none"><i class="mdi mdi-file-code-outline"></i> <span>{% tr "hosts.snip_show" %}</span></button>
+        <div class="isc-hsnip"></div>{% endif %}
       </details>
     </div>
     {% endfor %}
@@ -146,6 +148,14 @@ function snip(box, q) {
   });
   if (order.length > 10) to.insertAdjacentHTML('beforeend', '<div class="small text-muted">… +' + (order.length - 10) + '</div>');
 }
+document.querySelectorAll('.isc-hsnip-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var box = btn.closest('details'), to = box.querySelector('.isc-hsnip');
+    if (to.innerHTML) { to.innerHTML = ''; btn.querySelector('span').textContent = '{{ snip_show }}'; return; }
+    snip(box, box.querySelector('.isc-hsearch').value.trim());
+    btn.querySelector('span').textContent = '{{ snip_hide }}';
+  });
+});
 document.querySelectorAll('.isc-hsearch').forEach(function (inp) {
   var box = inp.parentElement, out = box.querySelector('.isc-hsearch-n');
   inp.addEventListener('input', function () {
@@ -162,7 +172,10 @@ document.querySelectorAll('.isc-hsearch').forEach(function (inp) {
       total += n;
     });
     out.textContent = q ? total + ' {{ found_label }}' : '';
-    snip(box, q);
+    var btn = box.querySelector('.isc-hsnip-btn');
+    btn.style.display = q && total ? '' : 'none';
+    box.querySelector('.isc-hsnip').innerHTML = '';
+    btn.querySelector('span').textContent = '{{ snip_show }}';
   });
 });
 </script>

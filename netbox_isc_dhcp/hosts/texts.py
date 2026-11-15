@@ -77,6 +77,8 @@ TR = {
     "hosts.search_hosts": ("Hľadať meno, MAC alebo IP…", "Search name, MAC or IP…"),
     "hosts.found_n": ("nájdených", "found"),
     "hosts.snip_lines": ("riadkov", "lines"),
+    "hosts.snip_show": ("Zobraziť CFG nájdených", "Show CFG of found hosts"),
+    "hosts.snip_hide": ("Skryť CFG", "Hide CFG"),
     "hosts.tpl_used": ("použitá v {n} skupinách", "used in {n} groups"),
     "hosts.tpl_add": ("Pridať šablónu", "Add template"),
     "hosts.tpl_name": ("Názov šablóny", "Template name"),
