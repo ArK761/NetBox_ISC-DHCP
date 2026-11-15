@@ -31,7 +31,10 @@ class AuditEvent(models.Model):
     """Audit log: regenerations (who/why, duration, changed files with diff) and downloads by DHCP servers."""
 
     time = models.DateTimeField(db_index=True)
-    kind = models.CharField(max_length=10, choices=(("regen", "Generovanie"), ("download", "Stiahnutie"), ("report", "Hlásenie")))
+    kind = models.CharField(max_length=10, choices=(("regen", "Generovanie"), ("download", "Stiahnutie"), ("plan", "Plán"), ("report", "Hlásenie")))
+    server = models.CharField(max_length=100, blank=True, default="", help_text="DHCP server name (plan / report).")
+    result = models.CharField(max_length=20, blank=True, default="", help_text="Report result: ok, test_failed, rolled_back, failed.")
+    output = models.TextField(blank=True, default="", help_text="Report output (dhcpd -t, errors).")
     user = models.CharField(max_length=150, blank=True, default="")
     client_ip = models.CharField(max_length=64, blank=True, default="")
     cause = models.TextField(blank=True, default="", help_text="Why: saved objects, button, plugin update.")
@@ -57,6 +60,12 @@ class DHCPServer(models.Model):
     name = models.CharField(max_length=100)
     address = models.CharField(max_length=255, help_text="IP address or FQDN of the DHCP server.")
     enabled = models.BooleanField(default=True)
+    test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test; {conf} = path of dhcpd.conf.")
+    restart_cmd = models.CharField(max_length=255, default="systemctl restart isc-dhcp-server", help_text="Restart of the DHCP service.")
+    backup_dir = models.CharField(max_length=255, blank=True, default="", help_text="Backup directory (empty = <base path>/bck).")
+    last_hash = models.CharField(max_length=64, blank=True, default="")
+    last_result = models.CharField(max_length=20, blank=True, default="")
+    last_report = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         app_label = "netbox_isc_dhcp"

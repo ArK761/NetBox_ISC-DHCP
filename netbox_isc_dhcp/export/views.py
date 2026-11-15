@@ -7,7 +7,10 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 
 from ..i18n import t
 from . import audit, build
@@ -87,7 +90,7 @@ class AuditView(LoginRequiredMixin, View):
             raise PermissionDenied
         kind = request.GET.get("kind", "")
         qs = AuditEvent.objects.all()
-        if kind in ("regen", "download", "report"):
+        if kind in ("regen", "download", "plan", "report"):
             qs = qs.filter(kind=kind)
         page = int(request.GET.get("p", "1")) if request.GET.get("p", "1").isdigit() else 1
         total = qs.count()
@@ -100,7 +103,7 @@ class AuditView(LoginRequiredMixin, View):
             e.n_dl = sum(1 for c in ch if c.get("action") == "download")
         return render(request, "netbox_isc_dhcp/export/audit.html", {
             "events": events, "kind": kind, "page": page, "has_next": page * self.PER_PAGE < total, "total": total,
-            "kinds": [("", t("aud.all")), ("regen", t("aud.regen")), ("download", t("aud.download")), ("report", t("aud.report"))],
+            "kinds": [("", t("aud.all")), ("regen", t("aud.regen")), ("download", t("aud.download")), ("plan", t("aud.plan_kind")), ("report", t("aud.report"))],
         })
 
 
@@ -126,6 +129,11 @@ class ServersInlineView(LoginRequiredMixin, View):
             elif srv:
                 srv.name, srv.address = name, addr
                 srv.save()
+        elif action == "cmds" and srv:
+            srv.test_cmd = request.POST.get("test_cmd", "").strip()[:255] or srv.test_cmd
+            srv.restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or srv.restart_cmd
+            srv.backup_dir = request.POST.get("backup_dir", "").strip()[:255]
+            srv.save()
         elif action == "toggle" and srv:
             srv.enabled = not srv.enabled
             srv.save()
@@ -134,3 +142,73 @@ class ServersInlineView(LoginRequiredMixin, View):
         invalidate()
         messages.success(request, t("msg.saved"))
         return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+
+
+def _json_body(request):
+    try:
+        return json.loads(request.body or b"{}")
+    except ValueError:
+        return None
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class PlanView(View):
+    """Agent: POST {"files": {path: sha256}} (what it has) -> ordered steps. GET = plan for an empty server."""
+
+    def _plan(self, request, have):
+        from django.urls import reverse
+        from urllib.parse import quote
+
+        from .agent import make_plan, server_for
+        from .models import AuditEvent
+
+        if not _client_allowed(request):
+            raise PermissionDenied
+        server = server_for(request)
+        mh = build.manifest_hash()
+        if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
+            return HttpResponse(json.dumps({"error": "dhcpd.conf is not generated (plugin settings: dhcpd.conf path)", "steps": []}),
+                                status=409, content_type="application/json")
+        steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_file", kwargs={"path": quote(p.lstrip("/"))})),
+                          request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report")), mh)
+        if steps:
+            AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
+                                      user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,
+                                      cause=t("aud.plan", n=len(steps)),
+                                      changes=[{"path": x.get("path") or x.get("cmd") or ", ".join(x.get("paths", [])) or x.get("url", ""), "action": x["op"]} for x in steps])
+        return HttpResponse(json.dumps({"hash": mh, "server": server.name if server else None, "steps": steps}, indent=1), content_type="application/json")
+
+    def get(self, request):
+        return self._plan(request, {})
+
+    def post(self, request):
+        body = _json_body(request)
+        if body is None or not isinstance(body.get("files", {}), dict):
+            return HttpResponse('{"error": "body must be JSON {\\"files\\": {path: sha256}}"}', status=400, content_type="application/json")
+        return self._plan(request, {str(k): str(v) for k, v in body.get("files", {}).items()})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ReportView(View):
+    """Agent: POST {"hash", "result": ok|test_failed|rolled_back|failed, "output", "done": [step numbers]}."""
+
+    RESULTS = ("ok", "test_failed", "rolled_back", "failed")
+
+    def post(self, request):
+        from .agent import server_for
+        from .models import AuditEvent
+
+        if not _client_allowed(request):
+            raise PermissionDenied
+        body = _json_body(request)
+        if body is None or body.get("result") not in self.RESULTS:
+            return HttpResponse('{"error": "result must be one of ok, test_failed, rolled_back, failed"}', status=400, content_type="application/json")
+        server = server_for(request)
+        now = timezone.now()
+        AuditEvent.objects.create(time=now, kind="report", server=server.name if server else "", client_ip=audit.client_ip(request),
+                                  manifest_hash=str(body.get("hash", ""))[:64], result=body["result"], output=str(body.get("output", ""))[:20000],
+                                  cause=t("aud.result_" + body["result"]), changes=[{"path": str(x), "action": "done"} for x in body.get("done", [])][:2000])
+        if server:
+            server.last_hash, server.last_result, server.last_report = str(body.get("hash", ""))[:64], body["result"], now
+            server.save(update_fields=["last_hash", "last_result", "last_report"])
+        return HttpResponse('{"ok": true}', content_type="application/json")
