@@ -12,7 +12,7 @@
             <select name="value" class="form-select form-select-sm">
               <option value="sk"{% if object.language == "sk" %} selected{% endif %}>Slovenčina</option>
               <option value="en"{% if object.language == "en" %} selected{% endif %}>English</option></select>
-            <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td></tr>
+            <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details></td></tr>
     </table>
   </div>
 
@@ -86,13 +86,7 @@
             <input name="name" value="{{ x.s.name }}" class="form-control form-control-sm" required><input name="address" value="{{ x.s.address }}" class="form-control form-control-sm font-monospace" required>
             <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td>
         <td>{% if x.ips %}{% for ip in x.ips %}<code class="me-1">{{ ip }}</code>{% endfor %}{% else %}<span class="text-danger small"><i class="mdi mdi-alert-circle-outline"></i> {% tr "srv.unresolved" %}</span>{% endif %}
-          <details class="ie mt-1"><summary class="small text-muted" title="{% tr 'lbl.click_edit' %}"><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</summary>
-            <form method="post" action="{{ srv_url }}" class="isc-srv-cmds">{% csrf_token %}<input type="hidden" name="field" value="cmds"><input type="hidden" name="pk" value="{{ x.s.pk }}">
-              <label class="small">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ x.s.test_cmd }}" class="form-control form-control-sm font-monospace mb-1">
-              <label class="small">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ x.s.restart_cmd }}" class="form-control form-control-sm font-monospace mb-1">
-              <label class="small">{% tr "srv.order" %}</label><input name="order" value="{{ x.s.order }}" type="number" min="1" max="99" class="form-control form-control-sm mb-1" style="max-width:6rem">
-              <label class="small">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ x.s.backup_dir }}" class="form-control form-control-sm font-monospace mb-1">
-              <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td>
+</td>
         <td class="small">{% if x.s.last_report %}<span class="badge {% if x.s.last_result == 'ok' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ x.s.last_result }}</span>
           <div class="text-muted">{{ x.s.last_report|date:"Y-m-d H:i:s" }}</div>{% if x.s.last_hash %}<code>{{ x.s.last_hash|slice:":12" }}</code>{% if x.s.last_hash == current_hash %} <i class="mdi mdi-check text-success"></i>{% endif %}{% endif %}
           {% else %}<span class="text-muted">{% tr "srv.never" %}</span>{% endif %}</td>
@@ -100,6 +94,13 @@
           <button class="btn btn-link p-0 border-0 isc-srv-toggle"><i class="mdi {% if x.s.enabled %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-2"></i></button></form></td>
         <td class="text-end"><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="delete"><input type="hidden" name="pk" value="{{ x.s.pk }}">
           <button class="btn btn-sm btn-outline-danger isc-srv-del"><i class="mdi mdi-trash-can-outline"></i></button></form></td></tr>
+      <tr class="isc-srv-cmdrow"><td></td><td colspan="7" class="pt-0 border-top-0"><details class="ie"><summary class="small text-muted" title="{% tr 'lbl.click_edit' %}"><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</summary>
+            <form method="post" action="{{ srv_url }}" class="isc-srv-cmds" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;max-width:none;width:100%;align-items:end">{% csrf_token %}<input type="hidden" name="field" value="cmds"><input type="hidden" name="pk" value="{{ x.s.pk }}">
+              <div><label class="small d-block">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ x.s.test_cmd }}" class="form-control form-control-sm font-monospace"></div>
+              <div><label class="small d-block">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ x.s.restart_cmd }}" class="form-control form-control-sm font-monospace"></div>
+              <div><label class="small d-block">{% tr "srv.order" %}</label><input name="order" value="{{ x.s.order }}" type="number" min="1" max="99" class="form-control form-control-sm" style="max-width:6rem"></div>
+              <div><label class="small d-block">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ x.s.backup_dir }}" class="form-control form-control-sm font-monospace"></div>
+              <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details></td></tr>
       {% empty %}<tr><td colspan="7" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
     </table>
     <form method="post" action="{{ srv_url }}" class="d-flex gap-2 p-3 border-top" id="isc-srv-add" style="max-width:40rem">{% csrf_token %}<input type="hidden" name="field" value="add">
