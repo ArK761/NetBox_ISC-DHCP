@@ -22,6 +22,8 @@ def make_plan(have: dict, server, file_url, report_url, manifest_hash, mode="pla
     """have = {path: sha256} on the server. plan = only changes (empty when nothing to do), export = everything."""
     from ..models import base_path
 
+    if server is not None and server.last_result != "ok":
+        mode = "export"  # never reported OK (or last report failed) -> full set until the first OK
     rows = list(ExportFile.objects.order_by("area", "path").values("path", "area", "sha256", "size"))
     want = {r["path"]: r for r in rows}
     dirs = sorted({r["path"].rsplit("/", 1)[0] for r in rows if r["area"] != "conf"})

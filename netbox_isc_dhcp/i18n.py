@@ -85,6 +85,7 @@ TR = {
     "aud.result_failed": ("chyba – pozri výstup", "error – see the output"),
     "srv.cmds": ("Príkazy agenta", "Agent commands"),
     "srv.cmds_hint": ("rovnaké pre všetky servery; plugin ich len vloží do plánu, spúšťa ich skript.", "same for all servers; the plugin only puts them into the plan, the script runs them."),
+    "srv.full_first": ("Server, ktorý ešte nenahlásil OK (zatiaľ nehlásil alebo posledné hlásenie je chyba), dostane vždy kompletný CFG. Až po prvom OK dostáva v režime Plán len zmeny.", "A server that has not reported OK yet (never reported or the last report is an error) always gets the complete CFG. Only after the first OK does it get just changes in Plan mode."),
     "srv.test_cmd": ("Test", "Test"),
     "srv.restart_cmd": ("Reštart", "Restart"),
     "srv.backup_dir": ("Záloha", "Backup"),
