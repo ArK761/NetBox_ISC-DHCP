@@ -228,7 +228,7 @@ TR = {
     "opt.raw": ("Vlastný text (ľubovoľné riadky)", "Own text (any lines)"),
     "hint.gateway": ("globálne, Subnety", "global, Subnets"),
     "hint.ip": ("n>0 od siete, n<0 od broadcastu, -1 = posledná použiteľná", "n>0 from the network, n<0 from the broadcast, -1 = last usable"),
-    "ph.lease": ("600 (sekundy)", "600 (seconds)"),
+    "ph.lease": ("600 alebo 600 900 (default max, sekundy)", "600 or 600 900 (default max, seconds)"),
     "err.code_refused": ("Kód sa NEUložil: chyba v {n} z {total} rozsahov poolu. Platí posledný funkčný kód.", "Code NOT saved: errors in {n} of {total} prefixes of the pool. The last working code stays."),
     "msg.code_saved": ("Kód uložený – skontrolovaný na {n} rozsahoch.", "Code saved – checked on {n} prefixes."),
     "lbl.code_refused": ("Opravte chyby a uložte znova (váš text je v editore):", "Fix the errors and save again (your text is in the editor):"),
@@ -303,7 +303,8 @@ def current_language() -> str:
 
 # Validation messages come from pure code in English; Slovak versions:
 _MSG_SK = {
-    "lease must be a positive number of seconds": "lease musí byť kladné číslo (sekundy)",
+    "lease must be a positive number of seconds": "lease musí byť kladné číslo (sekundy), prípadne dve: default max",
+    "max-lease-time must not be lower than default-lease-time": "max-lease-time nesmie byť menší ako default-lease-time",
     "pick at least one DNS server": "zvoľte aspoň jeden DNS server",
     "value must be a whole number": "hodnota musí byť celé číslo",
     "value must be an IPv4 address": "hodnota musí byť IPv4 adresa",

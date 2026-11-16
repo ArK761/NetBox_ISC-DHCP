@@ -61,7 +61,7 @@
 <h2>8. Own variables</h2>
 <p>Named pieces of ISC configuration. When adding one, pick an ISC option (lease, DNS, network, access, PXE, DDNS, own text), write a description and set the value right away:</p>
 <table><tr><th>Option</th><th>Value</th><th>Inserts</th></tr>
-<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (factor 1.3 – configurable)</td></tr>
+<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (factor 1.3 – configurable)<br><code>600 900</code> = <code>default-lease-time 600;</code> <code>max-lease-time 900;</code></td></tr>
 <tr><td>domain-name-servers</td><td>ticked DNS servers</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
