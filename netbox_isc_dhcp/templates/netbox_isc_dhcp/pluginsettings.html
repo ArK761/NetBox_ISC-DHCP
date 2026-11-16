@@ -74,12 +74,12 @@
         <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
           <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form>
-      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3" id="isc-agent-cmds" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;align-items:end">{% csrf_token %}<input type="hidden" name="field" value="cmds">
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3" id="isc-agent-cmds" style="display:grid;grid-template-columns:auto minmax(14rem,24rem) 1fr;gap:.5rem .75rem;align-items:center">{% csrf_token %}<input type="hidden" name="field" value="cmds">
         <div style="grid-column:1/-1" class="small"><strong><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</strong> – {% tr "srv.cmds_hint" %}</div>
-        <div><label class="small d-block">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ object.agent_test_cmd }}" class="form-control form-control-sm font-monospace"></div>
-        <div><label class="small d-block">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ object.agent_restart_cmd }}" class="form-control form-control-sm font-monospace"></div>
-        <div><label class="small d-block">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ object.agent_backup_dir }}" class="form-control form-control-sm font-monospace"></div>
-        <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></div>
+        <label class="small">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ object.agent_test_cmd }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.test_cmd_do" %}</span>
+        <label class="small">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ object.agent_restart_cmd }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.restart_cmd_do" %}</span>
+        <label class="small">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ object.agent_backup_dir }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.backup_dir_do" %}</span>
+        <div></div><div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></div>
     {% url 'plugins:netbox_isc_dhcp:servers_inline' as srv_url %}
     <table class="table table-sm mb-0">
       <thead><tr><th>#</th><th>{% tr "srv.first" %}</th><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
