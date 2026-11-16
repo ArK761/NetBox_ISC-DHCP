@@ -134,16 +134,23 @@ def _server_rows():
     from .export.servers import resolve
 
     out = []
-    for srv in DHCPServer.objects.all():
+    for srv in DHCPServer.objects.order_by("pk"):
         ips, err = resolve(srv.address)
         out.append({"s": srv, "ips": ips, "err": err})
     return out
 
 
+def _first_pk():
+    from .export.models import DHCPServer
+
+    f = DHCPServer.objects.order_by("order", "pk").first()
+    return f.pk if f else None
+
+
 # --- Plugin settings: language, dhcpd.conf path, base path and subdirectories ---
 _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
       extra_context=lambda request, instance: {
-          "servers": _server_rows(),
+          "servers": _server_rows(), "first_pk": _first_pk(),
           "current_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),
                           report=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report"))),

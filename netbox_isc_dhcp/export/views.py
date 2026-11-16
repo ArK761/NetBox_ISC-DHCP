@@ -134,8 +134,6 @@ class ServersInlineView(LoginRequiredMixin, View):
             srv.test_cmd = request.POST.get("test_cmd", "").strip()[:255] or srv.test_cmd
             srv.restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or srv.restart_cmd
             srv.backup_dir = request.POST.get("backup_dir", "").strip()[:255]
-            o = request.POST.get("order", "")
-            srv.order = int(o) if o.isdigit() and 0 < int(o) < 100 else srv.order
             srv.save()
         elif action == "mode":
             from ..models import PluginSettings, settings_obj
@@ -150,7 +148,7 @@ class ServersInlineView(LoginRequiredMixin, View):
             st.staged_rollout = request.POST.get("value") == "1"
             st.save()
         elif action == "first" and srv:  # only one server can be first; others keep their relative order
-            rest = [x for x in DHCPServer.objects.order_by("order", "pk") if x.pk != srv.pk]
+            rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]  # list order (pk) never changes
             for i, x in enumerate([srv] + rest, 1):
                 if x.order != i:
                     x.order = i

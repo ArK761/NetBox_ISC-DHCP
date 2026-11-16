@@ -78,9 +78,9 @@
     <table class="table table-sm mb-0">
       <thead><tr><th>#</th><th>{% tr "srv.first" %}</th><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
       {% for x in servers %}<tr class="isc-srv">
-        <td><span class="badge text-bg-secondary">{{ x.s.order }}</span></td>
+        <td><span class="badge text-bg-secondary">{{ forloop.counter }}</span></td>
         <td><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="first"><input type="hidden" name="pk" value="{{ x.s.pk }}">
-          <label class="form-check form-switch m-0" title="{% tr 'srv.first_hint' %}"><input class="form-check-input" type="checkbox"{% if forloop.first %} checked disabled{% endif %} onchange="this.form.submit()"></label></form></td>
+          <label class="form-check form-switch m-0" title="{% tr 'srv.first_hint' %}"><input class="form-check-input" type="checkbox"{% if x.s.pk == first_pk %} checked disabled{% endif %} onchange="this.form.submit()"></label></form></td>
         <td colspan="2"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><strong>{{ x.s.name }}</strong> <code class="ms-2">{{ x.s.address }}</code> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
           <form method="post" action="{{ srv_url }}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="field" value="edit"><input type="hidden" name="pk" value="{{ x.s.pk }}">
             <input name="name" value="{{ x.s.name }}" class="form-control form-control-sm" required><input name="address" value="{{ x.s.address }}" class="form-control form-control-sm font-monospace" required>
@@ -98,7 +98,6 @@
             <form method="post" action="{{ srv_url }}" class="isc-srv-cmds" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;max-width:none;width:100%;align-items:end">{% csrf_token %}<input type="hidden" name="field" value="cmds"><input type="hidden" name="pk" value="{{ x.s.pk }}">
               <div><label class="small d-block">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ x.s.test_cmd }}" class="form-control form-control-sm font-monospace"></div>
               <div><label class="small d-block">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ x.s.restart_cmd }}" class="form-control form-control-sm font-monospace"></div>
-              <div><label class="small d-block">{% tr "srv.order" %}</label><input name="order" value="{{ x.s.order }}" type="number" min="1" max="99" class="form-control form-control-sm" style="max-width:6rem"></div>
               <div><label class="small d-block">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ x.s.backup_dir }}" class="form-control form-control-sm font-monospace"></div>
               <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details></td></tr>
       {% empty %}<tr><td colspan="7" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
