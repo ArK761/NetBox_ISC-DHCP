@@ -76,9 +76,11 @@
           <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form></div>
     {% url 'plugins:netbox_isc_dhcp:servers_inline' as srv_url %}
     <table class="table table-sm mb-0">
-      <thead><tr><th>#</th><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>{% tr "srv.first" %}</th><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
       {% for x in servers %}<tr class="isc-srv">
         <td><span class="badge text-bg-secondary">{{ x.s.order }}</span></td>
+        <td><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="first"><input type="hidden" name="pk" value="{{ x.s.pk }}">
+          <label class="form-check form-switch m-0" title="{% tr 'srv.first_hint' %}"><input class="form-check-input" type="checkbox"{% if forloop.first %} checked disabled{% endif %} onchange="this.form.submit()"></label></form></td>
         <td colspan="2"><details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><strong>{{ x.s.name }}</strong> <code class="ms-2">{{ x.s.address }}</code> <i class="mdi mdi-pencil-outline text-muted"></i></summary>
           <form method="post" action="{{ srv_url }}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="field" value="edit"><input type="hidden" name="pk" value="{{ x.s.pk }}">
             <input name="name" value="{{ x.s.name }}" class="form-control form-control-sm" required><input name="address" value="{{ x.s.address }}" class="form-control form-control-sm font-monospace" required>

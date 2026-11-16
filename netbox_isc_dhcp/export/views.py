@@ -149,6 +149,12 @@ class ServersInlineView(LoginRequiredMixin, View):
             st = settings_obj() or PluginSettings.objects.create()
             st.staged_rollout = request.POST.get("value") == "1"
             st.save()
+        elif action == "first" and srv:  # only one server can be first; others keep their relative order
+            rest = [x for x in DHCPServer.objects.order_by("order", "pk") if x.pk != srv.pk]
+            for i, x in enumerate([srv] + rest, 1):
+                if x.order != i:
+                    x.order = i
+                    x.save(update_fields=["order"])
         elif action == "toggle" and srv:
             srv.enabled = not srv.enabled
             srv.save()

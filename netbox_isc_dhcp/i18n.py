@@ -71,6 +71,8 @@ TR = {
     "aud.plan_export": ("export pre agenta (všetko): {n} krokov", "agent export (everything): {n} steps"),
     "srv.staged": ("Postupné nasadenie", "Staged rollout"),
     "srv.staged_hint": ("nový CFG dostane najprv server č. 1; ďalší až keď predchádzajúci nahlási OK pre tú istú sadu (aby nespadli všetky naraz). Vypnuté = všetky hneď.", "server no. 1 gets a new CFG first; the next one only after the previous reported OK for the same set (so they never fail together). Off = all at once."),
+    "srv.first": ("Prvý", "First"),
+    "srv.first_hint": ("Tento server dostane nový CFG ako prvý (môže byť len jeden)", "This server gets new CFG first (only one)"),
     "srv.order": ("Poradie pri nasadení", "Rollout order"),
     "srv.mode": ("Režim agenta (pre všetky servery)", "Agent mode (all servers)"),
     "srv.mode_plan": ("Plán – len zmeny", "Plan – changes only"),
