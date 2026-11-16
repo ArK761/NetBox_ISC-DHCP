@@ -222,8 +222,8 @@ def _statement_errors(no, body, words, depth, net, site, classes, STATEMENTS, OP
                 errs.append(f"line {no}: default-lease-time {d} is greater than max-lease-time {m}")
     elif w0 in ("allow", "deny", "ignore") and len(words) >= 3 and words[1] == "members" and words[2] == "of":
         m = re.search(r'"([^"]+)"', body)
-        if m and classes and not lenient and m.group(1) not in classes:
-            errs.append(f"line {no}: class \"{m.group(1)}\" is not defined (tenant tables or static part)")
+        if m and not lenient and m.group(1) not in classes:
+            errs.append(f"line {no}: class \"{m.group(1)}\" does not exist (no dynamic group file defines it)")
     elif w0 in ("next-server",) and len(words) >= 2:
         bad = check_value("hostlist", words[1])
         if bad:

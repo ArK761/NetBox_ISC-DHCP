@@ -61,7 +61,7 @@
 <h2>8. Vlastné premenné</h2>
 <p>Pomenované kúsky konfigurácie ISC. Pri pridaní vyberiete voľbu ISC (lease, DNS, sieť, prístup, PXE, DDNS, vlastný text), napíšete popis a hneď nastavíte hodnotu:</p>
 <table><tr><th>Voľba</th><th>Hodnota</th><th>Vloží</th></tr>
-<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (násobok 1,3 – nastaviteľný)<br><code>600 900</code> = <code>default-lease-time 600;</code> <code>max-lease-time 900;</code></td></tr>
+<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (násobok 1,3 – nastaviteľný)<br><code>600 900</code> = <code>default-lease-time 600;</code> <code>max-lease-time 900;</code><br>max = <code>1.5</code> = násobok (600 × 1,5 = 900)</td></tr>
 <tr><td>domain-name-servers</td><td>zaškrtnuté DNS servery</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
@@ -129,4 +129,4 @@
 <li><b>Kroky</b> (vykonať po poradí, pole <code>step</code> = číslo): <code>backup</code> (paths → to: skopírovať dhcpd.conf a adresáre do zálohy), <code>download</code> (url, path, sha256: stiahnuť do dočasného súboru, overiť SHA256, presunúť na path; dhcpd.conf je vždy posledný), <code>test</code> (cmd; pri chybe obnoviť zálohu = on_fail restore), <code>restart</code> (cmd; ak dhcpd nebeží, obnoviť zálohu a reštartovať), <code>delete</code> (path: len súbory zo spravovaných adresárov, po úspešnom reštarte), <code>report</code>.</li>
 <li><b>2. Hlásenie</b>: <code>POST dhcp/export/report/</code> s JSON <code>{"hash", "result": "ok"|"test_failed"|"rolled_back"|"failed", "output": "výstup dhcpd -t / chyba", "done": [čísla krokov]}</code>. Stav servera je v CFG pluginu (posledné hlásenie, hash, ✓ = má aktuálnu sadu), každý plán a hlásenie v Audite.</li>
 <li>Ak dhcpd.conf nie je vygenerovaný (chýba cesta), plán vráti chybu 409 a agent nesmie nič robiť.</li></ul>
-</body></html>
+<h3>Triedy (class)</h3><p>Triedy vytvárajú súbory <code>_Dynamic</code> skupín v Hosty a MAC adresy (len zahrnuté v dhcpd.conf). Stránka Subnety ukazuje kartu tried s použitím v pooloch. Kód subnetu s <code>allow/deny members of "X"</code>, kde trieda X neexistuje, sa neuloží (dhcpd by nenaštartoval) a taký subnet sa neexportuje. <code>..</code> v kóde subnetu ponúkne allow/deny riadok pre každú dynamickú triedu.</p></body></html>

@@ -20,7 +20,7 @@
 <script>
 (function () {
   var vars = JSON.parse(document.getElementById("isc-vars").textContent || "[]"), fetched = 0;
-  var url = "{% url 'plugins:netbox_isc_dhcp:variables_json' %}";
+  var url = "{% url 'plugins:netbox_isc_dhcp:variables_json' %}" + (vars.some(function (v) { return v.cls; }) ? "?classes=1" : "");
   function refresh(t) {  // load the current list (new variables appear without reloading the page)
     if (Date.now() - fetched < 3000) return;
     fetched = Date.now();
@@ -41,7 +41,7 @@
     idx = Math.min(idx, items.length - 1);
     box.innerHTML = items.map(function (v, i) {
       return '<button type="button" class="' + (i === idx ? 'active' : '') + '" data-i="' + i + '">' +
-        '<strong>' + v.name + '</strong><br><code class="small">' + v.lines.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ⏎ ") + '</code></button>';
+        '<strong>' + (v.cls ? '<i class="mdi mdi-account-group-outline"></i> class ' : '') + v.name + '</strong><br><code class="small">' + v.lines.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ⏎ ") + '</code></button>';
     }).join("");
     var r = t.getBoundingClientRect(), c = caret(t);
     var left = Math.min(r.left + c.left, r.right - 260), top = r.top + c.top + c.height + 4;
@@ -80,7 +80,7 @@
     var m = token(ta); if (!m || !items[i]) return;
     var start = ta.selectionStart - m[0].length;
     var lineStart = ta.value.lastIndexOf("\n", start - 1) + 1, indent = ta.value.slice(lineStart, start).match(/^[ \t]*/)[0];
-    ta.setRangeText("## VARIABLE ADDED VIA OWN VARIABLES\n" + indent + "USE " + items[i].name, start, ta.selectionStart, "end");
+    ta.setRangeText(items[i].cls ? items[i].lines : "## VARIABLE ADDED VIA OWN VARIABLES\n" + indent + "USE " + items[i].name, start, ta.selectionStart, "end");
     hide(); ta.focus(); paint(ta);
   }
   document.querySelectorAll("textarea.code-editor").forEach(function (t) {

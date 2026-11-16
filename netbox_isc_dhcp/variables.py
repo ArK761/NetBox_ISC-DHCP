@@ -49,11 +49,22 @@ def build_lines(option: str, value: str, dns_ips=(), lease_factor: float = 1.3) 
     _, _, kind, pattern = CATALOG[option]
     value = (value or "").strip()
     if kind == "lease":
-        parts = value.split()  # "60" (max = default x factor) or "60 90" (default max)
-        if not 1 <= len(parts) <= 2 or not all(p.isdigit() and int(p) > 0 for p in parts):
+        parts = value.split()  # "60" (max = default x global factor), "60 90" (max seconds), "60 1.5" (max = default x 1.5)
+        if not 1 <= len(parts) <= 2 or not (parts[0].isdigit() and int(parts[0]) > 0):
             raise VariableError("lease must be a positive number of seconds")
         dflt = int(parts[0])
-        mx = int(parts[1]) if len(parts) == 2 else round(dflt * lease_factor)
+        if len(parts) == 1:
+            mx = round(dflt * lease_factor)
+        elif parts[1].isdigit() and int(parts[1]) > 0:
+            mx = int(parts[1])
+        else:
+            try:
+                f = float(parts[1])
+            except ValueError:
+                raise VariableError("lease must be a positive number of seconds")
+            if not 1 <= f <= 100:
+                raise VariableError("lease must be a positive number of seconds")
+            mx = round(dflt * f)
         if mx < dflt:
             raise VariableError("max-lease-time must not be lower than default-lease-time")
         return f"default-lease-time {dflt};\nmax-lease-time {mx};"

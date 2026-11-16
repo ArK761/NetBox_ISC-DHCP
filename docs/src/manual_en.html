@@ -61,7 +61,7 @@
 <h2>8. Own variables</h2>
 <p>Named pieces of ISC configuration. When adding one, pick an ISC option (lease, DNS, network, access, PXE, DDNS, own text), write a description and set the value right away:</p>
 <table><tr><th>Option</th><th>Value</th><th>Inserts</th></tr>
-<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (factor 1.3 – configurable)<br><code>600 900</code> = <code>default-lease-time 600;</code> <code>max-lease-time 900;</code></td></tr>
+<tr><td>default + max lease</td><td>600</td><td><code>default-lease-time 600;</code> <code>max-lease-time 780;</code> (factor 1.3 – configurable)<br><code>600 900</code> = <code>default-lease-time 600;</code> <code>max-lease-time 900;</code><br>max = <code>1.5</code> = factor (600 × 1.5 = 900)</td></tr>
 <tr><td>domain-name-servers</td><td>ticked DNS servers</td><td><code>option domain-name-servers …;</code></td></tr>
 <tr><td>range</td><td>10.17.0.10 10.17.3.254</td><td><code>range 10.17.0.10 10.17.3.254;</code></td></tr>
 <tr><td>allow / deny duplicates</td><td>deny</td><td><code>deny duplicates;</code></td></tr></table>
@@ -129,4 +129,4 @@
 <li><b>Steps</b> (run in order, field <code>step</code> = number): <code>backup</code> (paths → to), <code>download</code> (url, path, sha256: download to a temp file, verify SHA256, move to path; dhcpd.conf always last), <code>test</code> (cmd; on error restore the backup = on_fail restore), <code>restart</code> (cmd; if dhcpd does not run, restore and restart), <code>delete</code> (path: only files of the managed directories, after a successful restart), <code>report</code>.</li>
 <li><b>2. Report</b>: <code>POST dhcp/export/report/</code> with JSON <code>{"hash", "result": "ok"|"test_failed"|"rolled_back"|"failed", "output": "dhcpd -t output / error", "done": [step numbers]}</code>. The server state is in plugin settings (last report, hash, ✓ = has the current set), every plan and report in the Audit.</li>
 <li>If dhcpd.conf is not generated (path missing), the plan returns error 409 and the agent must do nothing.</li></ul>
-</body></html>
+<h3>Classes</h3><p>Classes are created by the groups' <code>_Dynamic</code> files in Hosts and MAC addresses (only those included in dhcpd.conf). The Subnets page shows a class card with their use in pools. Subnet code with <code>allow/deny members of "X"</code> where class X does not exist is refused (dhcpd would not start) and such a subnet is not exported. <code>..</code> in subnet code offers an allow/deny line for every dynamic class.</p></body></html>

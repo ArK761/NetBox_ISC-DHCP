@@ -158,6 +158,18 @@ def invalid_variables() -> set[str]:
     return {v.name for v in ConfigVariable.objects.all()} - set(variable_snippets())
 
 
+def dynamic_classes() -> set:
+    """Classes defined in the stored (= included) group files; only these exist for dhcpd."""
+    import re as _re
+
+    from .export.models import ExportFile
+
+    out = set()
+    for content in ExportFile.objects.filter(area="table").values_list("content", flat=True):
+        out |= set(_re.findall(r'^\s*class\s+"([^"]+)"', content or "", _re.M))
+    return out
+
+
 def check_context() -> dict:
     """Site knowledge for code checks: custom options, set variables and classes (static part + tenant tables)."""
     import re as _re
@@ -169,6 +181,5 @@ def check_context() -> dict:
     classes = set(site["classes"])
     from .export.models import ExportFile
 
-    for content in list(DHCPFile.objects.values_list("content", flat=True)) + list(ExportFile.objects.filter(area="table").values_list("content", flat=True)):
-        classes |= set(_re.findall(r'\bclass\s+"([^"]+)"', content or ""))
+    classes |= dynamic_classes()
     return {"site": site, "known_classes": classes, "invalid": invalid_variables()}

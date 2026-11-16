@@ -21,6 +21,9 @@ def _flush():
 
     audit.start()
     try:
+        from ..services import dynamic_classes
+
+        before = dynamic_classes()
         if p["tables"]:
             build.regen_tables()
         else:
@@ -31,6 +34,11 @@ def _flush():
             for k in gone:
                 for row in build.ExportFile.objects.filter(key__startswith=f"group:{k}:"):
                     build._del(row)
+        if dynamic_classes() != before:  # a class appeared/disappeared: subnet codes using it must be re-checked
+            from .. import compat
+
+            compat.invalidate()
+            p["all_subnets"] = True
         if p["all_subnets"]:
             build.regen_subnets()
         else:

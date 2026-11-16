@@ -398,6 +398,18 @@ def _pool_names(model, qs, key) -> list[tuple[str, str]]:
     return [(v, l) for v, l in options if v in used] or [(v, label.get(v, v)) for v in sorted(used)]
 
 
+def _class_context():
+    """Subnety card: dynamic classes (from the stored group files) with their use, and classes used but not existing."""
+    from .hosts.usage import references, usage_of
+    from .hosts.views import _usage_rows
+    from .services import check_context, dynamic_classes
+
+    refs, dyn = references(), dynamic_classes()
+    known = dyn | set(check_context()["site"].get("classes", ()))
+    unknown = [{"name": n, "uses": [u for u in us if u["where"] != "static"]} for n, us in sorted(refs.items()) if n not in known]
+    return {"classes": _usage_rows(usage_of(sorted(dyn, key=str.lower), refs)), "unknown_classes": [u for u in unknown if u["uses"]]}
+
+
 def _subnetconfig_context(request, instance):
     from .source_fields import (_field_q, cond_values, distinct_values, field_options, is_active, label_for,
                                 source_label, source_models)
@@ -449,6 +461,7 @@ def _subnetconfig_context(request, instance):
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
             "overrides": __import__("netbox_isc_dhcp.compat", fromlist=["x"]).overrides(),
+            **_class_context(),
             "gateway_label": t("lbl.gw_first") if instance.gateway_mode == "first" else t("lbl.gw_last"),
             "subdirs": DHCPPath.objects.all(), "subnet_dir": getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "subnet_dir", None),
             "matched_text": t("lbl.matched", n=count) if any_active else t("lbl.matched_none")}
@@ -502,7 +515,7 @@ def _pooltemplate_context(request, instance):
         text, errors = render_subnet(chosen_override.code, str(chosen.prefix), a["dns"], {"obj": chosen, "cf": chosen.custom_field_data or {}},
                                      gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"], invalid=a["invalid"])
         errors = [tmsg(e) for e in errors]
-    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars(), "draft": draft,
+    return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars() + _editor_classes(), "draft": draft,
             "overrides": own, "chosen_override": chosen_override,
             "suitable_text": ranges_text(instance.suitable), "allowed": (lo, hi), "incompatible": bad,
             "lengths": instance.suitable}
@@ -618,6 +631,16 @@ def _editor_vars():
     return [{"name": n, "lines": l} for n, l in sorted(variable_snippets().items())]
 
 
+def _editor_classes():
+    """Dynamic classes for the `..` autocomplete in subnet code editors: allow + deny line per class."""
+    from .services import dynamic_classes
+
+    out = []
+    for c in sorted(dynamic_classes(), key=str.lower):
+        out += [{"name": c, "cls": True, "lines": f'allow members of "{c}";'}, {"name": c, "cls": True, "lines": f'deny members of "{c}";'}]
+    return out
+
+
 class VariablesView(LoginRequiredMixin, View):
     def get(self, request):
         from django.shortcuts import render
@@ -636,7 +659,9 @@ class VariablesView(LoginRequiredMixin, View):
             except VariableError as exc:
                 lines, err = "", tmsg(str(exc))
             rows.append({"obj": v, "label": label, "kind": kind, "lines": lines, "error": err,
-                         "used_by": usage.get(v.name, []), "dns_ids": set(v.dns_servers or [])})
+                         "used_by": usage.get(v.name, []), "dns_ids": set(v.dns_servers or []),
+                         "lease_def": (v.value or "").split()[0] if kind == "lease" and (v.value or "").split() else "",
+                         "lease_max": (v.value or "").split()[1] if kind == "lease" and len((v.value or "").split()) > 1 else ""})
         groups = {}
         for key, (label, group, kind, _) in CATALOG.items():
             groups.setdefault(t(f"grp.{group}"), []).append((key, t("opt.raw") if key == "raw" else label, kind))
@@ -659,6 +684,8 @@ def _apply_value(obj, post):
         obj.value = post.get("value_raw", post.get("value", ""))
     elif kind in ("allowdeny", "truefalse", "onoff"):
         obj.value = post.get(f"value_{kind}", post.get("value", "")).strip()
+    elif kind == "lease" and "value_lease_def" in post:  # default + max (seconds) or factor (e.g. 1.5)
+        obj.value = " ".join(x for x in (post.get("value_lease_def", "").strip(), post.get("value_lease_max", "").strip().replace(",", ".")) if x)
     else:
         obj.value = post.get("value_text", post.get("value", "")).strip()
 
@@ -808,7 +835,7 @@ class SubnetOverrideView(LoginRequiredMixin, View):
         text, errors = self._check(code, prefix)
         return render(request, self.template, {
             "pool": pool, "prefix": prefix, "override": ovr, "code": code, "rendered": text,
-            "errors": [tmsg(e) for e in errors], "editor_vars": _editor_vars(), "draft": draft is not None,
+            "errors": [tmsg(e) for e in errors], "editor_vars": _editor_vars() + _editor_classes(), "draft": draft is not None,
         })
 
     def post(self, request, pk, prefix_pk):
@@ -845,4 +872,4 @@ class VariablesJSONView(LoginRequiredMixin, View):
     def get(self, request):
         from django.http import JsonResponse
 
-        return JsonResponse({"vars": _editor_vars()})
+        return JsonResponse({"vars": _editor_vars() + (_editor_classes() if request.GET.get("classes") else [])})
