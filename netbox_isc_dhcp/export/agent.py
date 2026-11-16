@@ -30,14 +30,17 @@ def make_plan(have: dict, server, file_url, report_url, manifest_hash, mode="pla
     if not download and not delete:
         return []
     conf = next((r["path"] for r in rows if r["area"] == "conf"), "")
-    backup = (server.backup_dir if server and server.backup_dir else f"{base_path() or ''}/bck")
+    from ..models import settings_obj
+
+    st = settings_obj()
+    backup = (st.agent_backup_dir if st and st.agent_backup_dir else f"{base_path() or ''}/bck")
     steps = [{"op": "backup", "paths": ([conf] if conf else []) + dirs, "to": backup}]
     # included files first, dhcpd.conf last: dhcpd.conf never points to a file that is not there yet
     for r in sorted(download, key=lambda r: r["area"] == "conf"):
         steps.append({"op": "download", "path": r["path"], "sha256": r["sha256"], "size": r["size"], "url": file_url(r["path"])})
-    test = (server.test_cmd if server else "dhcpd -t -cf {conf}").replace("{conf}", conf)
+    test = (st.agent_test_cmd if st else "dhcpd -t -cf {conf}").replace("{conf}", conf)
     steps.append({"op": "test", "cmd": test, "on_fail": "restore"})
-    steps.append({"op": "restart", "cmd": server.restart_cmd if server else "systemctl restart isc-dhcp-server", "on_fail": "restore"})
+    steps.append({"op": "restart", "cmd": st.agent_restart_cmd if st else "systemctl restart isc-dhcp-server", "on_fail": "restore"})
     for p in delete:
         steps.append({"op": "delete", "path": p})
     steps.append({"op": "report", "url": report_url, "hash": manifest_hash})

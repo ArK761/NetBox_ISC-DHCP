@@ -84,6 +84,7 @@ TR = {
     "aud.result_rolled_back": ("dhcpd po reštarte nebežal – vrátené na zálohu", "dhcpd did not run after restart – rolled back"),
     "aud.result_failed": ("chyba – pozri výstup", "error – see the output"),
     "srv.cmds": ("Príkazy agenta", "Agent commands"),
+    "srv.cmds_hint": ("rovnaké pre všetky servery; plugin ich len vloží do plánu, spúšťa ich skript.", "same for all servers; the plugin only puts them into the plan, the script runs them."),
     "srv.test_cmd": ("Test ({conf} = cesta k dhcpd.conf)", "Test ({conf} = dhcpd.conf path)"),
     "srv.restart_cmd": ("Reštart", "Restart"),
     "srv.backup_dir": ("Záloha (prázdne = <základná cesta>/bck)", "Backup (empty = <base path>/bck)"),

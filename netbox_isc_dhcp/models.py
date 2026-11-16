@@ -255,6 +255,9 @@ class PluginSettings(NetBoxModel):
                                    help_text="Subdirectory of the subnet (prefix) files.")
     agent_mode = models.CharField(max_length=10, default="plan", choices=(("plan", "Plan"), ("export", "Export")),
                                   help_text="For all DHCP servers: plan = only changes, export = download everything.")
+    agent_test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test for all DHCP servers; {conf} = path of dhcpd.conf.")
+    agent_restart_cmd = models.CharField(max_length=255, default="systemctl restart isc-dhcp-server", help_text="Restart of the DHCP service (all servers).")
+    agent_backup_dir = models.CharField(max_length=255, blank=True, default="", help_text="Backup directory for all servers (empty = <base path>/bck).")
     staged_rollout = models.BooleanField(default=False, help_text="Servers get a new CFG one after another (by order): the next only after the previous reported OK.")
 
     class Meta:

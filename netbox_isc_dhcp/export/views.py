@@ -130,11 +130,14 @@ class ServersInlineView(LoginRequiredMixin, View):
             elif srv:
                 srv.name, srv.address = name, addr
                 srv.save()
-        elif action == "cmds" and srv:
-            srv.test_cmd = request.POST.get("test_cmd", "").strip()[:255] or srv.test_cmd
-            srv.restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or srv.restart_cmd
-            srv.backup_dir = request.POST.get("backup_dir", "").strip()[:255]
-            srv.save()
+        elif action == "cmds":  # shared by all DHCP servers
+            from ..models import PluginSettings, settings_obj
+
+            st = settings_obj() or PluginSettings.objects.create()
+            st.agent_test_cmd = request.POST.get("test_cmd", "").strip()[:255] or st.agent_test_cmd
+            st.agent_restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or st.agent_restart_cmd
+            st.agent_backup_dir = request.POST.get("backup_dir", "").strip()[:255]
+            st.save()
         elif action == "mode":
             from ..models import PluginSettings, settings_obj
 

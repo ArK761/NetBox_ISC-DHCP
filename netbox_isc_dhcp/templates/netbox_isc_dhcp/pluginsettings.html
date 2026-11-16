@@ -73,7 +73,13 @@
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-staged">{% csrf_token %}<input type="hidden" name="field" value="staged">
         <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
-          <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form></div>
+          <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3" id="isc-agent-cmds" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;align-items:end">{% csrf_token %}<input type="hidden" name="field" value="cmds">
+        <div style="grid-column:1/-1" class="small"><strong><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</strong> – {% tr "srv.cmds_hint" %}</div>
+        <div><label class="small d-block">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ object.agent_test_cmd }}" class="form-control form-control-sm font-monospace"></div>
+        <div><label class="small d-block">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ object.agent_restart_cmd }}" class="form-control form-control-sm font-monospace"></div>
+        <div><label class="small d-block">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ object.agent_backup_dir }}" class="form-control form-control-sm font-monospace"></div>
+        <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></div>
     {% url 'plugins:netbox_isc_dhcp:servers_inline' as srv_url %}
     <table class="table table-sm mb-0">
       <thead><tr><th>#</th><th>{% tr "srv.first" %}</th><th>{% tr "lbl.name" %}</th><th>{% tr "srv.address" %}</th><th>{% tr "srv.col_ip" %}</th><th>{% tr "srv.state" %}</th><th>{% tr "hosts.col_enabled" %}</th><th></th></tr></thead>
@@ -94,12 +100,6 @@
           <button class="btn btn-link p-0 border-0 isc-srv-toggle"><i class="mdi {% if x.s.enabled %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-2"></i></button></form></td>
         <td class="text-end"><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="delete"><input type="hidden" name="pk" value="{{ x.s.pk }}">
           <button class="btn btn-sm btn-outline-danger isc-srv-del"><i class="mdi mdi-trash-can-outline"></i></button></form></td></tr>
-      <tr class="isc-srv-cmdrow"><td></td><td colspan="7" class="pt-0 border-top-0"><details class="ie"><summary class="small text-muted" title="{% tr 'lbl.click_edit' %}"><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</summary>
-            <form method="post" action="{{ srv_url }}" class="isc-srv-cmds" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;max-width:none;width:100%;align-items:end">{% csrf_token %}<input type="hidden" name="field" value="cmds"><input type="hidden" name="pk" value="{{ x.s.pk }}">
-              <div><label class="small d-block">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ x.s.test_cmd }}" class="form-control form-control-sm font-monospace"></div>
-              <div><label class="small d-block">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ x.s.restart_cmd }}" class="form-control form-control-sm font-monospace"></div>
-              <div><label class="small d-block">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ x.s.backup_dir }}" class="form-control form-control-sm font-monospace"></div>
-              <div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form></details></td></tr>
       {% empty %}<tr><td colspan="7" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
     </table>
     <form method="post" action="{{ srv_url }}" class="d-flex gap-2 p-3 border-top" id="isc-srv-add" style="max-width:40rem">{% csrf_token %}<input type="hidden" name="field" value="add">
