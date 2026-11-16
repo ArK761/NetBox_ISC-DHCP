@@ -84,6 +84,22 @@ class HostsInlineView(LoginRequiredMixin, View):
     """Click-to-edit values of the hosts page; returns to the part that was changed."""
 
     def post(self, request):
+        from django.db import transaction
+
+        from .classes import lost_by_tables, refuse_text
+        from .models import HostConfig
+
+        with transaction.atomic():  # anti-mistake: table switches / template edits that remove a used class are rolled back
+            resp = self._post(request)
+            lost = lost_by_tables(HostConfig.objects.first() or host_config())
+            if lost:
+                transaction.set_rollback(True)
+        if lost:
+            list(messages.get_messages(request))
+            messages.error(request, refuse_text(lost))
+        return resp
+
+    def _post(self, request):
         if not request.user.has_perm("netbox_isc_dhcp.change_hostconfig"):
             raise PermissionDenied
         cfg = host_config()
@@ -251,6 +267,22 @@ class HostGroupInlineView(LoginRequiredMixin, View):
     def post(self, request, pk):
         if not request.user.has_perm("netbox_isc_dhcp.change_hostconfig"):
             raise PermissionDenied
+        get_object_or_404(HostGroup, pk=pk)
+        from django.db import transaction
+
+        from .classes import lost_by_group, refuse_text
+
+        with transaction.atomic():  # anti-mistake: a change that removes a used class is rolled back
+            resp = self._post(request, pk)
+            lost = lost_by_group(HostGroup.objects.get(pk=pk))
+            if lost:
+                transaction.set_rollback(True)
+        if lost:
+            list(messages.get_messages(request))  # drop the success message of the rolled back change
+            messages.error(request, refuse_text(lost))
+        return resp
+
+    def _post(self, request, pk):
         hg = get_object_or_404(HostGroup, pk=pk)
         field, value = request.POST.get("field", ""), request.POST.get("value", "").strip()
         sid = request.POST.get("src", "")

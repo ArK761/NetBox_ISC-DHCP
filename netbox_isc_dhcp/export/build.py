@@ -57,15 +57,14 @@ def _tables_state():
     return (cfg, st, gm) if gm is not None else (None, None, None)
 
 
-def regen_group(hg, state=None):
-    """Both files of one group. Not stored (and removed) when the group is not included, empty or failing."""
+def group_texts(hg, state=None) -> dict:
+    """{kind: (key, path, text)} of the files this group would store (not included, empty or failing = left out)."""
     from ..hosts.codegen import render_files
     from ..hosts.logic import _SAFE_NAME, build_group
     from ..services import is_safe_name
 
     cfg, st, gm = state or _tables_state()
-    changed = False
-    keep = set()
+    out = {}
     if cfg is not None and hg.group_model == cfg.group_model and gm.objects.filter(pk=hg.group_pk).exists() \
             and (not cfg.include_each or hg.include) and _SAFE_NAME.match(hg.name or ""):
         rendered = render_files(hg, build_group(hg), {k: hg.code(k) for k in ("dynamic", "static")})
@@ -74,9 +73,17 @@ def regen_group(hg, state=None):
             name = hg.file_name(kind)
             if err or not text.strip() or not is_safe_name(name):
                 continue
-            key = f"group:{hg.pk}:{kind}"
-            keep.add(key)
-            changed |= _put(key, "table", f"{st.table_dir.path}/{name}", text)
+            out[kind] = (f"group:{hg.pk}:{kind}", f"{st.table_dir.path}/{name}", text)
+    return out
+
+
+def regen_group(hg, state=None):
+    """Both files of one group. Not stored (and removed) when the group is not included, empty or failing."""
+    changed = False
+    keep = set()
+    for key, path, text in group_texts(hg, state).values():
+        keep.add(key)
+        changed |= _put(key, "table", path, text)
     for row in ExportFile.objects.filter(key__startswith=f"group:{hg.pk}:"):
         if row.key not in keep:
             _del(row)

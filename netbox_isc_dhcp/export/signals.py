@@ -164,3 +164,7 @@ def _connect():
 
 _connect()
 
+
+from ..hosts.classes import connect as _classes_connect  # noqa: E402
+
+_classes_connect()

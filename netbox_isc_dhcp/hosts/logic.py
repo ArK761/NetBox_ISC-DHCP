@@ -100,8 +100,9 @@ def groups_overview(cfg, open_row=None) -> dict:
                                           dynamic_template=HostCodeTemplate.objects.filter(kind="dynamic").first(),
                                           static_template=HostCodeTemplate.objects.filter(kind="static").first())
         elif hg.name != name[:200]:
-            hg.name = name[:200]
-            hg.save(update_fields=["name"])
+            from .classes import sync_name
+
+            sync_name(hg, name[:200])  # the class is renamed in every subnet code too
         row = {"obj": g, "hg": hg, "name": name, "valid": bool(_SAFE_NAME.match(name))}
         row.update(build_group(hg))
         if not row["objects"]:  # nothing from the sources yet: what NetBox links to the group
