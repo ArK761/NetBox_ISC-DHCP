@@ -98,7 +98,7 @@
       <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.prefixes" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "lbl.use_for" %}</th><th>{% tr "lbl.incompat_short" %}</th><th>{% tr "lbl.generate" %}</th>{% if object.include_subnets and object.include_each %}<th>{% tr "hosts.col_include" %}</th>{% endif %}<th></th></tr></thead>
       {% for p in pools %}
       <tr><td><a href="{{ p.obj.get_absolute_url }}"><strong>{{ p.obj.name }}</strong></a></td><td>{{ p.count }}</td>
-        <td class="text-nowrap">{% include "netbox_isc_dhcp/_code_state.html" with pool=p.obj ovr=p.ovr %}</td>
+        <td class="text-nowrap">{% include "netbox_isc_dhcp/_code_state.html" with pool=p.obj ovr=p.ovr %}{% if p.lit %} <span class="badge text-bg-warning" title="{% tr 'cls.hint_title' %}"><i class="mdi mdi-lightbulb-on-outline"></i> {{ p.lit }}× class</span>{% endif %}</td>
         <td><code>{{ p.range }}</code></td><td>{% if p.bad %}<span class="badge text-bg-danger">{{ p.bad }}</span>{% else %}<span class="text-success">0</span>{% endif %}</td>
         <td>{% if p.obj.enabled %}<span class="text-success">{% tr "lbl.yes" %}</span>{% else %}{% tr "lbl.no" %}{% endif %}</td>
         {% if object.include_subnets and object.include_each %}<td>{% url 'plugins:netbox_isc_dhcp:pooltemplate_inline' pk=p.obj.pk as pin_url %}<form method="post" action="{{ pin_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="include"><input type="hidden" name="next" value="{{ request.path }}"><input type="hidden" name="value" value="{% if p.obj.include %}0{% else %}1{% endif %}">

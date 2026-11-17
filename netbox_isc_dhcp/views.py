@@ -456,7 +456,7 @@ def _subnetconfig_context(request, instance):
                 lo, hi = pt.allowed_range()
                 pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [value])).count(),
                               "range": f"/{lo} – /{hi}" if lo else "—", "bad": sum(1 for x in bad if x["pool_pk"] == pt.pk),
-                              "ovr": ovr.get(pt.pk, 0)})
+                              "ovr": ovr.get(pt.pk, 0), "lit": len(__import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).literal_lines(pt.template))})
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
@@ -515,7 +515,10 @@ def _pooltemplate_context(request, instance):
         text, errors = render_subnet(chosen_override.code, str(chosen.prefix), a["dns"], {"obj": chosen, "cf": chosen.custom_field_data or {}},
                                      gateway_mode=a["gateway_mode"], snippets=a["snippets"], site=a["site"], known_classes=a["known_classes"], invalid=a["invalid"])
         errors = [tmsg(e) for e in errors]
+    from .hosts.classes import literal_lines
+
     return {"prefixes": prefixes, "chosen": chosen, "rendered": text, "errors": errors, "editor_vars": _editor_vars() + _editor_classes(), "draft": draft,
+            "class_hints": literal_lines(instance.template),
             "overrides": own, "chosen_override": chosen_override,
             "suitable_text": ranges_text(instance.suitable), "allowed": (lo, hi), "incompatible": bad,
             "lengths": instance.suitable}
@@ -558,6 +561,15 @@ class PoolTemplateInlineView(View):
         obj = get_object_or_404(PoolTemplate, pk=pk)
         field = request.POST.get("field")
         draft_key = f"isc_pool_draft_{obj.pk}"
+        if field == "to_use":  # hand-written members-of lines of dynamic classes -> USE ALLOW/DENY (same CFG)
+            from .hosts.classes import to_use
+
+            obj.template = to_use(obj.template)
+            obj.save()
+            messages.success(request, t("msg.saved"))
+            url = obj.get_absolute_url()
+            p = request.POST.get("p", "")
+            return redirect(f"{url}?p={p}" if p.isdigit() else url)
         if field == "template":
             from .variables import normalize
 
@@ -637,7 +649,7 @@ def _editor_classes():
 
     out = []
     for c in sorted(dynamic_classes(), key=str.lower):
-        out += [{"name": c, "cls": True, "lines": f'allow members of "{c}";'}, {"name": c, "cls": True, "lines": f'deny members of "{c}";'}]
+        out += [{"name": c, "cls": "ALLOW", "lines": f'allow members of "{c}";'}, {"name": c, "cls": "DENY", "lines": f'deny members of "{c}";'}]
     return out
 
 
@@ -836,6 +848,7 @@ class SubnetOverrideView(LoginRequiredMixin, View):
         return render(request, self.template, {
             "pool": pool, "prefix": prefix, "override": ovr, "code": code, "rendered": text,
             "errors": [tmsg(e) for e in errors], "editor_vars": _editor_vars() + _editor_classes(), "draft": draft is not None,
+            "class_hints": __import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).literal_lines(ovr.code) if ovr else [],
         })
 
     def post(self, request, pk, prefix_pk):
@@ -851,6 +864,13 @@ class SubnetOverrideView(LoginRequiredMixin, View):
                 ovr.delete()
             messages.success(request, t("msg.override_removed", prefix=str(prefix.prefix)))
             return redirect(f"{pool.get_absolute_url()}?p={prefix.pk}")
+        if request.POST.get("field") == "to_use" and ovr:
+            from .hosts.classes import to_use
+
+            ovr.code = to_use(ovr.code)
+            ovr.save()
+            messages.success(request, t("msg.saved"))
+            return redirect(here)
         if not pool.allow_override:
             messages.error(request, t("err.override_off"))
             return redirect(here)

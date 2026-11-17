@@ -41,6 +41,9 @@
     <div class="card-body">
       {% if draft %}<div class="alert alert-danger d-block"><strong class="d-block mb-1">{% tr "lbl.code_refused" %}</strong>
         <ul class="mb-0">{% for e, n, pfx in draft.problems %}<li>{{ e }} <span class="small opacity-75">– {% tr "lbl.in_prefixes" %} {{ n }}, {% tr "lbl.e_g" %} <code>{{ pfx }}</code></span></li>{% endfor %}</ul></div>{% endif %}
+      {% if class_hints %}<div class="alert alert-warning d-block"><i class="mdi mdi-lightbulb-on-outline me-1"></i><strong>{% tr "cls.hint_title" %}</strong>
+        <ul class="mb-1 small">{% for no, mode, name in class_hints %}<li>{% tr "cls.hint_line" %} {{ no }}: <code>{{ mode }} members of "{{ name }}";</code> → <code>USE {{ mode|upper }} {{ name }}</code></li>{% endfor %}</ul>
+        <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="to_use"><input type="hidden" name="p" value="{{ chosen.pk }}"><button class="btn btn-sm btn-warning"><i class="mdi mdi-swap-horizontal"></i> {% tr "cls.hint_btn" %}</button></form></div>{% endif %}
       <details class="ie wide"{% if draft %} open{% endif %}><summary title="{% tr 'lbl.click_edit' %}" class="d-block"><pre class="m-0">{{ object.template|isc_highlight }}</pre></summary>
         <form method="post" action="{{ inline_url }}">{% csrf_token %}<input type="hidden" name="field" value="template"><input type="hidden" name="p" value="{{ chosen.pk }}">
           <textarea name="value" rows="24" class="form-control font-monospace code-editor">{% if draft %}{{ draft.code }}{% else %}{{ object.template }}{% endif %}</textarea>

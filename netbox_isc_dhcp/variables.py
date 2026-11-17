@@ -32,6 +32,9 @@ CATALOG = {
 }
 NAME_RE = re.compile(r"^[A-Za-z0-9_./-]{1,60}$")
 USE_RE = re.compile(r"^(?P<indent>[ \t]*)USE[ \t]+(?P<name>\S+)[ \t]*$", re.M)
+# dynamic class line: USE ALLOW <class> / USE DENY <class>  ->  allow/deny members of "<class>";
+USE_CLASS_RE = re.compile(r"^(?P<indent>[ \t]*)USE[ \t]+(?P<mode>ALLOW|DENY)[ \t]+(?P<name>\S+)[ \t]*$", re.M)
+CLASS_COMMENT = "## CLASS ADDED VIA DYNAMIC CLASSES"
 
 
 class VariableError(ValueError):
@@ -157,4 +160,6 @@ def expand_use(template: str, snippets: dict[str, str], invalid=()) -> tuple[str
             return m.group(0)
         return "\n".join(f"{indent}{line} ## added via own variable {name} ##" for line in snippets[name].splitlines())
 
-    return USE_RE.sub(repl, normalize(template)), errors
+    text = USE_CLASS_RE.sub(lambda m: f'{m.group("indent")}{m.group("mode").lower()} members of "{m.group("name")}"; ## added via dynamic class {m.group("name")} ##',
+                            normalize(template))
+    return USE_RE.sub(repl, text), errors

@@ -33,7 +33,10 @@ def references() -> dict:
     out = {}
 
     def add(text, entry):
-        for mode, name in _REF.findall(_strip_comments(text)):
+        from ..variables import USE_CLASS_RE
+
+        found = _REF.findall(_strip_comments(text)) + [(m.group("mode"), m.group("name")) for m in USE_CLASS_RE.finditer(text or "")]
+        for mode, name in found:
             lst = out.setdefault(name, [])
             e = next((x for x in lst if x["where"] == entry["where"] and x["name"] == entry["name"]), None)
             if e is None:

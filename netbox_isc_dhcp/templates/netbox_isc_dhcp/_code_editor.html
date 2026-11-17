@@ -22,7 +22,7 @@
 <script>
 (function () {
   var vars = JSON.parse(document.getElementById("isc-vars").textContent || "[]"), fetched = 0;
-  var url = "{% url 'plugins:netbox_isc_dhcp:variables_json' %}" + (vars.some(function (v) { return v.cls; }) ? "?classes=1" : "");
+  var url = "{% url 'plugins:netbox_isc_dhcp:variables_json' %}" + (vars.some(function (v) { return v.cls; }) || document.querySelector("[data-isc-classes]") ? "?classes=1" : "");
   function refresh(t) {  // load the current list (new variables appear without reloading the page)
     if (Date.now() - fetched < 3000) return;
     fetched = Date.now();
@@ -32,18 +32,18 @@
   var box = document.getElementById("isc-ac"), ta = null, items = [], idx = 0;
   function hide() { box.style.display = "none"; items = []; }
   function token(t) {
-    var before = t.value.slice(0, t.selectionStart), m = before.match(/\.\.([A-Za-z0-9_.-]*)$/);
-    return m ? m : null;
+    var before = t.value.slice(0, t.selectionStart), m = before.match(/(^|[^.])(\.{2,3})([A-Za-z0-9_][A-Za-z0-9_.\/-]*)?$/);
+    return m ? [m[2] + (m[3] || ""), m[3] || "", m[2].length === 3] : null;  // [token, query, classes?]
   }
   function show(t) {
     var m = token(t); if (!m) { hide(); return; }
     var q = m[1].toLowerCase();
-    items = vars.filter(function (v) { return v.name.toLowerCase().indexOf(q) > -1; });
+    items = vars.filter(function (v) { return !!v.cls === m[2] && v.name.toLowerCase().indexOf(q) > -1; });
     if (!items.length) { hide(); return; }
     idx = Math.min(idx, items.length - 1);
     box.innerHTML = items.map(function (v, i) {
       return '<button type="button" class="' + (i === idx ? 'active' : '') + '" data-i="' + i + '">' +
-        '<strong>' + (v.cls ? '<i class="mdi mdi-account-group-outline"></i> class ' : '') + v.name + '</strong><br><code class="small">' + v.lines.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ⏎ ") + '</code></button>';
+        '<strong>' + (v.cls ? '<i class="mdi mdi-account-group-outline"></i> USE ' + v.cls + ' ' : '') + v.name + '</strong><br><code class="small">' + v.lines.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ⏎ ") + '</code></button>';
     }).join("");
     var r = t.getBoundingClientRect(), c = caret(t);
     var left = Math.min(r.left + c.left, r.right - 260), top = r.top + c.top + c.height + 4;
@@ -62,7 +62,7 @@
   // yellow background behind own-variable lines (a mirror div under the transparent textarea)
   function esc(x) { return x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
   function isVar(l) { return /^\s*USE\s+\S+\s*$/.test(l) || l.indexOf("## VARIABLE ADDED VIA OWN VARIABLES") > -1; }
-  function isCls(l) { return l.indexOf("## CLASS ADDED VIA DYNAMIC CLASSES") > -1 || l.indexOf("## added via dynamic class") > -1; }
+  function isCls(l) { return l.indexOf("## CLASS ADDED VIA DYNAMIC CLASSES") > -1 || l.indexOf("## added via dynamic class") > -1 || /^\s*USE\s+(ALLOW|DENY)\s+\S+\s*$/.test(l); }
   function paint(t) {
     var back = t._iscBack; if (!back) return;
     back.innerHTML = t.value.split("\n").map(function (l) { return isVar(l) ? "<mark>" + esc(l) + "</mark>" : isCls(l) ? '<mark class="isc-cls">' + esc(l) + "</mark>" : esc(l); }).join("\n") + "\n";
@@ -83,7 +83,7 @@
     var m = token(ta); if (!m || !items[i]) return;
     var start = ta.selectionStart - m[0].length;
     var lineStart = ta.value.lastIndexOf("\n", start - 1) + 1, indent = ta.value.slice(lineStart, start).match(/^[ \t]*/)[0];
-    ta.setRangeText(items[i].cls ? "## CLASS ADDED VIA DYNAMIC CLASSES\n" + indent + items[i].lines + " ## added via dynamic class " + items[i].name + " ##"
+    ta.setRangeText(items[i].cls ? "## CLASS ADDED VIA DYNAMIC CLASSES\n" + indent + "USE " + items[i].cls + " " + items[i].name
                                  : "## VARIABLE ADDED VIA OWN VARIABLES\n" + indent + "USE " + items[i].name, start, ta.selectionStart, "end");
     hide(); ta.focus(); paint(ta);
   }

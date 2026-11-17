@@ -84,8 +84,44 @@ def refuse_text(lost: dict) -> str:
     return t("cls.refuse", items="; ".join(f'"{c}" ({where_text(u)})' for c, u in sorted(lost.items())))
 
 
+def literal_lines(text) -> list:
+    """Hand-written allow/deny members of "X" lines whose class X is dynamic: [(line no, mode, name)]."""
+    from ..services import dynamic_classes
+
+    dyn, out = dynamic_classes(), []
+    for no, line in enumerate((text or "").split("\n"), 1):
+        m = re.match(r'^\s*(allow|deny)\s+members\s+of\s+"([^"]+)"', line.split("#", 1)[0])
+        if m and m.group(2) in dyn:
+            out.append((no, m.group(1), m.group(2)))
+    return out
+
+
+def to_use(text) -> str:
+    """Replace those lines by `USE ALLOW|DENY X` (with the class header line)."""
+    from ..variables import CLASS_COMMENT
+
+    lines, nos = (text or "").split("\n"), {no: (mode, name) for no, mode, name in literal_lines(text)}
+    out = []
+    for no, line in enumerate(lines, 1):
+        if no in nos:
+            mode, name = nos[no]
+            indent = re.match(r"^[ \t]*", line).group(0)
+            if not (out and out[-1].strip() == CLASS_COMMENT):
+                out.append(indent + CLASS_COMMENT)
+            out.append(f"{indent}USE {mode.upper()} {name}")
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
 def _r(new):
-    return lambda m: (m.group(1) or m.group(3)) + new + (m.group(2) or m.group(4))
+    def f(m):
+        g = [x for x in m.groups()]
+        for i in (0, 2, 4):
+            if g[i] is not None:
+                return g[i] + new + (g[i + 1] or "")
+        return m.group(0)
+    return f
 
 
 def rename_class(old: str, new: str) -> list:
@@ -94,7 +130,8 @@ def rename_class(old: str, new: str) -> list:
 
     if not old or not new or old == new:
         return []
-    pat = re.compile(_MEMBERS.format(re.escape(old)) + "|" + r"(## added via dynamic class ){}( ##)".format(re.escape(old)))
+    pat = re.compile(_MEMBERS.format(re.escape(old)) + "|" + r"(## added via dynamic class ){}( ##)".format(re.escape(old))
+                     + "|" + r"(^[ \t]*USE[ \t]+(?:ALLOW|DENY)[ \t]+){}([ \t]*$)".format(re.escape(old)), re.M)
     changed = []
     with transaction.atomic():
         for p in PoolTemplate.objects.all():
