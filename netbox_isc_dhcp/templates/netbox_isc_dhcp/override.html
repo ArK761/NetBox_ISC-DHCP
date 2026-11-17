@@ -1,6 +1,6 @@
 {% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
 {% block title %}{% tr "lbl.override" %}: {{ pool.name }} / {{ prefix.prefix }}{% endblock %}
-{% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}</style>
+{% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}mark.isc-cls{background:rgba(56,189,248,.30);color:inherit;padding:0;border-radius:2px}</style>
 <div class="row"><div class="col-12 col-xl-11">
   <div class="alert alert-warning d-block"><i class="mdi mdi-alert-outline me-1"></i>{% tr "lbl.override_info" %}
     <a class="ms-2" href="{{ pool.get_absolute_url }}?p={{ prefix.pk }}"><i class="mdi mdi-arrow-left"></i> {% tr "lbl.back_to_pool" %} {{ pool.name }}</a></div>

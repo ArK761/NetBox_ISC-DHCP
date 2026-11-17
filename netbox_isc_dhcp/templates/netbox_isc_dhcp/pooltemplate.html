@@ -1,6 +1,6 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:dhcp_hub' %}">{% tr "menu.dhcp" %}</a></li><li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:subnetconfig_list' %}">{% tr "menu.subnets" %}</a></li>{% endblock breadcrumbs %}
-{% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
+{% block content %}<style>mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0;border-radius:2px}mark.isc-cls{background:rgba(56,189,248,.30);color:inherit;padding:0;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
 {% url 'plugins:netbox_isc_dhcp:pooltemplate_inline' pk=object.pk as inline_url %}
 <div class="row"><div class="col-12 col-xl-11">
   <a class="btn btn-sm btn-outline-secondary mb-3" id="isc-back" href="{% url 'plugins:netbox_isc_dhcp:subnetconfig_list' %}"><i class="mdi mdi-arrow-left"></i> {% tr "lbl.back_to" %} {% tr "menu.subnets" %}</a>

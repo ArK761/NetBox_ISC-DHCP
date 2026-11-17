@@ -84,29 +84,33 @@ def refuse_text(lost: dict) -> str:
     return t("cls.refuse", items="; ".join(f'"{c}" ({where_text(u)})' for c, u in sorted(lost.items())))
 
 
+def _r(new):
+    return lambda m: (m.group(1) or m.group(3)) + new + (m.group(2) or m.group(4))
+
+
 def rename_class(old: str, new: str) -> list:
     """Rewrite allow/deny/ignore members of "old" to "new" in pools, individual subnet codes and the static part (atomic)."""
     from ..models import BaseConfig, PoolTemplate, SubnetOverride
 
     if not old or not new or old == new:
         return []
-    pat = re.compile(_MEMBERS.format(re.escape(old)))
+    pat = re.compile(_MEMBERS.format(re.escape(old)) + "|" + r"(## added via dynamic class ){}( ##)".format(re.escape(old)))
     changed = []
     with transaction.atomic():
         for p in PoolTemplate.objects.all():
-            txt = pat.sub(lambda m: m.group(1) + new + m.group(2), p.template or "")
+            txt = pat.sub(_r(new), p.template or "")
             if txt != p.template:
                 p.template = txt
                 p.save()
                 changed.append(f"pool {p.name}")
         for o in SubnetOverride.objects.select_related("pool"):
-            txt = pat.sub(lambda m: m.group(1) + new + m.group(2), o.code or "")
+            txt = pat.sub(_r(new), o.code or "")
             if txt != o.code:
                 o.code = txt
                 o.save()
                 changed.append(f"subnet {o.prefix_text}")
         for b in BaseConfig.objects.all():
-            txt = pat.sub(lambda m: m.group(1) + new + m.group(2), b.static_text or "")
+            txt = pat.sub(_r(new), b.static_text or "")
             if txt != b.static_text:
                 b.static_text = txt
                 b.save()
