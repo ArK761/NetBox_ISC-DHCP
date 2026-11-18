@@ -8,7 +8,12 @@
   .isc-act-add { color: var(--tblr-success, #2fb344); } .isc-act-update { color: var(--tblr-warning, #f59f00); } .isc-act-delete { color: var(--tblr-danger, #d63939); }
 </style>
 <div class="row"><div class="col-12">
-  <div class="card mb-3">
+  {% if agents %}<div class="card mb-3"><h5 class="card-header"><i class="mdi mdi-robot-outline me-1"></i>{% tr "aud.states" %}</h5>
+    <table class="table table-sm mb-0">{% for a in agents %}<tr{% if not a.s.enabled %} class="opacity-50"{% endif %}>
+      <td class="text-nowrap" style="width:12rem"><i class="mdi mdi-server-network"></i> <strong>{{ a.s.name }}</strong></td>
+      <td class="text-nowrap" style="width:12rem">{% if a.s.last_seen %}<span class="{% if a.stale %}text-danger{% else %}text-success{% endif %}">● {% if a.stale %}{% tr "srv.silent" %}{% else %}{% tr "srv.online" %}{% endif %}</span> <span class="text-muted small">{{ a.ago }}</span>{% else %}<span class="text-muted">● {% tr "srv.never_seen" %}</span>{% endif %}</td>
+      <td class="small">{{ a.state }}</td></tr>{% endfor %}</table></div>{% endif %}
+<div class="card mb-3">
     <h5 class="card-header d-flex align-items-center"><i class="mdi mdi-clipboard-text-clock-outline me-2"></i>{% tr "aud.title" %} <span class="badge text-bg-secondary ms-2">{{ total }}</span></h5>
     <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "aud.hint" %}</div>
     <div class="px-3 pb-3 d-flex gap-2">{% for k, l in kinds %}<a class="btn btn-sm {% if k == kind %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?kind={{ k }}">{{ l }}</a>{% endfor %}</div>

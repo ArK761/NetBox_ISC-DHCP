@@ -173,7 +173,16 @@ class AuditView(LoginRequiredMixin, View):
             e.n_upd = sum(1 for c in ch if c.get("action") == "update")
             e.n_del = sum(1 for c in ch if c.get("action") == "delete")
             e.n_dl = sum(1 for c in ch if c.get("action") == "download")
+        from .models import DHCPServer as _S
+        from .agent import stale as _stale, status_text as _status
+        from ..models import settings_obj as _so
+        from ..views import _ago
+
+        _st = _so()
+        agents = [{"s": x, "ago": _ago(x.last_seen) if x.last_seen else "", "stale": bool(x.last_seen) and _stale(x, _st.agent_interval if _st else 60),
+                   "state": _status(x) if x.last_seen else ""} for x in _S.objects.order_by("pk")]
         return render(request, "netbox_isc_dhcp/export/audit.html", {
+            "agents": agents,
             "events": events, "kind": kind, "page": page, "has_next": page * self.PER_PAGE < total, "total": total,
             "kinds": [("", t("aud.all")), ("regen", t("aud.regen")), ("download", t("aud.download")), ("plan", t("aud.plan_kind")), ("report", t("aud.report")),
                       ("agent", t("aud.agent_kind")), ("admin", t("aud.admin_kind"))],

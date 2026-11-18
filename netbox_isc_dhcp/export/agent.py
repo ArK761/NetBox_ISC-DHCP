@@ -197,9 +197,27 @@ def heartbeat(server, request, data):
         server.dhcpd_running = dhcpd
     server.last_seen = timezone.now()
     server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen"])
+    if not msgs:  # nothing changed: a status line at least once an hour
+        from datetime import timedelta
+
+        if not AuditEvent.objects.filter(kind="agent", server=server.name, time__gte=server.last_seen - timedelta(hours=1)).exclude(result="refused").exists():
+            msgs.append(t("aud.ag_status", state=status_text(server)))
     if msgs:
         AuditEvent.objects.create(time=server.last_seen, kind="agent", server=server.name, client_ip=audit.client_ip(request),
                                   manifest_hash=running, cause="; ".join(msgs), changes=changes)
+
+
+def status_text(server):
+    """agent 1.3.0 · ISC 4.4.3-P1 · dhcpd beží · CFG 18.11.26_003"""
+    from ..i18n import t
+    from . import versions
+
+    parts = [f"agent {server.agent_version or '?'}"]
+    parts.append(t("srv.isc_none") if server.isc_version == "none" else f"ISC {server.isc_version or '?'}")
+    if server.isc_version not in ("", "none") and server.dhcpd_running is not None:
+        parts.append(t("aud.ag_dhcpd_up") if server.dhcpd_running else t("aud.ag_dhcpd_down"))
+    parts.append(f"CFG {versions.label(server.running_hash)}" if server.running_hash else t("aud.ag_no_cfg"))
+    return " · ".join(parts)
 
 
 def stale(server, interval) -> bool:
