@@ -97,8 +97,8 @@ def make_plan(have: dict, server, file_url, report_url, manifest_hash, mode="pla
     """have = {path: sha256} on the server. plan = only changes (empty when nothing to do), export = everything."""
     from ..models import BACKUP_DIR, settings_obj
 
-    if server is not None and server.last_result != "ok":
-        mode = "export"  # never reported OK (or the last set failed) -> full set until the first OK
+    if server is not None and server.last_result not in ("ok", "start_failed"):
+        mode = "export"  # never reported OK (or the last set failed) -> full set until the first OK (start_failed = CFG is fine, only the service will not start)
     rows = list(ExportFile.objects.order_by("area", "path").values("path", "area", "sha256", "size"))
     want = {r["path"]: r for r in rows}
     dirs = managed_dirs()
@@ -194,6 +194,7 @@ def heartbeat(server, request, data):
     running = str(data.get("running", ""))[:64]
     run = data.get("dhcpd")
     dhcpd = None if run in (None, "") else str(run) in ("1", "true", "yes")
+    pid = "".join(c for c in str(data.get("dhcpd_pid", ""))[:10] if c.isdigit())
     first = server.last_seen is None
     msgs, changes = [], []
     if first:
@@ -241,7 +242,8 @@ def heartbeat(server, request, data):
         changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(dhcpd)})
         server.dhcpd_running = dhcpd
     server.last_seen = timezone.now()
-    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "agent_cmd"])
+    server.dhcpd_pid = pid if dhcpd else ""
+    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

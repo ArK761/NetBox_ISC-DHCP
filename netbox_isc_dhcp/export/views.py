@@ -559,7 +559,7 @@ class PlanView(View):
 class ReportView(View):
     """Agent result. POST form or JSON: hash, result ok|test_failed|rolled_back|failed, output, done."""
 
-    RESULTS = ("ok", "test_failed", "rolled_back", "failed")
+    RESULTS = ("ok", "test_failed", "rolled_back", "failed", "start_failed")
 
     def post(self, request):
         from . import versions
@@ -571,7 +571,7 @@ class ReportView(View):
             raise PermissionDenied
         body = _agent_data(request)
         if body is None or body.get("result") not in self.RESULTS:
-            return HttpResponse('{"error": "result must be one of ok, test_failed, rolled_back, failed"}', status=400, content_type="application/json")
+            return HttpResponse('{"error": "result must be one of ok, test_failed, rolled_back, failed, start_failed"}', status=400, content_type="application/json")
         server = server_for(request)
         now = timezone.now()
         h = str(body.get("hash", ""))[:64]
@@ -587,10 +587,14 @@ class ReportView(View):
             server.last_hash, server.last_result, server.last_report = h, body["result"], now
             fields = ["last_hash", "last_result", "last_report", "disk_broken"]
             kept = str(body.get("kept", "")) in ("1", "true", "yes")
-            server.disk_broken = h if body["result"] == "test_failed" and kept else ("" if body["result"] == "ok" else server.disk_broken)
+            server.disk_broken = h if body["result"] == "test_failed" and kept else ("" if body["result"] in ("ok", "start_failed") else server.disk_broken)
             run = str(body.get("running", "") or (h if body["result"] == "ok" else ""))[:64]
             if run:
                 server.running_hash = run
                 fields.append("running_hash")
+            pid = "".join(c for c in str(body.get("pid", ""))[:10] if c.isdigit())
+            if pid:
+                server.dhcpd_pid = pid
+                fields.append("dhcpd_pid")
             server.save(update_fields=fields)
         return HttpResponse('{"ok": true}', content_type="application/json")

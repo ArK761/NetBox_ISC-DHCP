@@ -25,6 +25,7 @@
         <dd>{% if x.s.last_report %}
             {% if x.s.last_result == "ok" %}<span class="text-success"><i class="mdi mdi-check-circle"></i> {% tr "srv.res_ok" %}</span>
             {% elif not x.s.last_result %}<span class="text-warning"><i class="mdi mdi-timer-sand"></i> {% tr "srv.wait_report" %}</span>
+            {% elif x.s.last_result == "start_failed" %}<span class="text-warning"><i class="mdi mdi-reload-alert"></i> {% tr "srv.res_start_failed" %}</span>
             {% elif x.s.last_result == "rolled_back" %}<span class="text-danger"><i class="mdi mdi-undo"></i> {% tr "srv.res_rolled_back" %}</span>
             {% elif x.s.last_result == "test_failed" %}<span class="text-danger"><i class="mdi mdi-close-circle"></i> {% tr "srv.res_test_failed" %}</span>
             {% else %}<span class="text-danger"><i class="mdi mdi-close-circle"></i> {% tr "srv.res_failed" %}</span>{% endif %}
@@ -36,7 +37,7 @@
         <dt>{% tr "srv.k_service" %}</dt>
         <dd>{% if x.s.isc_version == "none" %}<span class="isc-chip red">{% tr "srv.isc_none" %}</span>
           {% else %}<span class="isc-chip {% if isc_lock %}red{% else %}green{% endif %}">ISC {{ x.s.isc_version|default:"?" }}</span>
-            {% if x.s.dhcpd_running is True %}<span class="isc-chip green">▶ dhcpd {% tr "srv.runs" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>
+            {% if x.s.dhcpd_running is True %}<span class="isc-chip green">▶ dhcpd {% tr "srv.runs" %}{% if x.s.dhcpd_pid %} · {% tr "srv.pid" %} {{ x.s.dhcpd_pid }}{% endif %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>
             {% elif x.s.dhcpd_running is False and x.s.dhcpd_by == "admin" %}<span class="isc-chip yellow">⏹ {% tr "srv.dhcpd_admin_off" %}</span>
             {% elif x.s.dhcpd_running is False %}<span class="isc-chip red">⏹ {% tr "srv.dhcpd_down" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>{% endif %}
             {% if x.dhcpd_since %}<span class="text-muted">{% tr "srv.since" %} {{ x.dhcpd_since }}</span>{% endif %}

@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.10.2"
+AGENT_VERSION="1.11.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -132,6 +132,14 @@ dhcpd_running() {
 
 state() { cat "$STATE_DIR/$1" 2>/dev/null; }
 
+pid_now() { pidof dhcpd 2>/dev/null | tr ' ' '\n' | head -1; }  # first dhcpd PID, empty = none
+
+pid_step() {  # pid_step <label> <old-pid>: log "dhcpd PID <old> -> <now> (<label>)" to the log and the report
+  local new l; new=$(pid_now)
+  l="dhcpd PID: ${2:-none} -> ${new:-none}  ($1)"
+  echo "$l" >>"${OUT:-/dev/null}"; log "$l"
+}
+
 # a path the agent may write / delete: below the base path or the dhcpd.conf in the conf dir, no ".."
 safe_path() {
   local p="$1"
@@ -153,7 +161,7 @@ report() {  # report <result> <output file>
   [ -n "$url" ] || return 0
   curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o /dev/null -X POST "$url" \
     --data-urlencode "result=$res" --data-urlencode "hash=$HASH" --data-urlencode "running=$(state running)" \
-    --data-urlencode "kept=${KEPT:-}" --data-urlencode "output@$out" || log "report failed (network)"
+    --data-urlencode "kept=${KEPT:-}" --data-urlencode "pid=$(pid_now)" --data-urlencode "output@$out" || log "report failed (network)"
 }
 
 step() {  # step <code> <n> <text>: one line in the log + a STEP line in the report (NetBox Audit shows the whole flow)
@@ -200,6 +208,7 @@ apparmor_fix() {  # dhcpd confined by AppArmor cannot read <base path>: allow it
 }
 
 apply() {
+  rm -f "$STATE_DIR/want_up"  # a new CFG supersedes a pending "keep up" retry
   local i tmp rc cmd now prev
   OUT="$WORK/output"; : >"$OUT"
   # 1. download everything to a staging dir and check sha256 (nothing is changed when a file is bad)
@@ -275,8 +284,8 @@ apply() {
   echo "\$ $cmd" >>"$OUT"
   mark_agent; rm -f "$STATE_DIR/admin_stopped"
   step restart 0 "restarting dhcpd"
-  kill_stray "$OUT"; bash -c "$cmd" >>"$OUT" 2>&1
-  sleep "$START_WAIT"
+  local p0; p0=$(pid_now); kill_stray "$OUT"; bash -c "$cmd" >>"$OUT" 2>&1
+  sleep "$START_WAIT"; pid_step "restart" "$p0"
   if [ "$(dhcpd_running)" != 1 ]; then
     step notrunning 0 "dhcpd did NOT start - restoring"; restore
     kill_stray "$OUT"; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"
@@ -290,8 +299,8 @@ apply() {
   [ "$nd" -gt 0 ] && step delete "$nd" "deleted $nd file(s) the plugin no longer generates"
   # 7. remember + report
   echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
-  log "CFG $CFG applied (${#DL_PATH[@]} files, ${#DELETES[@]} deleted)"
-  report ok "$OUT"
+  log "CFG $CFG applied (${#DL_PATH[@]} files, ${#DELETES[@]} deleted, dhcpd pid $(pid_now))"
+  rm -f "$STATE_DIR/want_up"; report ok "$OUT"
   # keep the newest backups only
   ls -1dt "$BACKUP_TO"/*/ 2>/dev/null | tail -n +"$((KEEP_BACKUPS + 1))" | while read -r d; do rm -rf -- "$d"; done
 }
@@ -336,13 +345,14 @@ kill_stray() {  # dhcpd processes while the service is not active (started by ha
     command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$DHCP_SERVICE" 2>/dev/null && systemctl stop "$DHCP_SERVICE" >/dev/null 2>&1  # crashed: service "active" without a process
     clean_stale_pidfile "$out" $pfs; return 0
   fi
-  echo "dhcpd process outside the service (pid $(pidof dhcpd)) - ending it" >>"$out"
-  log "dhcpd process outside the service (pid $(pidof dhcpd)) - ending it"
+  local p0; p0=$(pid_now)
+  echo "dhcpd process outside the service (pid $p0) - ending it" >>"$out"
+  log "dhcpd process outside the service (pid $p0) - ending it"
   kill $(pidof dhcpd) 2>/dev/null; local i=0
   while [ $i -lt 5 ] && pidof dhcpd >/dev/null 2>&1; do sleep 1; i=$((i+1)); done
   pidof dhcpd >/dev/null 2>&1 && kill -9 $(pidof dhcpd) 2>/dev/null; sleep 1
   command -v systemctl >/dev/null 2>&1 && systemctl reset-failed "$DHCP_SERVICE" 2>/dev/null
-  clean_stale_pidfile "$out" $pfs; return 0
+  clean_stale_pidfile "$out" $pfs; pid_step "kill stray" "$p0"; return 0
 }
 
 wait_down() { local i=0; while [ $i -lt "$1" ] && [ "$(dhcpd_running)" = 1 ]; do sleep 1; i=$((i+1)); done; }
@@ -400,20 +410,23 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
   : >"$out"
   case "$CMD" in
     stop)
-      echo 1 >"$STATE_DIR/admin_stopped"; mark_agent
+      echo 1 >"$STATE_DIR/admin_stopped"; rm -f "$STATE_DIR/want_up"; mark_agent
       svc stop >"$out" 2>&1 || true; wait_down 5
       txt="dhcpd stopped"
       if [ "$(dhcpd_running)" != 1 ] && pidof dhcpd >/dev/null 2>&1; then kill_stray "$out"; txt="dhcpd stopped (process outside the service ended)"; fi
       [ "$(dhcpd_running)" = 1 ] && { res=failed; txt="dhcpd still running: $(grep -v '^$' "$out" | tail -1)"; } ;;
     start|restart)
       rm -f "$STATE_DIR/admin_stopped"
-      local tcmd; tcmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; tcmd=$(allowed "$tcmd" "${ALLOWED_TEST_CMDS[@]}")
+      echo 1 >"$STATE_DIR/want_up"; date +%s >"$STATE_DIR/want_up_ts"  # keep dhcpd up: retry every ~minute until it runs
+      local tcmd p0; tcmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; tcmd=$(allowed "$tcmd" "${ALLOWED_TEST_CMDS[@]}")
       bash -c "$tcmd" >"$out" 2>&1; rc=$?
       if [ $rc -ne 0 ]; then
+        rm -f "$STATE_DIR/want_up"  # bad CFG -> this IS a CFG problem, do not retry
         res=failed; txt="dhcpd -t failed: $(grep -i -m1 -E 'line [0-9]+|error|denied|can.t' "$out")"
       else
-        kill_stray "$out"; mark_agent; svc "$CMD" >>"$out" 2>&1; sleep "$START_WAIT"
-        [ "$(dhcpd_running)" = 1 ] && txt="dhcpd running" || { res=failed; txt="dhcpd did not start"; }
+        OUT="$out"; p0=$(pid_now); kill_stray "$out"; mark_agent; svc "$CMD" >>"$out" 2>&1; sleep "$START_WAIT"; pid_step "$CMD" "$p0"; OUT=""
+        if [ "$(dhcpd_running)" = 1 ]; then rm -f "$STATE_DIR/want_up"; txt="dhcpd running (pid $(pid_now))"
+        else res=failed; txt="dhcpd did not start (CFG is OK) - retrying every minute"; fi
       fi ;;
     update)
       local self new="$WORK/agent.new"; self=$(readlink -f "$0")
@@ -436,18 +449,48 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
   log "NetBox command '$CMD': $res - $txt"
 }
 
-heal() {  # (a) manual restart asked in NetBox, or (b) the disk has exactly the current CFG and dhcpd does not run
+ensure_up() {  # keep dhcpd up after Start/Restart: test CFG, kill a stray dhcpd, remove a stale pidfile, start; retry ~1/min until it runs (NOT a CFG error)
+  [ -e "$STATE_DIR/want_up" ] || return 0
+  [ "$(state admin_stopped)" = 1 ] && { rm -f "$STATE_DIR/want_up"; return 0; }
+  [ "$(dhcpd_running)" = 1 ] && { rm -f "$STATE_DIR/want_up"; return 0; }
+  local now last; now=$(date +%s); last=$(state want_up_ts)
+  [ -n "$last" ] && [ $((now - last)) -lt 55 ] && return 0  # at most once per minute
+  echo "$now" >"$STATE_DIR/want_up_ts"
+  OUT="$WORK/up"; : >"$OUT"
+  local cmd rc p0
+  cmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_TEST_CMDS[@]}")
+  echo "\$ $cmd" >>"$OUT"; bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
+  if [ $rc -ne 0 ]; then  # the on-disk CFG is bad -> this really is a CFG problem, stop retrying
+    rm -f "$STATE_DIR/want_up"
+    log "retry: dhcpd -t FAILED - this is a CFG problem, stopping retries"
+    report test_failed "$OUT"; return 0
+  fi
+  log "retry: CFG tests OK, (re)starting dhcpd"
+  p0=$(pid_now); kill_stray "$OUT"
+  cmd="${RESTART_CMD:-${ALLOWED_RESTART_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_RESTART_CMDS[@]}")
+  echo "\$ $cmd" >>"$OUT"; mark_agent; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"; pid_step "retry start" "$p0"
+  if [ "$(dhcpd_running)" = 1 ]; then
+    rm -f "$STATE_DIR/want_up"; echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
+    log "dhcpd is UP (pid $(pid_now)) after retry"; report ok "$OUT"
+  else
+    log "dhcpd still not up (service failed, NOT a CFG problem) - will try again in ~1 min"
+    report start_failed "$OUT"
+  fi
+}
+
+heal() {  # (a) manual restart asked in NetBox -> continuous retry; (b) disk = current CFG but dhcpd down -> one automatic attempt per CFG
   [ "$(isc_version)" != none ] || return 0
   [ "$(state admin_stopped)" = 1 ] && return 0  # stopped from NetBox: stays down until Start / Restart / a new CFG
   if [ -n "$RESTART_REQ" ] && [ "$RESTART_REQ" != "$(state restart_req)" ]; then
     echo "$RESTART_REQ" >"$STATE_DIR/restart_req"; log "manual restart asked in NetBox"
-  else
-    [ "$DISK" = current ] && [ "$(dhcpd_running)" != 1 ] || return 0
-    [ "$(state heal)" = "$HASH" ] && return 0  # one automatic attempt per CFG (no restart loop) - then only a new CFG or a manual restart
+    echo 1 >"$STATE_DIR/want_up"; rm -f "$STATE_DIR/want_up_ts"; return 0  # ensure_up does the work, and keeps retrying
   fi
+  [ -e "$STATE_DIR/want_up" ] && return 0  # continuous retry already armed (ensure_up handles it)
+  [ "$DISK" = current ] && [ "$(dhcpd_running)" != 1 ] || return 0
+  [ "$(state heal)" = "$HASH" ] && return 0  # one automatic attempt per CFG (no restart loop) - then only a new CFG or a manual restart
   echo "$HASH" >"$STATE_DIR/heal"
   OUT="$WORK/heal"; : >"$OUT"
-  local cmd rc
+  local cmd rc p0
   cmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_TEST_CMDS[@]}")
   log "testing CFG $CFG on disk and (re)starting dhcpd"
   echo "\$ $cmd" >>"$OUT"; bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
@@ -456,12 +499,12 @@ heal() {  # (a) manual restart asked in NetBox, or (b) the disk has exactly the 
     report test_failed "$OUT"; return 0
   fi
   cmd="${RESTART_CMD:-${ALLOWED_RESTART_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_RESTART_CMDS[@]}")
-  echo "\$ $cmd" >>"$OUT"; kill_stray "$OUT"; mark_agent; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"
+  echo "\$ $cmd" >>"$OUT"; p0=$(pid_now); kill_stray "$OUT"; mark_agent; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"; pid_step "self-heal" "$p0"
   if [ "$(dhcpd_running)" = 1 ]; then
     echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
-    log "dhcpd started with CFG $CFG"; echo "dhcpd started (it was down, CFG on disk = current)" >>"$OUT"; report ok "$OUT"
+    log "dhcpd started with CFG $CFG (pid $(pid_now))"; echo "dhcpd started (it was down, CFG on disk = current)" >>"$OUT"; report ok "$OUT"
   else
-    log "dhcpd did not start - see: systemctl status $DHCP_SERVICE"; report failed "$OUT"
+    log "dhcpd did not start (CFG is OK) - retrying every minute"; echo 1 >"$STATE_DIR/want_up"; report start_failed "$OUT"
   fi
 }
 
@@ -477,7 +520,7 @@ contact() {
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
@@ -531,7 +574,8 @@ contact() {
   for f in "${DL_PATH[@]}"; do [ "$(dirname "$f")" = "$CONF_DIR" ] && echo "$f" >"$STATE_DIR/conf"; done
   [ -z "$(state conf)" ] && [ -n "$CONF_DIR" ] && echo "$CONF_DIR/dhcpd.conf" >"$STATE_DIR/conf"
   run_cmd  # Start / Stop / Restart / Update from NetBox
-  heal  # files on disk = current CFG but dhcpd is down: test + restart
+  heal  # manual restart / self-heal
+  ensure_up  # keep retrying dhcpd start every ~minute after Start/Restart until it is up
   if [ -n "$WAIT" ]; then  # log only when the reason changes (no line every interval)
     [ "$WAIT $CFG" != "${LAST_WAIT:-}" ] && log "waiting ($WAIT) CFG $CFG"
     LAST_WAIT="$WAIT $CFG"; return 0
