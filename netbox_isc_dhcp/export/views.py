@@ -371,7 +371,7 @@ class ServersInlineView(LoginRequiredMixin, View):
             srv.agent_cmd = f"{action}:{timezone.now().strftime('%Y%m%d%H%M%S')}"
             srv.save(update_fields=["agent_cmd"])
             log = [(f"{action} {srv.name}", "", srv.agent_cmd)]
-            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_" + action), name=srv.name))
+            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name))
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""

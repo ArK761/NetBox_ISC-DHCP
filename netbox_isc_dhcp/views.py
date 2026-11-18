@@ -167,9 +167,9 @@ def _server_rows():
 
         cmd = srv.agent_cmd.split(":", 1)[0] if srv.agent_cmd else ""
         out.append({"s": srv, "ips": ips, "err": err, "wait": wait, "reason": reason, "names": names, "first_why": t(fb) if fb else "", "outdated": agent_outdated(srv),
-                    "cmd_pending": t("srv.cmd_" + cmd) if cmd else "",
+                    "cmd_pending": t("srv.cmd_%s" % cmd) if cmd else "",
                     "dhcpd_since": timezone.localtime(srv.dhcpd_since).strftime("%d.%m. %H:%M") if srv.dhcpd_since else "",
-                    "dhcpd_by": t("srv.by_" + srv.dhcpd_by) if srv.dhcpd_by else "",
+                    "dhcpd_by": t("srv.by_%s" % srv.dhcpd_by) if srv.dhcpd_by else "",
                     "key_pending": bool(st and st.agent_key and st.agent_key_old and srv.enabled and srv.last_seen and srv.key_hash != key_hash(st.agent_key)),
                     "stale": srv.enabled and srv.last_seen is not None and stale(srv, interval),
                     "ago": _ago(srv.last_seen) if srv.last_seen else "",

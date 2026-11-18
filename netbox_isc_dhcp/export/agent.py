@@ -195,7 +195,7 @@ def heartbeat(server, request, data):
     done = str(data.get("cmd_done", ""))[:200]  # <id>:<ok|failed>:<text>
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]
-        msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_" + server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
+        msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_%s" % server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
         server.agent_cmd = ""
     if running and running != server.running_hash:
         msgs.append(t("aud.ag_runs", cfg=versions.label(running)))
