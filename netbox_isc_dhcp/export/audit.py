@@ -80,16 +80,22 @@ def download(request, path=None):
     """Manifest fetch = new event; file fetches of the same client are added to its latest event (30 min)."""
     from . import build
 
+    from .agent import server_for
+
     ip = client_ip(request)
     user = request.user.username if request.user.is_authenticated else ""
+    srv = server_for(request)
+    sname = srv.name if srv else ""
     now = timezone.now()
     if path is None:
-        AuditEvent.objects.create(time=now, kind="download", user=user, client_ip=ip, cause="manifest", manifest_hash=build.manifest_hash())
+        AuditEvent.objects.create(time=now, kind="download", user=user, client_ip=ip, server=sname, cause="manifest", manifest_hash=build.manifest_hash())
         prune()
         return
     ev = AuditEvent.objects.filter(kind="download", client_ip=ip, user=user, time__gte=now - timezone.timedelta(minutes=30)).first()
     if ev is None:
-        ev = AuditEvent.objects.create(time=now, kind="download", user=user, client_ip=ip, cause="files", manifest_hash=build.manifest_hash())
+        from ..i18n import t
+
+        ev = AuditEvent.objects.create(time=now, kind="download", user=user, client_ip=ip, server=sname, cause=t("aud.dl_files"), manifest_hash=build.manifest_hash())
     ev.changes = (ev.changes or []) + [{"path": path, "action": "download"}]
     ev.save(update_fields=["changes"])
 

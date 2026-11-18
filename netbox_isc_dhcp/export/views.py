@@ -317,6 +317,13 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_keep_failed", str(st.agent_keep_failed), str(request.POST.get("value") == "1"))]
             st.agent_keep_failed = request.POST.get("value") == "1"
             st.save(update_fields=["agent_keep_failed"])
+        elif action == "bundle_min":
+            st = _st()
+            v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
+            if v in (1, 5, 10, 20, 50, 100):
+                log = [("agent_bundle_min", str(st.agent_bundle_min), str(v))]
+                st.agent_bundle_min = v
+                st.save(update_fields=["agent_bundle_min"])
         elif action == "interval":
             from .agent import INTERVALS
 
@@ -495,9 +502,10 @@ class PlanView(View):
             api = request.path_info.startswith("/api/")
             fname = "plugins-api:netbox_isc_dhcp-api:agent_file" if api else "plugins:netbox_isc_dhcp:export_file"
             rname = "plugins-api:netbox_isc_dhcp-api:agent_report" if api else "plugins:netbox_isc_dhcp:export_report"
-            info["bundle"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_bundle" if api else "plugins:netbox_isc_dhcp:export_bundle"))
             steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse(fname, kwargs={"path": quote(p.lstrip("/"))})),
                               request.build_absolute_uri(reverse(rname)), mh, mode)
+            if sum(1 for x in steps if x["op"] == "download") >= (st.agent_bundle_min if st else 10):  # many files: one tar.gz
+                info["bundle"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_bundle" if api else "plugins:netbox_isc_dhcp:export_bundle"))
         if steps:
             AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
                                       user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,

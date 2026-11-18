@@ -213,6 +213,7 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "intervals": [(v, f"{v} s" if v < 60 else f"{v // 60} min") for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).INTERVALS],
           "isc_lock": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).isc_mismatch(),
           "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0],
+          "bundle_choices": (1, 5, 10, 20, 50, 100),
           "agent_api_url": request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_plan")),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),
                           report=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report"))),

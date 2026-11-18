@@ -99,6 +99,10 @@
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-agent-interval">{% csrf_token %}<input type="hidden" name="field" value="interval">
         <i class="mdi mdi-timer-outline"></i><span class="small fw-semibold text-nowrap">{% tr "srv.interval" %}</span>
         <select name="value" class="form-select form-select-sm" style="width:7.5rem" onchange="this.form.submit()">{% for v, l in intervals %}<option value="{{ v }}"{% if object.agent_interval == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-bundle-min">{% csrf_token %}<input type="hidden" name="field" value="bundle_min">
+        <i class="mdi mdi-package-variant-closed"></i><span class="small fw-semibold text-nowrap" title="{% tr 'srv.bundle_hint' %}">{% tr "srv.bundle_min" %}</span>
+        <select name="value" class="form-select form-select-sm" style="width:6rem" onchange="this.form.submit()">{% for v in bundle_choices %}<option value="{{ v }}"{% if object.agent_bundle_min == v %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+        <span class="small text-muted">{% tr "srv.files" %}</span></form>
       <span class="small text-muted" title="{% tr 'srv.cfg_hint' %}"><i class="mdi mdi-tag-outline"></i> {% tr "srv.current_cfg" %} <span class="isc-chip green ms-1">{{ current_label|default:"—" }}</span></span>
       <span class="small d-flex flex-wrap align-items-center gap-2" id="isc-agent-key"><i class="mdi mdi-key-variant"></i><span class="fw-semibold">{% tr "srv.key" %}</span>
         {% if object.agent_key %}<code id="isc-key-mask" class="isc-chip">••••{{ object.agent_key|slice:"-4:" }}</code>
