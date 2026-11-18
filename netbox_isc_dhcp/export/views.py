@@ -436,6 +436,12 @@ class PlanView(View):
 
         if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
             return reply([], {"error": "dhcpd.conf is not generated"}, status=409)
+        api = request.path_info.startswith("/api/")
+        info["report"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_report" if api else "plugins:netbox_isc_dhcp:export_report"))
+        if have:  # files on the server are exactly the current set -> the agent may (re)start dhcpd itself when it is down
+            want = dict(ExportFile.objects.values_list("path", "sha256"))
+            if want and all(have.get(p) == h for p, h in want.items()):
+                info["disk"] = "current"
         _key_progress(request, server, info)
         reason, names = gate(server, mh)
         if reason:
