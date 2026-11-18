@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.9.2"
+AGENT_VERSION="1.9.3"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -482,7 +482,7 @@ contact() {
 }
 
 INTERVAL=60
-log "isc-dhcp-agent $AGENT_VERSION started, NetBox $NETBOX_URL, ISC $(isc_version)"
+log "isc-dhcp-agent $AGENT_VERSION started, NetBox $NETBOX_URL, ISC $(isc_version), dhcpd $([ "$(dhcpd_running)" = 1 ] && echo running || echo NOT running)"
 while true; do
   WORK=$(mktemp -d) || die "mktemp failed"
   contact
