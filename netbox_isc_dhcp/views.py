@@ -129,11 +129,22 @@ _crud(DHCPGroup, forms.DHCPGroupForm, tables.DHCPGroupTable)
 _crud(DNSServer, forms.DNSServerForm, tables.DNSServerTable)
 
 
+def _ago(when):
+    from django.utils import timezone
+
+    n = max(0, int((timezone.now() - when).total_seconds()))
+    if n < 60:
+        return t("ago.s", n=n)
+    if n < 3600:
+        return t("ago.m", n=n // 60)
+    if n < 86400:
+        return t("ago.h", n=n // 3600)
+    return t("ago.d", n=n // 86400)
+
+
 def _server_rows():
     from .export.models import DHCPServer
     from .export.servers import resolve
-
-    from django.utils.timesince import timesince
 
     from .export import build, versions
     from .export.agent import gate, stale
@@ -149,7 +160,7 @@ def _server_rows():
         wait = t(f"srv.wait_{reason}", names=", ".join(names)) if reason else ""
         out.append({"s": srv, "ips": ips, "err": err, "wait": wait, "reason": reason, "names": names,
                     "stale": srv.enabled and srv.last_seen is not None and stale(srv, interval),
-                    "ago": timesince(srv.last_seen) if srv.last_seen else "",
+                    "ago": _ago(srv.last_seen) if srv.last_seen else "",
                     "run_label": lab.get(srv.running_hash, srv.running_hash[:12]) if srv.running_hash else "",
                     "run_ok": srv.running_hash == mh, "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else ""})
     waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}

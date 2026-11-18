@@ -237,6 +237,19 @@ def _json_body(request):
         return None
 
 
+def _refused_contact(request):
+    """Audit an agent contact from an IP that is not a DHCP server (once per IP in 10 min) - shows why an agent does not appear."""
+    from datetime import timedelta
+
+    from .models import AuditEvent
+
+    ip = audit.client_ip(request)
+    if AuditEvent.objects.filter(kind="agent", client_ip=ip, result="refused", time__gte=timezone.now() - timedelta(minutes=10)).exists():
+        return
+    AuditEvent.objects.create(time=timezone.now(), kind="agent", client_ip=ip, result="refused", cause=t("aud.agent_refused", ip=ip),
+                              output=f"REMOTE_ADDR={request.META.get('REMOTE_ADDR', '')} X-Forwarded-For={request.META.get('HTTP_X_FORWARDED_FOR', '')}")
+
+
 def _wants_text(request):
     return request.GET.get("format") == "text" or "text/plain" in request.META.get("HTTP_ACCEPT", "")
 
@@ -264,6 +277,7 @@ class PlanView(View):
         from ..models import CONF_DIR, base_path, settings_obj
 
         if not _client_allowed(request):
+            _refused_contact(request)
             raise PermissionDenied
         server = server_for(request)
         if data and request.method == "POST":
