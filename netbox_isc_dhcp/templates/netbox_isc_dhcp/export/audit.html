@@ -8,7 +8,7 @@
   .isc-act-add { color: var(--tblr-success, #2fb344); } .isc-act-update { color: var(--tblr-warning, #f59f00); } .isc-act-delete { color: var(--tblr-danger, #d63939); }
 </style>
 <div class="row"><div class="col-12">
-  {% if agents %}<div class="card mb-3"><h5 class="card-header"><i class="mdi mdi-robot-outline me-1"></i>{% tr "aud.states" %}</h5>
+  <div id="isc-audit-live">{% if agents %}<div class="card mb-3"><h5 class="card-header"><i class="mdi mdi-robot-outline me-1"></i>{% tr "aud.states" %}</h5>
     <table class="table table-sm mb-0">{% for a in agents %}<tr{% if not a.s.enabled %} class="opacity-50"{% endif %}>
       <td class="text-nowrap" style="width:12rem"><i class="mdi mdi-server-network"></i> <strong>{{ a.s.name }}</strong></td>
       <td class="text-nowrap" style="width:12rem">{% if a.s.last_seen %}<span class="{% if a.stale %}text-danger{% else %}text-success{% endif %}">● {% if a.stale %}{% tr "srv.silent" %}{% else %}{% tr "srv.online" %}{% endif %}</span> <span class="text-muted small">{{ a.ago }}</span>{% else %}<span class="text-muted">● {% tr "srv.never_seen" %}</span>{% endif %}</td>
@@ -35,5 +35,19 @@
     <div class="p-3 d-flex gap-2">{% if page > 1 %}<a class="btn btn-sm btn-outline-secondary" href="?kind={{ kind }}&p={{ page|add:'-1' }}">← {% tr "aud.prev" %}</a>{% endif %}
       {% if has_next %}<a class="btn btn-sm btn-outline-secondary" href="?kind={{ kind }}&p={{ page|add:'1' }}">{% tr "aud.next" %} →</a>{% endif %}</div>
   </div>
+</div>
 </div></div>
+<script>
+  (function () {  // live audit: refresh every 5 s only while the page is visible, never while a detail is open
+    var box = document.getElementById("isc-audit-live");
+    setInterval(function () {
+      if (document.hidden || box.querySelector("details[open]")) return;
+      fetch(location.href, {credentials: "same-origin"}).then(function (r) { return r.ok ? r.text() : null; }).then(function (h) {
+        if (!h || box.querySelector("details[open]")) return;
+        var n = new DOMParser().parseFromString(h, "text/html").getElementById("isc-audit-live");
+        if (n) box.innerHTML = n.innerHTML;
+      }).catch(function () {});
+    }, 5000);
+  })();
+</script>
 {% endblock %}

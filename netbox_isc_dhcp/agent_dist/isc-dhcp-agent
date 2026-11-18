@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.7.1"
+AGENT_VERSION="1.8.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -259,6 +259,7 @@ apply() {
   # 5. restart + check that dhcpd runs
   cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
   echo "\$ $cmd" >>"$OUT"
+  mark_agent; rm -f "$STATE_DIR/admin_stopped"
   bash -c "$cmd" >>"$OUT" 2>&1
   sleep "$START_WAIT"
   if [ "$(dhcpd_running)" != 1 ]; then
@@ -285,8 +286,66 @@ save_url() {  # remember the working URL in the config file
   [ -w "$CONF_FILE" ] && sed -i "s|^NETBOX_URL=.*|NETBOX_URL=\"$1\"|" "$CONF_FILE" && log "NETBOX_URL changed to $1 (saved in $CONF_FILE)"
 }
 
+svc() {  # svc <start|stop|restart>: the DHCP service, without any command from NetBox
+  if command -v systemctl >/dev/null 2>&1; then systemctl "$1" "$DHCP_SERVICE"; else service "$DHCP_SERVICE" "$1"; fi
+}
+
+mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
+
+dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop since the last contact ("" = no change)
+  local now prev who
+  now=$(dhcpd_running); prev=$(state dhcpd_prev)
+  echo "$now" >"$STATE_DIR/dhcpd_prev"
+  [ -z "$prev" ] || [ "$now" = "$prev" ] && { rm -f "$STATE_DIR/agent_did"; return 0; }
+  who=manual; [ "$(state agent_did)" = 1 ] && who=agent
+  rm -f "$STATE_DIR/agent_did"
+  [ "$now" = 1 ] && echo "${who}_start" || echo "${who}_stop"
+}
+
+run_cmd() {  # command from NetBox (start | stop | restart | update), once per id; result goes back with the next contact
+  [ -n "$CMD" ] && [ -n "$CMD_ID" ] || return 0
+  [ "$(state cmd_done | cut -d: -f1)" = "$CMD_ID" ] && return 0
+  local res=ok txt="" out="$WORK/cmd" rc
+  : >"$out"
+  case "$CMD" in
+    stop)
+      echo 1 >"$STATE_DIR/admin_stopped"; mark_agent
+      svc stop >"$out" 2>&1 || true; sleep 2
+      [ "$(dhcpd_running)" = 1 ] && { res=failed; txt="dhcpd still running"; } || txt="dhcpd stopped" ;;
+    start|restart)
+      rm -f "$STATE_DIR/admin_stopped"
+      local tcmd; tcmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; tcmd=$(allowed "$tcmd" "${ALLOWED_TEST_CMDS[@]}")
+      bash -c "$tcmd" >"$out" 2>&1; rc=$?
+      if [ $rc -ne 0 ]; then
+        res=failed; txt="dhcpd -t failed: $(grep -i -m1 -E 'line [0-9]+|error|denied|can.t' "$out")"
+      else
+        mark_agent; svc "$CMD" >>"$out" 2>&1; sleep "$START_WAIT"
+        [ "$(dhcpd_running)" = 1 ] && txt="dhcpd running" || { res=failed; txt="dhcpd did not start"; }
+      fi ;;
+    update)
+      local self new="$WORK/agent.new"; self=$(readlink -f "$0")
+      if [ -z "$AGENT_URL" ] || ! curl -fsS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 120 -o "$new" "$AGENT_URL" 2>"$out"; then
+        res=failed; txt="download failed"
+      elif [ "$(sha256sum "$new" | cut -d' ' -f1)" != "$AGENT_SHA" ]; then
+        res=failed; txt="sha256 mismatch"
+      elif ! bash -n "$new" 2>>"$out"; then
+        res=failed; txt="new agent has a syntax error"
+      else
+        txt="updated to $(grep -m1 '^AGENT_VERSION=' "$new" | cut -d'"' -f2)"
+        echo "$CMD_ID:$res:$txt" >"$STATE_DIR/cmd_done"
+        install -m 755 "$new" "$self" && log "agent $txt - restarting the agent"
+        [ "$ONCE" = 1 ] || { command -v systemctl >/dev/null 2>&1 && systemctl --no-block restart isc-dhcp-agent; }
+        return 0
+      fi ;;
+    *) res=failed; txt="unknown command $CMD" ;;
+  esac
+  echo "$CMD_ID:$res:$txt" >"$STATE_DIR/cmd_done"
+  log "NetBox command '$CMD': $res - $txt"
+}
+
 heal() {  # (a) manual restart asked in NetBox, or (b) the disk has exactly the current CFG and dhcpd does not run
   [ "$(isc_version)" != none ] || return 0
+  [ "$(state admin_stopped)" = 1 ] && return 0  # stopped from NetBox: stays down until Start / Restart / a new CFG
   if [ -n "$RESTART_REQ" ] && [ "$RESTART_REQ" != "$(state restart_req)" ]; then
     echo "$RESTART_REQ" >"$STATE_DIR/restart_req"; log "manual restart asked in NetBox"
   else
@@ -304,7 +363,7 @@ heal() {  # (a) manual restart asked in NetBox, or (b) the disk has exactly the 
     report test_failed "$OUT"; return 0
   fi
   cmd="${RESTART_CMD:-${ALLOWED_RESTART_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_RESTART_CMDS[@]}")
-  echo "\$ $cmd" >>"$OUT"; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"
+  echo "\$ $cmd" >>"$OUT"; mark_agent; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"
   if [ "$(dhcpd_running)" = 1 ]; then
     echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
     log "dhcpd started with CFG $CFG"; echo "dhcpd started (it was down, CFG on disk = current)" >>"$OUT"; report ok "$OUT"
@@ -319,10 +378,12 @@ contact() {
   f=$(state conf); [ -n "$f" ] && [ -f "$f" ] && sha256sum "$f" >>"$have"
   while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' -exec sha256sum {} + >>"$have"; done < <(state dirs)
   local url alt
+  EVENT=$(dhcpd_event)
   for url in "$NETBOX_URL" "$(other_scheme "$NETBOX_URL")"; do  # try https and http, keep the one that works
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
-      --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
@@ -330,7 +391,7 @@ contact() {
   local redir="${code#* }"; code="${code%% *}"
   if [ "$url" != "$NETBOX_URL" ]; then NETBOX_URL="$url"; save_url "$url"; fi
   DL_PATH=(); DL_SHA=(); DL_URL=(); BACKUP_PATHS=(); DELETES=(); DIRS=()
-  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"; BUNDLE=""; DISK=""; RESTART_REQ=""
+  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"; BUNDLE=""; DISK=""; RESTART_REQ=""; CMD=""; CMD_ID=""; AGENT_URL=""; AGENT_SHA=""
   local key a b c
   while IFS=$'\t' read -r key a b c; do
     case "$key" in
@@ -341,6 +402,9 @@ contact() {
       bundle) BUNDLE="$a" ;;
       disk) DISK="$a" ;;
       restart_req) RESTART_REQ="$a" ;;
+      cmd) CMD="$a"; CMD_ID="$b" ;;
+      agent_url) AGENT_URL="$a" ;;
+      agent_sha) AGENT_SHA="$a" ;;
       hash) HASH="$a" ;; cfg) CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
       backup) BACKUP_TO="$a"; IFS=$'\t' read -r -a BACKUP_PATHS <<<"$b${c:+	$c}" ;;
@@ -371,6 +435,7 @@ contact() {
   [ ${#DIRS[@]} -gt 0 ] && printf '%s\n' "${DIRS[@]}" >"$STATE_DIR/dirs"
   for f in "${DL_PATH[@]}"; do [ "$(dirname "$f")" = "$CONF_DIR" ] && echo "$f" >"$STATE_DIR/conf"; done
   [ -z "$(state conf)" ] && [ -n "$CONF_DIR" ] && echo "$CONF_DIR/dhcpd.conf" >"$STATE_DIR/conf"
+  run_cmd  # Start / Stop / Restart / Update from NetBox
   heal  # files on disk = current CFG but dhcpd is down: test + restart
   if [ -n "$WAIT" ]; then  # log only when the reason changes (no line every interval)
     [ "$WAIT $CFG" != "${LAST_WAIT:-}" ] && log "waiting ($WAIT) CFG $CFG"

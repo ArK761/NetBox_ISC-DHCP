@@ -129,13 +129,30 @@
     </script>
     <div id="isc-srv-live" data-url="{% url 'plugins:netbox_isc_dhcp:servers_table' %}">{% include "netbox_isc_dhcp/_servers_table.html" %}</div>
     <script>
-      (function () {  // live servers table: refresh every 5 s, never while the admin edits something in it
+      (function () {  // live servers table: refresh every 5 s while the page is visible; buttons/switches work without a page reload
         var box = document.getElementById("isc-srv-live");
-        setInterval(function () {
-          if (document.hidden || box.querySelector("details[open]") || box.contains(document.activeElement)) return;
-          fetch(box.dataset.url, {credentials: "same-origin"}).then(function (r) { return r.ok ? r.text() : null; })
-            .then(function (h) { if (h && !box.querySelector("details[open]") && !box.contains(document.activeElement)) box.innerHTML = h; }).catch(function () {});
-        }, 5000);
+        function busy() { return box.querySelector("details[open]") || box.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type !== "checkbox"; }
+        function load(force) {
+          if (!force && (document.hidden || busy())) return Promise.resolve();
+          return fetch(box.dataset.url, {credentials: "same-origin"}).then(function (r) { return r.ok ? r.text() : null; })
+            .then(function (h) { if (h && (force || !busy())) { var m = document.getElementById("isc-srv-msg"), keep = m ? m.innerHTML : ""; box.innerHTML = h; if (keep) document.getElementById("isc-srv-msg").innerHTML = keep; } }).catch(function () {});
+        }
+        function show(msgs) {
+          var m = document.getElementById("isc-srv-msg"); if (!m) return;
+          m.innerHTML = msgs.map(function (x) { var c = x.level === "error" ? "danger" : (x.level === "warning" ? "warning" : "success");
+            return '<div class="alert alert-' + c + ' d-block py-1 px-3 mb-2 small">' + x.text.replace(/</g, "&lt;") + "</div>"; }).join("");
+          clearTimeout(show.t); show.t = setTimeout(function () { var mm = document.getElementById("isc-srv-msg"); if (mm) mm.innerHTML = ""; }, 6000);
+        }
+        box.addEventListener("submit", function (e) {
+          if (e.defaultPrevented) return;
+          e.preventDefault();
+          var f = e.target;
+          fetch(f.action, {method: "POST", body: new FormData(f), credentials: "same-origin", headers: {"X-Requested-With": "fetch"}})
+            .then(function (r) { return r.json(); }).then(function (d) { load(true).then(function () { show(d.messages || []); }); })
+            .catch(function () { f.submit(); });
+        });
+        setInterval(function () { load(false); }, 5000);
+        document.addEventListener("visibilitychange", function () { if (!document.hidden) load(false); });
       })();
     </script>
     <div class="small text-info px-3 pt-2"><i class="mdi mdi-information-outline"></i> {% tr "srv.full_first" %}</div>

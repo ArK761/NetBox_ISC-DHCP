@@ -134,6 +134,24 @@ class BundleView(View):
 
 
 @method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
+class AgentSelfView(View):
+    """The agent script bundled with this plugin version (for the update pushed from NetBox)."""
+
+    def get(self, request):
+        from .agent import agent_script
+
+        if not _client_allowed(request):
+            _refused_contact(request)
+            raise PermissionDenied
+        ver, sha, raw = agent_script()
+        if not raw:
+            raise Http404
+        resp = HttpResponse(raw, content_type="text/x-shellscript; charset=utf-8")
+        resp["X-SHA256"], resp["X-Agent-Version"] = sha, ver
+        return resp
+
+
+@method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 class FileView(View):
     def get(self, request, path):
         if not _client_allowed(request):
@@ -239,6 +257,14 @@ class ServersInlineView(LoginRequiredMixin, View):
     """Add / edit / switch / delete DHCP servers on the plugin settings page."""
 
     def post(self, request):
+        resp = self._post(request)
+        if request.headers.get("X-Requested-With") == "fetch":  # live table: answer with the messages, no page reload
+            from django.http import JsonResponse
+
+            return JsonResponse({"messages": [{"level": m.level_tag, "text": str(m)} for m in messages.get_messages(request)]})
+        return resp
+
+    def _post(self, request):
         from .models import DHCPServer
         from .servers import invalidate, valid_address
 
@@ -341,10 +367,11 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_key_old", "***", "")] if st.agent_key_old else []
             st.agent_key_old = ""
             st.save(update_fields=["agent_key_old"])
-        elif action == "restart" and srv:  # manual dhcpd restart: the agent tests the CFG on disk and restarts at the next contact
-            srv.restart_req = timezone.now().strftime("%Y%m%d%H%M%S")
-            srv.save(update_fields=["restart_req"])
-            log = [("restart dhcpd " + srv.name, "", srv.restart_req)]
+        elif action in ("start", "stop", "restart", "update") and srv:  # command for the agent, done once at its next contact
+            srv.agent_cmd = f"{action}:{timezone.now().strftime('%Y%m%d%H%M%S')}"
+            srv.save(update_fields=["agent_cmd"])
+            log = [(f"{action} {srv.name}", "", srv.agent_cmd)]
+            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_" + action), name=srv.name))
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""
@@ -365,7 +392,8 @@ class ServersInlineView(LoginRequiredMixin, View):
         if log:
             _admin_audit(request, log)
         invalidate()
-        messages.success(request, t("msg.saved"))
+        if not list(messages.get_messages(request)._queued_messages if hasattr(messages.get_messages(request), "_queued_messages") else []):
+            messages.success(request, t("msg.saved"))
         return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
 
 
@@ -448,6 +476,15 @@ class PlanView(View):
                 info["disk"] = "current"
         if server is not None and server.restart_req:
             info["restart_req"] = server.restart_req  # manual restart from NetBox (the agent does it once per id)
+        if server is not None and server.agent_cmd:  # start | stop | restart | update, done once per id
+            cmd, cid = server.agent_cmd.split(":", 1)
+            info["cmd"] = f"{cmd}\t{cid}"
+            if cmd == "update":
+                from .agent import agent_script
+
+                ver, sha, _ = agent_script()
+                info["agent_url"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_self" if api else "plugins:netbox_isc_dhcp:export_agent_self"))
+                info["agent_sha"] = sha
         _key_progress(request, server, info)
         reason, names = gate(server, mh)
         if reason:

@@ -184,8 +184,19 @@ def heartbeat(server, request, data):
             msgs.append(t("aud.ag_isc_new", v=isc))
         else:
             msgs.append(t("aud.ag_isc_changed", old=server.isc_version, new=isc))
+    event = str(data.get("dhcpd_event", ""))[:20]  # agent_start | agent_stop | manual_start | manual_stop
     if isc != "none" and dhcpd is not None and (dhcpd != server.dhcpd_running or first or server.isc_version in ("", "none")):
-        msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
+        if event in ("manual_start", "manual_stop", "agent_start", "agent_stop"):
+            msgs.append(t("aud.ag_" + event))
+        else:
+            msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
+        server.dhcpd_since = timezone.now()
+        server.dhcpd_by = "manual" if event.startswith("manual") else ("agent" if event.startswith("agent") else "")
+    done = str(data.get("cmd_done", ""))[:200]  # <id>:<ok|failed>:<text>
+    if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
+        _, res, *txt = done.split(":", 2) + [""]
+        msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_" + server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
+        server.agent_cmd = ""
     if running and running != server.running_hash:
         msgs.append(t("aud.ag_runs", cfg=versions.label(running)))
     for k, v in (("agent_version", agent), ("isc_version", isc), ("running_hash", running)):
@@ -196,7 +207,7 @@ def heartbeat(server, request, data):
         changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(dhcpd)})
         server.dhcpd_running = dhcpd
     server.last_seen = timezone.now()
-    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen"])
+    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
@@ -241,3 +252,33 @@ def first_block(server):
     if server.isc_version in ("", "none"):
         return "srv.isc_none"
     return ""
+
+
+# ---- agent shipped with the plugin (NetBox knows the newest version and can push it) ----
+def agent_script():
+    """(version, sha256, bytes) of the agent bundled in this plugin version."""
+    import hashlib
+    import os
+    import re
+
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "agent_dist", "isc-dhcp-agent")
+    try:
+        raw = open(path, "rb").read()
+    except OSError:
+        return "", "", b""
+    m = re.search(rb'^AGENT_VERSION="([^"]+)"', raw, re.M)
+    return (m.group(1).decode() if m else ""), hashlib.sha256(raw).hexdigest(), raw
+
+
+def _vkey(v):
+    import re
+
+    return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3]) or (0,)
+
+
+def agent_outdated(server) -> bool:
+    latest = agent_script()[0]
+    return bool(latest and server.agent_version and _vkey(server.agent_version) < _vkey(latest))
+
+
+CMDS = ("start", "stop", "restart", "update")

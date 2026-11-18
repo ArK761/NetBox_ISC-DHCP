@@ -38,7 +38,12 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo /none
 get() {  # get <file> <dest>: from the checkout next to this script, else from git
   if [ -f "$here/$1" ]; then install -m "$3" "$here/$1" "$2"; else curl -fsSL "$REPO/$REF/agent/$1" -o "$2" && chmod "$3" "$2"; fi
 }
-get isc-dhcp-agent "$BIN" 755
+# the agent itself lives inside the plugin package (NetBox knows the newest version and can push updates)
+if [ -f "$here/../netbox_isc_dhcp/agent_dist/isc-dhcp-agent" ]; then
+  install -m 755 "$here/../netbox_isc_dhcp/agent_dist/isc-dhcp-agent" "$BIN"
+else
+  curl -fsSL "$REPO/$REF/netbox_isc_dhcp/agent_dist/isc-dhcp-agent" -o "$BIN" && chmod 755 "$BIN"
+fi
 get isc-dhcp-agent.service "$UNIT" 644
 if [ ! -f "$CONF" ]; then
   get isc-dhcp-agent.conf.example "$CONF" 600
