@@ -126,6 +126,42 @@ class DNSWarningMiddleware:
                 url = reverse("plugins:netbox_isc_dhcp:subnet_override", kwargs={"pk": o.pool_id, "prefix_pk": o.prefix_id})
                 tree.setdefault((o.pool.name, pool_url), []).append((o.prefix_text, url, ""))
             out.append(("warning", "mdi-pencil-outline", t("warn.overrides", n=len(ovr)), subnets, t("menu.subnets"), tree))
+        out += self._server_notices()
+        return out
+
+    @staticmethod
+    def _server_notices():
+        """DHCP servers: different ISC versions, ISC missing, CFG mismatch, silent agent, dhcpd down."""
+        from django.urls import reverse
+
+        from .export import build, versions
+        from .export.agent import enabled_servers, isc_versions, stale
+        from .models import settings_obj
+
+        url = reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers"
+        label = t("srv.title")
+        srvs = enabled_servers()
+        if not srvs:
+            return []
+        out = []
+        iv = isc_versions()
+        if len(iv) > 1:
+            out.append(("danger", "mdi-alert-octagon-outline", t("warn.isc_mismatch", list="; ".join(f"{v}: {', '.join(n)}" for v, n in iv.items())), url, label))
+        missing = [s.name for s in srvs if s.isc_version == "none"]
+        if missing:
+            out.append(("danger", "mdi-alert-octagon-outline", t("warn.isc_missing", names=", ".join(missing)), url, label))
+        mh = build.manifest_hash()
+        lab = versions.labels()
+        bad = [f"{s.name} {lab.get(s.running_hash, s.running_hash[:12])}" for s in srvs if s.last_seen and s.running_hash and s.running_hash != mh]
+        if bad:
+            out.append(("warning", "mdi-file-compare", t("warn.cfg_mismatch", list=", ".join(bad), cur=lab.get(mh, mh[:12])), url, label))
+        st = settings_obj()
+        silent = [s.name for s in srvs if s.last_seen and stale(s, st.agent_interval if st else 60)]
+        if silent:
+            out.append(("danger", "mdi-lan-disconnect", t("warn.agent_stale", names=", ".join(silent)), url, label))
+        down = [s.name for s in srvs if s.dhcpd_running is False and s.isc_version != "none"]
+        if down:
+            out.append(("danger", "mdi-server-off", t("warn.dhcpd_down", names=", ".join(down)), url, label))
         return out
 
     def __call__(self, request):

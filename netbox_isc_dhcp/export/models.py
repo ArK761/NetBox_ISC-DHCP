@@ -31,7 +31,8 @@ class AuditEvent(models.Model):
     """Audit log: regenerations (who/why, duration, changed files with diff) and downloads by DHCP servers."""
 
     time = models.DateTimeField(db_index=True)
-    kind = models.CharField(max_length=10, choices=(("regen", "Generovanie"), ("download", "Stiahnutie"), ("plan", "Plán"), ("report", "Hlásenie")))
+    kind = models.CharField(max_length=10, choices=(("regen", "Generovanie"), ("download", "Stiahnutie"), ("plan", "Plán"), ("report", "Hlásenie"),
+                                                    ("agent", "Agent"), ("admin", "Správca")))
     server = models.CharField(max_length=100, blank=True, default="", help_text="DHCP server name (plan / report).")
     result = models.CharField(max_length=20, blank=True, default="", help_text="Report result: ok, test_failed, rolled_back, failed.")
     output = models.TextField(blank=True, default="", help_text="Report output (dhcpd -t, errors).")
@@ -67,6 +68,13 @@ class DHCPServer(models.Model):
     last_hash = models.CharField(max_length=64, blank=True, default="")
     last_result = models.CharField(max_length=20, blank=True, default="")
     last_report = models.DateTimeField(null=True, blank=True)
+    # agent state (sent on every contact)
+    last_seen = models.DateTimeField(null=True, blank=True, help_text="Last contact of the agent.")
+    agent_version = models.CharField(max_length=50, blank=True, default="")
+    isc_version = models.CharField(max_length=100, blank=True, default="", help_text="ISC dhcpd version; 'none' = not installed.")
+    dhcpd_running = models.BooleanField(null=True, blank=True)
+    running_hash = models.CharField(max_length=64, blank=True, default="", help_text="CFG set the agent says it runs.")
+    released_hash = models.CharField(max_length=64, blank=True, default="", help_text="Admin let the next servers go on without this server's OK for this set.")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
@@ -78,3 +86,22 @@ class DHCPServer(models.Model):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers"
+
+
+class CfgVersion(models.Model):
+    """Number of every CFG set (manifest hash): <dd.mm.yy>_<NNN> per day, e.g. 18.11.26_000."""
+
+    hash = models.CharField(max_length=64, unique=True)
+    label = models.CharField(max_length=20)
+    created = models.DateTimeField(db_index=True)
+
+    class Meta:
+        app_label = "netbox_isc_dhcp"
+        verbose_name = "CFG version"
+        ordering = ("-created",)
+
+    def __str__(self):
+        return self.label
+
+    def get_absolute_url(self):
+        return reverse("plugins:netbox_isc_dhcp:export")

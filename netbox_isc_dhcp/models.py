@@ -42,6 +42,10 @@ def settings_obj():
     return PluginSettings.objects.select_related("table_dir", "subnet_dir").first()
 
 
+CONF_DIR = "/etc/dhcp"  # fixed directory of dhcpd.conf on every DHCP server (owner rule)
+BACKUP_DIR = "/opt/BCK"  # default backup directory of the agent
+
+
 def base_path() -> str:
     cfg = PluginSettings.objects.first()
     return (cfg.base_path if cfg else "").rstrip("/")
@@ -255,6 +259,8 @@ class PluginSettings(NetBoxModel):
                                    help_text="Subdirectory of the subnet (prefix) files.")
     agent_mode = models.CharField(max_length=10, default="plan", choices=(("plan", "Plan"), ("export", "Export")),
                                   help_text="For all DHCP servers: plan = only changes, export = download everything.")
+    agent_interval = models.PositiveIntegerField(default=60, help_text="Seconds between two agent contacts (10 s - 30 min).")
+    agent_dirs = models.JSONField(default=list, blank=True, help_text="Every directory the plugin ever managed (old files there are deleted).")
     agent_test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test for all DHCP servers; {conf} = path of dhcpd.conf.")
     agent_restart_cmd = models.CharField(max_length=255, default="systemctl restart isc-dhcp-server", help_text="Restart of the DHCP service (all servers).")
     agent_backup_dir = models.CharField(max_length=255, blank=True, default="", help_text="Backup directory for all servers (empty = <base path>/bck).")
@@ -292,5 +298,5 @@ class DNSServer(NetBoxModel):
                 raise ValidationError({"active": t("err.max_dns", n=MAX_ACTIVE_DNS)})
 
 
-from .export.models import ExportFile  # noqa: E402,F401
+from .export.models import AuditEvent, CfgVersion, DHCPServer, ExportFile  # noqa: E402,F401
 from .hosts.models import HostCodeTemplate, HostConfig, HostGroup, HostGroupCode, HostSource  # noqa: E402,F401  (hosts package models)

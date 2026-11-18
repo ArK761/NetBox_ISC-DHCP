@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# isc-dhcp-agent - keeps the ISC DHCP configuration of this server in sync with the NetBox plugin netbox_isc_dhcp.
+# Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
+# backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
+# On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
+set -u
+AGENT_VERSION="1.0.0"
+CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
+
+# ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
+NETBOX_URL=""                                   # .../plugins/isc-dhcp/dhcp/export/agent/
+STATE_DIR="/var/lib/isc-dhcp-agent"
+DHCP_SERVICE="isc-dhcp-server"
+DHCPD_BIN="dhcpd"
+ALLOWED_TEST_CMDS=("dhcpd -t -cf /etc/dhcp/dhcpd.conf")
+ALLOWED_RESTART_CMDS=("systemctl restart isc-dhcp-server")
+RUNNING_CHECK=""                                # empty = systemctl is-active / pidof dhcpd
+START_WAIT=5                                    # seconds after restart before checking dhcpd
+KEEP_BACKUPS=10
+CURL_OPTS=()                                    # e.g. (--cacert /etc/ssl/netbox.pem)
+LOCK_FILE="/run/isc-dhcp-agent.lock"
+# shellcheck disable=SC1090
+[ -r "$CONF_FILE" ] && . "$CONF_FILE"
+
+ONCE=0
+case "${1:-}" in
+  --version) echo "$AGENT_VERSION"; exit 0 ;;
+  --once) ONCE=1 ;;
+  "") ;;
+  *) echo "usage: $0 [--once|--version]" >&2; exit 2 ;;
+esac
+
+log() { logger -t isc-dhcp-agent -- "$*" 2>/dev/null; echo "$(date '+%F %T') $*" >&2; }
+die() { log "ERROR: $*"; exit 1; }
+
+[ -n "$NETBOX_URL" ] || die "NETBOX_URL is not set in $CONF_FILE"
+for c in curl sha256sum flock; do command -v "$c" >/dev/null 2>&1 || die "missing command: $c"; done
+mkdir -p "$STATE_DIR" || die "cannot create $STATE_DIR"
+exec 9>"$LOCK_FILE" || die "cannot open $LOCK_FILE"
+flock -n 9 || die "another isc-dhcp-agent is running"
+
+isc_version() {
+  command -v "$DHCPD_BIN" >/dev/null 2>&1 || { echo none; return; }
+  local v
+  v=$("$DHCPD_BIN" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+)?' | head -1)
+  echo "${v:-unknown}"
+}
+
+dhcpd_running() {
+  if [ -n "$RUNNING_CHECK" ]; then bash -c "$RUNNING_CHECK" >/dev/null 2>&1 && echo 1 || echo 0; return; fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$DHCP_SERVICE" 2>/dev/null; then echo 1; return; fi
+  pidof dhcpd >/dev/null 2>&1 && echo 1 || echo 0
+}
+
+state() { cat "$STATE_DIR/$1" 2>/dev/null; }
+
+# a path the agent may write / delete: below the base path or the dhcpd.conf in the conf dir, no ".."
+safe_path() {
+  local p="$1"
+  case "$p" in *..*|*" "*|"") return 1 ;; esac
+  [ -n "${BASE:-}" ] && case "$p" in "$BASE"/*) return 0 ;; esac
+  [ -n "${CONF_DIR:-}" ] && [ "$(dirname "$p")" = "$CONF_DIR" ] && return 0
+  return 1
+}
+
+allowed() {  # allowed <cmd from NetBox> <local list...> -> the command to run (NetBox one only if allowed locally)
+  local want="$1"; shift
+  local c
+  for c in "$@"; do [ "$c" = "$want" ] && { echo "$c"; return 0; }; done
+  echo "$1"; return 1
+}
+
+report() {  # report <result> <output file>
+  local url="$REPORT_URL" res="$1" out="$2"
+  [ -n "$url" ] || return 0
+  curl -sS "${CURL_OPTS[@]}" --max-time 60 -o /dev/null -X POST "$url" \
+    --data-urlencode "result=$res" --data-urlencode "hash=$HASH" --data-urlencode "running=$(state running)" \
+    --data-urlencode "output@$out" || log "report failed (network)"
+}
+
+restore() {  # copy the backup back, remove files that did not exist before
+  local f
+  for f in "${NEW_FILES[@]}"; do rm -f -- "$f"; done
+  [ -d "$BK" ] && cp -a "$BK/." / 2>>"$OUT"
+  log "restored backup $BK"
+}
+
+apply() {
+  local i tmp rc cmd now prev
+  OUT="$WORK/output"; : >"$OUT"
+  # 1. download everything to a staging dir and check sha256 (nothing is changed when a file is bad)
+  for i in "${!DL_PATH[@]}"; do
+    safe_path "${DL_PATH[$i]}" || { echo "refused path ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
+    curl -fsS "${CURL_OPTS[@]}" --max-time 120 -o "$WORK/f$i" "${DL_URL[$i]}" 2>>"$OUT" \
+      || { echo "download failed: ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
+    [ "$(sha256sum "$WORK/f$i" | cut -d' ' -f1)" = "${DL_SHA[$i]}" ] \
+      || { echo "sha256 mismatch: ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
+  done
+  # 2. backup = cp of the whole current CFG to <backup dir>/<running CFG>_<time>
+  prev=$(state label); now=$(date +%Y%m%d-%H%M%S)
+  BK="$BACKUP_TO/${prev:-start}_$now"
+  mkdir -p "$BK" || { echo "cannot create backup $BK" >>"$OUT"; report failed "$OUT"; return; }
+  for i in "${BACKUP_PATHS[@]}"; do [ -e "$i" ] && cp -a --parents "$i" "$BK/" 2>>"$OUT"; done
+  echo "backup: $BK" >>"$OUT"
+  # 3. install (order from NetBox: included files first, dhcpd.conf last)
+  NEW_FILES=()
+  for i in "${!DL_PATH[@]}"; do
+    tmp="${DL_PATH[$i]}"
+    [ -e "$tmp" ] || NEW_FILES+=("$tmp")
+    mkdir -p "$(dirname "$tmp")" && cp "$WORK/f$i" "$tmp.isc-new" && mv -f "$tmp.isc-new" "$tmp" \
+      || { echo "install failed: $tmp" >>"$OUT"; restore; report failed "$OUT"; return; }
+  done
+  # 4. test
+  cmd=$(allowed "$TEST_CMD" "${ALLOWED_TEST_CMDS[@]}") || echo "test command from NetBox not allowed locally, used: $cmd" >>"$OUT"
+  echo "\$ $cmd" >>"$OUT"
+  bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
+  if [ $rc -ne 0 ]; then
+    log "test failed (rc=$rc), restoring"; restore; report test_failed "$OUT"; return
+  fi
+  # 5. restart + check that dhcpd runs
+  cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
+  echo "\$ $cmd" >>"$OUT"
+  bash -c "$cmd" >>"$OUT" 2>&1
+  sleep "$START_WAIT"
+  if [ "$(dhcpd_running)" != 1 ]; then
+    log "dhcpd did not start, restoring"; restore
+    bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"
+    echo "dhcpd after restore: $( [ "$(dhcpd_running)" = 1 ] && echo running || echo NOT running )" >>"$OUT"
+    report rolled_back "$OUT"; return
+  fi
+  # 6. delete files the plugin does not generate any more (only managed paths)
+  for i in "${DELETES[@]}"; do safe_path "$i" && rm -f -- "$i" && echo "deleted $i" >>"$OUT"; done
+  # 7. remember + report
+  echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
+  log "CFG $CFG applied (${#DL_PATH[@]} files, ${#DELETES[@]} deleted)"
+  report ok "$OUT"
+  # keep the newest backups only
+  ls -1dt "$BACKUP_TO"/*/ 2>/dev/null | tail -n +"$((KEEP_BACKUPS + 1))" | while read -r d; do rm -rf -- "$d"; done
+}
+
+contact() {
+  local have="$WORK/have" resp="$WORK/resp" code f d
+  : >"$have"
+  f=$(state conf); [ -n "$f" ] && [ -f "$f" ] && sha256sum "$f" >>"$have"
+  while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' -exec sha256sum {} + >>"$have"; done < <(state dirs)
+  code=$(curl -sS "${CURL_OPTS[@]}" --max-time 60 -o "$resp" -w '%{http_code}' -X POST "${NETBOX_URL}?format=text" \
+    --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
+    --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)") || { log "NetBox not reachable"; return 1; }
+  DL_PATH=(); DL_SHA=(); DL_URL=(); BACKUP_PATHS=(); DELETES=(); DIRS=()
+  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""
+  local key a b c
+  while IFS=$'\t' read -r key a b c; do
+    case "$key" in
+      interval) [[ "$a" =~ ^[0-9]+$ ]] && INTERVAL="$a" ;;
+      hash) HASH="$a" ;; cfg) CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
+      conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
+      backup) BACKUP_TO="$a"; IFS=$'\t' read -r -a BACKUP_PATHS <<<"$b${c:+	$c}" ;;
+      download) DL_PATH+=("$a"); DL_SHA+=("$b"); DL_URL+=("$c") ;;
+      test) TEST_CMD="$a" ;; restart) RESTART_CMD="$a" ;; delete) DELETES+=("$a") ;; report) REPORT_URL="$a" ;;
+    esac
+  done <"$resp"
+  [ "$code" = 200 ] || { log "NetBox answered $code ${ERR}"; return 1; }
+  [ ${#DIRS[@]} -gt 0 ] && printf '%s\n' "${DIRS[@]}" >"$STATE_DIR/dirs"
+  for f in "${DL_PATH[@]}"; do [ "$(dirname "$f")" = "$CONF_DIR" ] && echo "$f" >"$STATE_DIR/conf"; done
+  [ -z "$(state conf)" ] && [ -n "$CONF_DIR" ] && echo "$CONF_DIR/dhcpd.conf" >"$STATE_DIR/conf"
+  if [ -n "$WAIT" ]; then log "waiting ($WAIT) CFG $CFG"; return 0; fi
+  if [ ${#DL_PATH[@]} -eq 0 ] && [ ${#DELETES[@]} -eq 0 ]; then return 0; fi
+  [ "$(isc_version)" = none ] && { log "ISC dhcpd is not installed - plan ignored"; return 0; }
+  log "CFG $CFG: ${#DL_PATH[@]} to download, ${#DELETES[@]} to delete"
+  apply
+}
+
+INTERVAL=60
+log "isc-dhcp-agent $AGENT_VERSION started, NetBox $NETBOX_URL, ISC $(isc_version)"
+while true; do
+  WORK=$(mktemp -d) || die "mktemp failed"
+  contact
+  rm -rf -- "$WORK"
+  [ "$ONCE" = 1 ] && break
+  sleep "$INTERVAL"
+done

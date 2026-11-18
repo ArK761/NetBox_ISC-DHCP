@@ -66,6 +66,7 @@ class ExportPageView(LoginRequiredMixin, View):
             d["size"] = sum(x["r"].size for x in d["files"])
         last = max((r.updated for r in rows), default=None)
         return render(request, "netbox_isc_dhcp/export/export.html", {
+            "cfg_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash()),
             "m": m, "dirs": dirs, "last": last, "total_size": sum(r.size for r in rows),
             "files_text": t("exp.files", n=m["count"]),
         })
@@ -90,12 +91,16 @@ class AuditView(LoginRequiredMixin, View):
             raise PermissionDenied
         kind = request.GET.get("kind", "")
         qs = AuditEvent.objects.all()
-        if kind in ("regen", "download", "plan", "report"):
+        if kind in ("regen", "download", "plan", "report", "agent", "admin"):
             qs = qs.filter(kind=kind)
         page = int(request.GET.get("p", "1")) if request.GET.get("p", "1").isdigit() else 1
         total = qs.count()
         events = list(qs[(page - 1) * self.PER_PAGE: page * self.PER_PAGE])
+        from . import versions
+
+        labels = versions.labels()
         for e in events:
+            e.cfg_label = labels.get(e.manifest_hash, e.manifest_hash[:12])
             ch = e.changes or []
             e.n_add = sum(1 for c in ch if c.get("action") == "add")
             e.n_upd = sum(1 for c in ch if c.get("action") == "update")
@@ -103,8 +108,23 @@ class AuditView(LoginRequiredMixin, View):
             e.n_dl = sum(1 for c in ch if c.get("action") == "download")
         return render(request, "netbox_isc_dhcp/export/audit.html", {
             "events": events, "kind": kind, "page": page, "has_next": page * self.PER_PAGE < total, "total": total,
-            "kinds": [("", t("aud.all")), ("regen", t("aud.regen")), ("download", t("aud.download")), ("plan", t("aud.plan_kind")), ("report", t("aud.report"))],
+            "kinds": [("", t("aud.all")), ("regen", t("aud.regen")), ("download", t("aud.download")), ("plan", t("aud.plan_kind")), ("report", t("aud.report")),
+                      ("agent", t("aud.agent_kind")), ("admin", t("aud.admin_kind"))],
         })
+
+
+def _st():
+    from ..models import PluginSettings, settings_obj
+
+    return settings_obj() or PluginSettings.objects.create()
+
+
+def _admin_audit(request, log):
+    """Audit of changes to DHCP servers / agent settings: who, from where, old -> new."""
+    from .models import AuditEvent
+
+    AuditEvent.objects.create(time=timezone.now(), kind="admin", user=request.user.username, client_ip=audit.client_ip(request),
+                              cause=t("aud.admin_servers"), changes=[{"path": k, "action": "update", "old": str(o), "new": str(n)} for k, o, n in log])
 
 
 class ServersInlineView(LoginRequiredMixin, View):
@@ -120,6 +140,7 @@ class ServersInlineView(LoginRequiredMixin, View):
         pk = request.POST.get("pk", "")
         srv = DHCPServer.objects.filter(pk=int(pk)).first() if pk.isdigit() else None
         name, addr = request.POST.get("name", "").strip()[:100], request.POST.get("address", "").strip()[:255]
+        log = []
         if action in ("add", "edit"):
             if not name or not valid_address(addr):
                 messages.error(request, t("srv.err"))
@@ -127,40 +148,83 @@ class ServersInlineView(LoginRequiredMixin, View):
             if action == "add":
                 last = DHCPServer.objects.order_by("-order").first()
                 DHCPServer.objects.create(name=name, address=addr, order=(last.order + 1) if last else 1)
+                log = [("add", "", f"{name} {addr}")]
             elif srv:
+                log = [("edit", f"{srv.name} {srv.address}", f"{name} {addr}")]
                 srv.name, srv.address = name, addr
                 srv.save()
         elif action == "cmds":  # shared by all DHCP servers
-            from ..models import PluginSettings, settings_obj
+            from ..base_config import is_safe_path
 
-            st = settings_obj() or PluginSettings.objects.create()
+            bdir = request.POST.get("backup_dir", "").strip()[:255]
+            if bdir and not is_safe_path(bdir):
+                messages.error(request, t("srv.err_path"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            st = _st()
+            before = (st.agent_test_cmd, st.agent_restart_cmd, st.agent_backup_dir)
             st.agent_test_cmd = request.POST.get("test_cmd", "").strip()[:255] or st.agent_test_cmd
             st.agent_restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or st.agent_restart_cmd
-            st.agent_backup_dir = request.POST.get("backup_dir", "").strip()[:255]
+            st.agent_backup_dir = bdir
             st.save()
+            log = [("test", before[0], st.agent_test_cmd), ("restart", before[1], st.agent_restart_cmd), ("backup", before[2], st.agent_backup_dir)]
+            log = [x for x in log if x[1] != x[2]]
         elif action == "mode":
-            from ..models import PluginSettings, settings_obj
-
-            st = settings_obj() or PluginSettings.objects.create()
-            st.agent_mode = "export" if request.POST.get("value") == "export" else "plan"
+            st = _st()
+            log = [("mode", st.agent_mode, "export" if request.POST.get("value") == "export" else "plan")]
+            st.agent_mode = log[0][2]
             st.save()
         elif action == "staged":
-            from ..models import PluginSettings, settings_obj
-
-            st = settings_obj() or PluginSettings.objects.create()
+            st = _st()
+            log = [("staged_rollout", str(st.staged_rollout), str(request.POST.get("value") == "1"))]
             st.staged_rollout = request.POST.get("value") == "1"
             st.save()
+        elif action == "interval":
+            from .agent import INTERVALS
+
+            st = _st()
+            v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
+            if v in INTERVALS:
+                log = [("interval", str(st.agent_interval), str(v))]
+                st.agent_interval = v
+                st.save()
         elif action == "first" and srv:  # only one server can be first; others keep their relative order
+            from .agent import first_server, isc_mismatch
+
+            cur = first_server()
+            if isc_mismatch() and cur is not None and cur.pk != srv.pk:
+                messages.error(request, t("srv.err_first_isc"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]  # list order (pk) never changes
             for i, x in enumerate([srv] + rest, 1):
                 if x.order != i:
                     x.order = i
                     x.save(update_fields=["order"])
+            log = [("first", cur.name if cur else "", srv.name)]
+        elif action == "release" and srv:  # admin lets the next servers go on without this server's OK for the current set
+            from . import build
+
+            srv.released_hash = build.manifest_hash()
+            srv.save(update_fields=["released_hash"])
+            log = [("release", "", srv.name)]
+        elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
+            log = [("retry " + srv.name, srv.last_result, "")]
+            srv.last_result = ""
+            srv.save(update_fields=["last_result"])
         elif action == "toggle" and srv:
+            from .agent import first_server, isc_mismatch
+
+            cur = first_server()
+            if srv.enabled and isc_mismatch() and cur is not None and cur.pk == srv.pk:
+                messages.error(request, t("srv.err_first_isc"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             srv.enabled = not srv.enabled
             srv.save()
+            log = [("enabled " + srv.name, str(not srv.enabled), str(srv.enabled))]
         elif action == "delete" and srv:
+            log = [("delete", f"{srv.name} {srv.address}", "")]
             srv.delete()
+        if log:
+            _admin_audit(request, log)
         invalidate()
         messages.success(request, t("msg.saved"))
         return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
@@ -173,78 +237,117 @@ def _json_body(request):
         return None
 
 
+def _wants_text(request):
+    return request.GET.get("format") == "text" or "text/plain" in request.META.get("HTTP_ACCEPT", "")
+
+
+def _agent_data(request):
+    """Agent request data: form fields (bash agent) or JSON body."""
+    if request.method == "POST" and request.content_type == "application/json":
+        body = _json_body(request)
+        return body if isinstance(body, dict) else None
+    return request.POST if request.method == "POST" else request.GET
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class PlanView(View):
-    """Agent: POST {"files": {path: sha256}} (what it has) -> ordered steps. GET = plan for an empty server."""
+    """Agent contact. POST (form: files=<sha256sum output>, agent, isc, dhcpd, running | JSON {"files": {path: sha}})
+    -> state + ordered steps. ?format=text = TAB separated lines for the bash agent. GET = plan for an empty server."""
 
-    def _plan(self, request, have):
+    def _plan(self, request, have, data):
         from django.urls import reverse
         from urllib.parse import quote
 
-        from .agent import make_plan, server_for
+        from . import versions
+        from .agent import as_text, gate, heartbeat, make_plan, managed_dirs, server_for
         from .models import AuditEvent
+        from ..models import CONF_DIR, base_path, settings_obj
 
         if not _client_allowed(request):
             raise PermissionDenied
         server = server_for(request)
+        if data and request.method == "POST":
+            heartbeat(server, request, data)
         mh = build.manifest_hash()
-        if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
-            return HttpResponse(json.dumps({"error": "dhcpd.conf is not generated (plugin settings: dhcpd.conf path)", "steps": []}),
-                                status=409, content_type="application/json")
-        from ..models import settings_obj
-
+        ver = versions.ensure(mh)
         st = settings_obj()
         mode = st.agent_mode if st else "plan"
-        from .agent import waiting_for
+        info = {"mode": mode, "hash": mh, "cfg": ver.label if ver else "", "server": server.name if server else "",
+                "interval": st.agent_interval if st else 60, "conf_dir": CONF_DIR, "base": base_path(),
+                "dir": managed_dirs()}  # the agent sends sha256 of every file in these dirs (+ dhcpd.conf) next time
+        text = _wants_text(request)
 
-        wait = waiting_for(server, mh)
-        if wait:  # staged rollout: earlier servers must report OK for this exact set first
-            return HttpResponse(json.dumps({"mode": mode, "hash": mh, "server": server.name, "wait_for": wait, "steps": []}, indent=1),
-                                content_type="application/json")
+        def reply(steps, extra=None, status=200):
+            d = dict(info, **(extra or {}))
+            if text:
+                return HttpResponse(as_text(d, steps), status=status, content_type="text/plain; charset=utf-8")
+            return HttpResponse(json.dumps(dict(d, steps=steps), indent=1), status=status, content_type="application/json")
+
+        if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
+            return reply([], {"error": "dhcpd.conf is not generated"}, status=409)
+        reason, names = gate(server, mh)
+        if reason:
+            return reply([], {"wait": reason, "wait_for": ",".join(names)})
         if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh:
             steps = []  # export = everything, but only when the set changed since this server's last OK (no restart on every poll)
         else:
-            steps = None
-        steps = steps if steps is not None else make_plan(have, server, lambda p: request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_file", kwargs={"path": quote(p.lstrip("/"))})),
-                          request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report")), mh, mode)
+            steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_file", kwargs={"path": quote(p.lstrip("/"))})),
+                              request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report")), mh, mode)
         if steps:
             AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
                                       user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,
-                                      cause=t("aud.plan_" + mode, n=len(steps)),
+                                      cause=t("aud.plan_" + mode, n=len(steps)) + (f" · {ver.label}" if ver else ""),
                                       changes=[{"path": x.get("path") or x.get("cmd") or ", ".join(x.get("paths", [])) or x.get("url", ""), "action": x["op"]} for x in steps])
-        return HttpResponse(json.dumps({"mode": mode, "hash": mh, "server": server.name if server else None, "steps": steps}, indent=1), content_type="application/json")
+        return reply(steps)
 
     def get(self, request):
-        return self._plan(request, {})
+        return self._plan(request, {}, None)
 
     def post(self, request):
-        body = _json_body(request)
-        if body is None or not isinstance(body.get("files", {}), dict):
-            return HttpResponse('{"error": "body must be JSON {\\"files\\": {path: sha256}}"}', status=400, content_type="application/json")
-        return self._plan(request, {str(k): str(v) for k, v in body.get("files", {}).items()})
+        from .agent import parse_have
+
+        data = _agent_data(request)
+        if data is None:
+            return HttpResponse('{"error": "body must be JSON {\\"files\\": {path: sha256}} or a form"}', status=400, content_type="application/json")
+        files = data.get("files", {})
+        if isinstance(files, dict):
+            have = {str(k): str(v) for k, v in files.items()}
+        else:
+            have = parse_have(str(files or ""))
+        return self._plan(request, have, data)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class ReportView(View):
-    """Agent: POST {"hash", "result": ok|test_failed|rolled_back|failed, "output", "done": [step numbers]}."""
+    """Agent result. POST form or JSON: hash, result ok|test_failed|rolled_back|failed, output, done."""
 
     RESULTS = ("ok", "test_failed", "rolled_back", "failed")
 
     def post(self, request):
+        from . import versions
         from .agent import server_for
         from .models import AuditEvent
 
         if not _client_allowed(request):
             raise PermissionDenied
-        body = _json_body(request)
+        body = _agent_data(request)
         if body is None or body.get("result") not in self.RESULTS:
             return HttpResponse('{"error": "result must be one of ok, test_failed, rolled_back, failed"}', status=400, content_type="application/json")
         server = server_for(request)
         now = timezone.now()
+        h = str(body.get("hash", ""))[:64]
+        done = body.get("done", [])
+        done = done if isinstance(done, list) else [x for x in str(done).split() if x]
         AuditEvent.objects.create(time=now, kind="report", server=server.name if server else "", client_ip=audit.client_ip(request),
-                                  manifest_hash=str(body.get("hash", ""))[:64], result=body["result"], output=str(body.get("output", ""))[:20000],
-                                  cause=t("aud.result_" + body["result"]), changes=[{"path": str(x), "action": "done"} for x in body.get("done", [])][:2000])
+                                  manifest_hash=h, result=body["result"], output=str(body.get("output", ""))[:20000],
+                                  cause=t("aud.result_" + body["result"]) + (f" · {versions.label(h)}" if h else ""),
+                                  changes=[{"path": str(x), "action": "done"} for x in done][:2000])
         if server:
-            server.last_hash, server.last_result, server.last_report = str(body.get("hash", ""))[:64], body["result"], now
-            server.save(update_fields=["last_hash", "last_result", "last_report"])
+            server.last_hash, server.last_result, server.last_report = h, body["result"], now
+            fields = ["last_hash", "last_result", "last_report"]
+            run = str(body.get("running", "") or (h if body["result"] == "ok" else ""))[:64]
+            if run:
+                server.running_hash = run
+                fields.append("running_hash")
+            server.save(update_fields=fields)
         return HttpResponse('{"ok": true}', content_type="application/json")

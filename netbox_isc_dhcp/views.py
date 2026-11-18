@@ -133,10 +133,28 @@ def _server_rows():
     from .export.models import DHCPServer
     from .export.servers import resolve
 
+    from django.utils.timesince import timesince
+
+    from .export import build, versions
+    from .export.agent import gate, stale
+    from .models import settings_obj
+
+    st = settings_obj()
+    interval = st.agent_interval if st else 60
+    mh, lab = build.manifest_hash(), versions.labels()
     out = []
     for srv in DHCPServer.objects.order_by("pk"):
         ips, err = resolve(srv.address)
-        out.append({"s": srv, "ips": ips, "err": err})
+        reason, names = gate(srv, mh) if srv.enabled else ("", [])
+        wait = t(f"srv.wait_{reason}", names=", ".join(names)) if reason else ""
+        out.append({"s": srv, "ips": ips, "err": err, "wait": wait, "reason": reason, "names": names,
+                    "stale": srv.enabled and srv.last_seen is not None and stale(srv, interval),
+                    "ago": timesince(srv.last_seen) if srv.last_seen else "",
+                    "run_label": lab.get(srv.running_hash, srv.running_hash[:12]) if srv.running_hash else "",
+                    "run_ok": srv.running_hash == mh, "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else ""})
+    waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}
+    for r in out:
+        r["blocks"] = r["s"].name in waited  # others wait for this server: admin may let them go on
     return out
 
 
@@ -152,12 +170,14 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
       extra_context=lambda request, instance: {
           "servers": _server_rows(), "first_pk": _first_pk(),
           "current_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(),
+          "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(__import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash()),
+          "intervals": [(v, f"{v} s" if v < 60 else f"{v // 60} min") for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).INTERVALS],
+          "isc_lock": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).isc_mismatch(),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),
                           report=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report"))),
           "subdirs": DHCPPath.objects.all(),
           "dir_rows": [("table_dir", "lbl.table_dir", instance.table_dir), ("subnet_dir", "lbl.subnet_dir2", instance.subnet_dir)],
           "path_rows": [
-              ("config_path", "lbl.config_path", instance.config_path, "/etc/dhcp"),
               ("base_path", "lbl.base_path", instance.base_path, "/opt/dhcp"),
           ],
       })
@@ -219,7 +239,7 @@ register_model_view(DHCPFile, "regenerate", path="regenerate")(DHCPFileRegenerat
 
 # --- Inline editing on the settings page (click a value, type, save) -------------
 class PluginSettingsInlineView(View):
-    FIELDS = ("language", "config_path", "base_path", "table_dir", "subnet_dir")
+    FIELDS = ("language", "base_path", "table_dir", "subnet_dir")  # dhcpd.conf directory is fixed: /etc/dhcp
 
     def post(self, request, pk):
         if not request.user.has_perm("netbox_isc_dhcp.change_pluginsettings"):
@@ -343,7 +363,9 @@ def _baseconfig_context(request, instance):
     includes, warnings = table_includes()
     subs, w2 = subnet_includes_paths()
     warnings = warnings + w2
-    path = f"{st.config_path.rstrip('/')}/{instance.name}" if st and st.config_path else ""
+    from .models import CONF_DIR
+
+    path = f"{CONF_DIR}/{instance.name}"
     return {"file_path": path, "includes": includes, "subnet_includes": subs, "include_warnings": warnings}
 
 

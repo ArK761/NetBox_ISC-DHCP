@@ -59,7 +59,12 @@ subnet 10.20.0.0 netmask 255.255.255.0 {
 
 
 def test_good_file_has_no_errors():
-    assert structure_errors(GOOD, "10.20.0.0/24") == []
+    assert structure_errors(GOOD, "10.20.0.0/24", known_classes={"A", "B"}) == []
+
+
+def test_unknown_class_is_always_an_error():
+    # dhcpd does not start with an unknown class -> refused even when no dynamic class exists at all
+    assert any('"A" does not exist' in e for e in structure_errors(GOOD, "10.20.0.0/24"))
 
 
 def test_owner_case_option_outside_subnet_and_twice():
@@ -97,7 +102,7 @@ def test_good_file_with_site_context():
     ("    option domain-name firma.local;", "text in quotes"),
     ("    option subnet-mask 255.255.0.0;", "differs from the subnet mask"),
     ("    max-lease-time 100;", "greater than max-lease-time"),
-    ('    allow members of "Nope";', 'class "Nope" is not defined'),
+    ('    allow members of "Nope";', 'class "Nope" does not exist'),
     ('    log (info, concat("X ", fooo, binary-to-asci(10, 8, ".", leased-address)));', "unknown word(s) binary-to-asci, fooo"),
     ("    filename pxelinux.0;", "text in quotes"),
 ])

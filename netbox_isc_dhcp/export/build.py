@@ -239,12 +239,14 @@ def regen_conf():
     from ..models import BaseConfig, settings_obj
 
     st, cfg = settings_obj(), BaseConfig.objects.first()
-    if cfg is None or not (st and st.config_path):
+    from ..models import CONF_DIR
+
+    if cfg is None:
         return _drop(area="conf")
     from ..services import build_base_config
 
     text = build_base_config(cfg)[0]
-    path = f"{st.config_path.rstrip('/')}/{cfg.name}"
+    path = f"{CONF_DIR}/{cfg.name}"
     for other in ExportFile.objects.filter(area="conf").exclude(path=path):
         _del(other)
     return _put("conf", "conf", path, text)

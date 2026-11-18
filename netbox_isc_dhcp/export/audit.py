@@ -61,13 +61,17 @@ def finish(cause, always=False):
     ch = getattr(_local, "changes", None) or []
     t0 = getattr(_local, "t0", time.monotonic())
     _local.changes = None
+    from . import build, versions
+
+    mh = build.manifest_hash()
+    versions.ensure(mh)
+    versions.remember_dirs()
     if not ch and not always:
         return None
-    from . import build
 
     user, ip = current_user()
     ev = AuditEvent.objects.create(time=timezone.now(), kind="regen", user=user, client_ip=ip, cause=cause[:4000],
-                                   duration_ms=int((time.monotonic() - t0) * 1000), manifest_hash=build.manifest_hash(), changes=ch)
+                                   duration_ms=int((time.monotonic() - t0) * 1000), manifest_hash=mh, changes=ch)
     prune()
     return ev
 

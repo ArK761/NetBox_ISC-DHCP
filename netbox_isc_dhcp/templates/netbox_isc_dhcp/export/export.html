@@ -14,7 +14,7 @@
 <div class="row"><div class="col-12">
   <div class="card mb-3">
     <h5 class="card-header d-flex align-items-center"><i class="mdi mdi-file-tree-outline me-2"></i>{% tr "exp.title" %}
-      <span class="badge text-bg-primary ms-2">{{ files_text }}</span></h5>
+      <span class="badge text-bg-primary ms-2">{{ files_text }}</span>{% if cfg_label %}<span class="badge text-bg-info ms-2" title="{% tr 'srv.current_cfg' %}">CFG {{ cfg_label }}</span>{% endif %}</h5>
     <div class="isc-card-hint isc-green"><i class="mdi mdi-information-outline"></i> {% tr "exp.hint" %}</div>
     <div class="isc-card-hint pt-0"><i class="mdi mdi-shield-lock-outline"></i> {% tr "exp.access" %}</div>
     <div class="px-3 pb-3 d-flex flex-wrap gap-3 align-items-center">

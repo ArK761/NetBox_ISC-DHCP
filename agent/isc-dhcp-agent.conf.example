@@ -1,0 +1,20 @@
+# /etc/isc-dhcp-agent.conf - local settings of isc-dhcp-agent (everything else comes from NetBox:
+# interval, paths, backup dir, test/restart commands, which files to download or delete).
+
+# Agent URL of the plugin (CFG pluginu -> DHCP servery shows it)
+NETBOX_URL=""
+
+# Safety: test / restart commands from NetBox are run ONLY when they are listed here.
+# Otherwise the first command of the list is used (and the report says so).
+ALLOWED_TEST_CMDS=("dhcpd -t -cf /etc/dhcp/dhcpd.conf")
+ALLOWED_RESTART_CMDS=("systemctl restart isc-dhcp-server")
+
+# Service checked after restart (systemctl is-active, fallback pidof dhcpd)
+DHCP_SERVICE="isc-dhcp-server"
+
+# Seconds to wait after restart before checking dhcpd, number of backups kept
+START_WAIT=5
+KEEP_BACKUPS=10
+
+# Extra curl options, e.g. own CA:  CURL_OPTS=(--cacert /etc/ssl/certs/netbox-ca.pem)
+CURL_OPTS=()
