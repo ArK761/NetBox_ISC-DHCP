@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.11.0"
+AGENT_VERSION="1.11.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -486,25 +486,10 @@ heal() {  # (a) manual restart asked in NetBox -> continuous retry; (b) disk = c
     echo 1 >"$STATE_DIR/want_up"; rm -f "$STATE_DIR/want_up_ts"; return 0  # ensure_up does the work, and keeps retrying
   fi
   [ -e "$STATE_DIR/want_up" ] && return 0  # continuous retry already armed (ensure_up handles it)
-  [ "$DISK" = current ] && [ "$(dhcpd_running)" != 1 ] || return 0
-  [ "$(state heal)" = "$HASH" ] && return 0  # one automatic attempt per CFG (no restart loop) - then only a new CFG or a manual restart
-  echo "$HASH" >"$STATE_DIR/heal"
-  OUT="$WORK/heal"; : >"$OUT"
-  local cmd rc p0
-  cmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_TEST_CMDS[@]}")
-  log "testing CFG $CFG on disk and (re)starting dhcpd"
-  echo "\$ $cmd" >>"$OUT"; bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
-  if [ $rc -ne 0 ]; then
-    log "test failed (rc=$rc) - dhcpd stays down:"; grep -v '^\$ \|^Internet Systems\|^Copyright\|^All rights\|^For info\|^$' "$OUT" | tail -n 15 | while IFS= read -r l; do log "  $l"; done
-    report test_failed "$OUT"; return 0
-  fi
-  cmd="${RESTART_CMD:-${ALLOWED_RESTART_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_RESTART_CMDS[@]}")
-  echo "\$ $cmd" >>"$OUT"; p0=$(pid_now); kill_stray "$OUT"; mark_agent; bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"; pid_step "self-heal" "$p0"
-  if [ "$(dhcpd_running)" = 1 ]; then
-    echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
-    log "dhcpd started with CFG $CFG (pid $(pid_now))"; echo "dhcpd started (it was down, CFG on disk = current)" >>"$OUT"; report ok "$OUT"
-  else
-    log "dhcpd did not start (CFG is OK) - retrying every minute"; echo 1 >"$STATE_DIR/want_up"; report start_failed "$OUT"
+  # disk = current CFG but dhcpd is down (crash, failed service, after an agent update) -> arm continuous retry automatically
+  if [ "$DISK" = current ] && [ "$(dhcpd_running)" != 1 ]; then
+    echo 1 >"$STATE_DIR/want_up"; rm -f "$STATE_DIR/want_up_ts"
+    log "dhcpd is down and the disk already has the current CFG - will keep (re)starting it until it is up"
   fi
 }
 
