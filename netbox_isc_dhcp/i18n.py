@@ -185,6 +185,7 @@ TR = {
     "aud.svc_bad": ("služba DHCP: {svc} – {why}", "DHCP service: {svc} – {why}"),
     "svc.v6": ("IPv6 server (dhcpd6) padá:", "IPv6 server (dhcpd6) fails:"),
     "svc.nodefault": ("chýba – služba spúšťa IPv4 AJ IPv6; nastav", "is missing: the service starts IPv4 AND IPv6 - set"),
+    "aud.dup": ("bežalo viac dhcpd naraz – agent nechal jeden: {txt}", "several dhcpd ran at once – the agent kept one: {txt}"),
     "aud.svc_ok": ("služba DHCP je znova v poriadku ({svc})", "DHCP service is OK again ({svc})"),
     "aud.fail_cleared": ("dhcpd beží s aktuálnym CFG – staré hlásenie „zlyhala“ zrušené", "dhcpd runs the current CFG – the old “failed” report cleared"),
     "warn.svc_bad": ("Služba DHCP nie je v poriadku na: {names} – dôvod je pri serveri v CFG pluginu.", "DHCP service is not OK on: {names} – the reason is shown at the server in CFG pluginu."),

@@ -212,6 +212,8 @@ def heartbeat(server, request, data):
     pid = "".join(c for c in str(data.get("dhcpd_pid", ""))[:10] if c.isdigit())
     svc = "".join(c for c in str(data.get("svc", ""))[:20] if c.isalnum() or c in "-_")
     svc_why = str(data.get("svc_why", ""))[:300]
+    dup = str(data.get("dup", ""))[:200]
+
     first = server.last_seen is None
     msgs, changes = [], []
     if first:
@@ -258,6 +260,8 @@ def heartbeat(server, request, data):
     if dhcpd is not None and dhcpd != server.dhcpd_running:
         changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(dhcpd)})
         server.dhcpd_running = dhcpd
+    if dup:
+        msgs.append(t("aud.dup", txt=dup))
     if svc and (svc != server.svc_state or (svc not in ("active", "none") and svc_why and svc_why != server.svc_why)):
         if svc in ("active", "none"):
             if server.svc_state not in ("", "active", "none"):
