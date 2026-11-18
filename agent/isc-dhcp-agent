@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.5.1"
+AGENT_VERSION="1.5.2"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -182,22 +182,28 @@ apply() {
   local bundled=0
   if [ -n "$BUNDLE" ] && command -v tar >/dev/null 2>&1; then
     printf '%s\n' "${DL_PATH[@]}" >"$WORK/paths"
+    local t0=$SECONDS
     mkdir -p "$WORK/b"
     if curl -fsS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 300 -X POST "$BUNDLE" --data-urlencode "paths@$WORK/paths" -o "$WORK/b.tgz" 2>>"$OUT" \
        && tar -xzf "$WORK/b.tgz" -C "$WORK/b" 2>>"$OUT"; then
       bundled=1
+      log "downloaded bundle (tar.gz): $(du -k "$WORK/b.tgz" | cut -f1) KB in $((SECONDS - t0)) s"
       for i in "${!DL_PATH[@]}"; do
         safe_path "${DL_PATH[$i]}" || { echo "refused path ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
         if [ -f "$WORK/b${DL_PATH[$i]}" ] && [ "$(sha256sum "$WORK/b${DL_PATH[$i]}" | cut -d' ' -f1)" = "${DL_SHA[$i]}" ]; then
           mv "$WORK/b${DL_PATH[$i]}" "$WORK/f$i"
         else
-          bundled=0; echo "bundle: missing or bad ${DL_PATH[$i]} - downloading file by file" >>"$OUT"; break
+          bundled=0; echo "bundle: missing or bad ${DL_PATH[$i]} - downloading file by file" >>"$OUT"; log "bundle: missing or bad ${DL_PATH[$i]} - downloading file by file"; break
         fi
       done
     else
-      echo "bundle download failed - downloading file by file" >>"$OUT"
+      echo "bundle download failed - downloading file by file" >>"$OUT"; log "bundle download failed - downloading file by file"
     fi
+  elif [ -n "$BUNDLE" ]; then
+    log "tar not found - downloading file by file"
   fi
+  [ "$bundled" = 1 ] && log "sha256 OK for all ${#DL_PATH[@]} files"
+  [ "$bundled" = 1 ] || log "downloading ${#DL_PATH[@]} files one by one"
   [ "$bundled" = 1 ] || for i in "${!DL_PATH[@]}"; do
     safe_path "${DL_PATH[$i]}" || { echo "refused path ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
     curl -fsS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 120 -o "$WORK/f$i" "${DL_URL[$i]}" 2>>"$OUT" \
