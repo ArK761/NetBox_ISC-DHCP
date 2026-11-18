@@ -181,6 +181,21 @@ def why_text(raw):
     return raw
 
 
+_SVC = (  # agent service reason (English) -> i18n key
+    ("IPv6 server (dhcpd6) fails:", "svc.v6"),
+    ("is missing: the service starts IPv4 AND IPv6 - set", "svc.nodefault"),
+)
+
+
+def svc_text(raw):
+    """Translate the agent's reason why the DHCP service is not active (plugin language)."""
+    from ..i18n import t
+
+    for frag, key in _SVC:
+        raw = raw.replace(frag, t(key))
+    return raw
+
+
 def heartbeat(server, request, data):
     """Store what the agent says about itself; audit what changed, in plain words."""
     from ..i18n import t
@@ -248,7 +263,7 @@ def heartbeat(server, request, data):
             if server.svc_state not in ("", "active", "none"):
                 msgs.append(t("aud.svc_ok", svc=svc))
         else:
-            msgs.append(t("aud.svc_bad", svc=svc, why=svc_why or "?"))
+            msgs.append(t("aud.svc_bad", svc=svc, why=svc_text(svc_why) or "?"))
     if svc:
         server.svc_state, server.svc_why = svc, ("" if svc in ("active", "none") else svc_why)
     # the agent says dhcpd runs the CFG of the last (start) failure: that old "failed" is not true any more (dhcpd -t failures stay)

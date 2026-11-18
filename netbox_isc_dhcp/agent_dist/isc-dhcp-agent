@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.12.0"
+AGENT_VERSION="1.12.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -142,11 +142,20 @@ svc_is_active() { [ "$(svc_state)" = active ] || { [ "$(svc_state)" = none ] && 
 svc_why() {  # short reason from the unit journal why the service is not active ("" when active)
   case "$(svc_state)" in active|none) return 0 ;; esac
   command -v journalctl >/dev/null 2>&1 || return 0
-  local j l; j=$(journalctl -u "$DHCP_SERVICE" -n 80 --no-pager -q 2>/dev/null)
-  l=$(echo "$j" | grep -iE 'No subnet|Address already in use|Not configured|Can.t |no such file|permission denied' | grep -v 'systemd\[' | tail -1)
+  local j l v6="" ifc hint=""
+  j=$(journalctl -u "$DHCP_SERVICE" -n 80 --no-pager -q 2>/dev/null)
+  echo "$j" | grep -qE 'DHCPv6 server.*failed|subnet6' && v6=1
+  l=$(echo "$j" | grep -iE 'No subnet6? declaration|Address already in use|Not configured|Can.t |no such file|permission denied' | grep -v 'systemd\[' | head -1)
   [ -z "$l" ] && l=$(echo "$j" | grep -iE 'failed!' | tail -1)
   [ -z "$l" ] && l=$(echo "$j" | grep -iE 'fail' | tail -1)
-  echo "$l" | sed -E 's/^.{15} [^ ]+ //; s/^[^ ]+\[[0-9]+\]: //' | cut -c1-200
+  l=$(echo "$l" | sed -E 's/^.{15} [^ ]+ //; s/^[^ ]+\[[0-9]+\]: //' | cut -c1-140)
+  if [ -n "$v6" ]; then
+    l="IPv6 server (dhcpd6) fails: $l"
+    ifc=$(echo "$j" | grep -oE 'No subnet6 declaration for [^ ]+' | head -1 | awk '{print $NF}')
+    [ -f /etc/init.d/"$DHCP_SERVICE" ] && [ ! -f /etc/default/"$DHCP_SERVICE" ] && \
+      hint=" | /etc/default/$DHCP_SERVICE is missing: the service starts IPv4 AND IPv6 - set INTERFACESv4=\"${ifc:-<interface>}\" INTERFACESv6=\"\""
+  fi
+  echo "$l$hint" | cut -c1-290
 }
 
 diag() {  # full check when something is not OK: last NetBox command, service, every dhcpd process, pidfile, service error
@@ -490,14 +499,14 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
 ensure_up() {  # keep dhcpd up after Start/Restart: test CFG, kill a stray dhcpd, remove a stale pidfile, start; retry ~1/min until it runs (NOT a CFG error)
   [ -e "$STATE_DIR/want_up" ] || return 0
   [ "$(state admin_stopped)" = 1 ] && { rm -f "$STATE_DIR/want_up"; return 0; }
-  if [ "$(dhcpd_running)" = 1 ]; then  # dhcpd serves (maybe started by hand / by the service): done, NetBox gets OK
+  if [ "$(dhcpd_running)" = 1 ] && [ ! -e "$STATE_DIR/force_restart" ]; then  # dhcpd serves (maybe started by hand / by the service): done, NetBox gets OK
     rm -f "$STATE_DIR/want_up"; OUT="$WORK/up"; : >"$OUT"
     echo "dhcpd is running (pid $(pid_now))" >>"$OUT"; echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
     log "dhcpd is running (pid $(pid_now)) - retry finished"; report ok "$OUT"; return 0
   fi
   local now last; now=$(date +%s); last=$(state want_up_ts)
   [ -n "$last" ] && [ $((now - last)) -lt 55 ] && return 0  # at most once per minute
-  echo "$now" >"$STATE_DIR/want_up_ts"
+  echo "$now" >"$STATE_DIR/want_up_ts"; rm -f "$STATE_DIR/force_restart"
   OUT="$WORK/up"; : >"$OUT"
   local cmd rc p0
   cmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_TEST_CMDS[@]}")
@@ -525,7 +534,7 @@ heal() {  # (a) manual restart asked in NetBox -> continuous retry; (b) disk = c
   [ "$(state admin_stopped)" = 1 ] && return 0  # stopped from NetBox: stays down until Start / Restart / a new CFG
   if [ -n "$RESTART_REQ" ] && [ "$RESTART_REQ" != "$(state restart_req)" ]; then
     echo "$RESTART_REQ" >"$STATE_DIR/restart_req"; log "manual restart asked in NetBox"
-    echo 1 >"$STATE_DIR/want_up"; rm -f "$STATE_DIR/want_up_ts"; return 0  # ensure_up does the work, and keeps retrying
+    echo 1 >"$STATE_DIR/want_up"; echo 1 >"$STATE_DIR/force_restart"; rm -f "$STATE_DIR/want_up_ts"; return 0  # ensure_up does a real restart, and keeps retrying
   fi
   [ -e "$STATE_DIR/want_up" ] && return 0  # continuous retry already armed (ensure_up handles it)
   # disk = current CFG but dhcpd is down (crash, failed service, after an agent update) -> arm continuous retry automatically
