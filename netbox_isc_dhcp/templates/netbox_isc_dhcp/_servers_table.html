@@ -82,3 +82,4 @@
   {% tr "srv.agent_gh_check" %} {% if agent_src.when %}{{ agent_src.when }}{% else %}{% tr "srv.agent_gh_running" %}{% endif %}{% if agent_src.err %} – <span class="text-warning">{% tr "srv.agent_gh_err" %} ({{ agent_src.err }})</span>{% endif %}
   <form method="post" action="{{ srv_url }}" class="d-inline m-0 ms-2">{% csrf_token %}<input type="hidden" name="field" value="gh_check">
     <button class="btn btn-sm btn-outline-secondary py-0"><i class="mdi mdi-refresh"></i> {% tr "srv.agent_gh_now" %}</button></form></div>
+<span id="isc-cur-cfg-src" hidden>{{ current_label }}</span>

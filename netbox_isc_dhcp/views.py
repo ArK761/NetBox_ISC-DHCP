@@ -193,7 +193,7 @@ class ServersTableView(LoginRequiredMixin, View):
         if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
             raise PermissionDenied
         return render(request, "netbox_isc_dhcp/_servers_table.html", {
-            "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(),
+            "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
             "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0], "agent_src": _agent_src()})
 
 

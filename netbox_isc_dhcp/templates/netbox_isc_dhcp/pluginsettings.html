@@ -112,7 +112,7 @@
         <i class="mdi mdi-package-variant-closed"></i><span class="small fw-semibold text-nowrap" title="{% tr 'srv.bundle_hint' %}">{% tr "srv.bundle_min" %}</span>
         <select name="value" class="form-select form-select-sm" style="width:6rem" onchange="this.form.submit()">{% for v in bundle_choices %}<option value="{{ v }}"{% if object.agent_bundle_min == v %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
         <span class="small text-muted">{% tr "srv.files" %}</span></form>
-      <span class="small text-muted" title="{% tr 'srv.cfg_hint' %}"><i class="mdi mdi-tag-outline"></i> {% tr "srv.current_cfg" %} <span class="isc-chip green ms-1">{{ current_label|default:"—" }}</span></span>
+      <span class="small text-muted" title="{% tr 'srv.cfg_hint' %}"><i class="mdi mdi-tag-outline"></i> {% tr "srv.current_cfg" %} <span class="isc-chip green ms-1" id="isc-cur-cfg">{{ current_label|default:"—" }}</span></span>
       <span class="small d-flex flex-wrap align-items-center gap-2" id="isc-agent-key"><i class="mdi mdi-key-variant"></i><span class="fw-semibold">{% tr "srv.key" %}</span>
         {% if object.agent_key %}<code id="isc-key-mask" class="isc-chip">••••{{ object.agent_key|slice:"-4:" }}</code>
           <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="iscCopy('{{ object.agent_key }}', this)" title="{% tr 'srv.copy' %}"><i class="mdi mdi-content-copy"></i> {% tr "srv.copy" %}</button>
@@ -148,7 +148,7 @@
         function load(force) {
           if (!force && (document.hidden || busy())) return Promise.resolve();
           return fetch(box.dataset.url, {credentials: "same-origin"}).then(function (r) { return r.ok ? r.text() : null; })
-            .then(function (h) { if (h && (force || !busy())) { var m = document.getElementById("isc-srv-msg"), keep = m ? m.innerHTML : ""; box.innerHTML = h; if (keep) document.getElementById("isc-srv-msg").innerHTML = keep; } }).catch(function () {});
+            .then(function (h) { if (h && (force || !busy())) { var m = document.getElementById("isc-srv-msg"), keep = m ? m.innerHTML : ""; box.innerHTML = h; if (keep) document.getElementById("isc-srv-msg").innerHTML = keep; var c = document.getElementById("isc-cur-cfg"), cs = document.getElementById("isc-cur-cfg-src"); if (c && cs && cs.textContent) c.textContent = cs.textContent; } }).catch(function () {});
         }
         function show(msgs) {
           var m = document.getElementById("isc-srv-msg"); if (!m) return;
