@@ -45,7 +45,7 @@ conf_set() {  # conf_set NAME value: replace or add NAME="value" in the config f
   local name="$1" val="$2"
   [[ "$name" =~ ^[A-Z_]+$ ]] || { echo "bad name: $name" >&2; exit 2; }
   touch "$CONF_FILE" && chmod 600 "$CONF_FILE" || { echo "cannot write $CONF_FILE (run as root)" >&2; exit 1; }
-  case "$val" in *[\"\\\$\`\|&]*) echo "value must not contain quotes, \\, \$, \`, | or &" >&2; exit 2 ;; esac
+  case "$val" in *[\"\\\$\`\|\&]*) echo "value must not contain quotes, \\, \$, \`, | or &" >&2; exit 2 ;; esac
   if grep -q "^$name=" "$CONF_FILE"; then
     sed -i "s|^$name=.*|$name=\"$val\"|" "$CONF_FILE"
   else
