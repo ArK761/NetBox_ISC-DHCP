@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.10.0"
+AGENT_VERSION="1.10.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -308,16 +308,41 @@ svc() {  # svc <start|stop|restart>: the DHCP service, without any command from 
   if command -v systemctl >/dev/null 2>&1; then systemctl "$1" "$DHCP_SERVICE"; else service "$DHCP_SERVICE" "$1"; fi
 }
 
-kill_stray() {  # dhcpd processes while the service is not active (started by hand / left by a failed start): end them, they block the port
+dhcpd_pidfiles() {  # pidfile from a running dhcpd (-pf arg), plus the Debian defaults
+  local pid pf
+  for pid in $(pidof dhcpd 2>/dev/null); do
+    pf=$(tr '\0' ' ' </proc/"$pid"/cmdline 2>/dev/null | grep -oE '(^| )-pf +[^ ]+' | awk '{print $NF}')
+    [ -n "$pf" ] && echo "$pf"
+  done
+  echo /run/dhcpd.pid; echo /var/run/dhcpd.pid
+}
+
+clean_stale_pidfile() {  # a pidfile left by a crashed / killed dhcpd points to a dead pid and blocks a clean start (start-stop-daemon)
+  local out="$1"; shift; local pf p seen=""
+  for pf in "$@"; do
+    case " $seen " in *" $pf "*) continue ;; esac; seen="$seen $pf"
+    [ -f "$pf" ] || continue
+    p=$(cat "$pf" 2>/dev/null)
+    if [ -z "$p" ] || ! kill -0 "$p" 2>/dev/null; then
+      rm -f "$pf" && { echo "removed stale pidfile $pf (pid ${p:-empty} dead)" >>"$out"; log "removed stale pidfile $pf (pid ${p:-empty} dead)"; }
+    fi
+  done
+}
+
+kill_stray() {  # dhcpd processes while the service is not active (started by hand / left by a failed start): end them + clear a stale pidfile; both block a clean start
   [ "$(dhcpd_running)" = 1 ] && return 0
-  pidof dhcpd >/dev/null 2>&1 || { command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$DHCP_SERVICE" 2>/dev/null && systemctl stop "$DHCP_SERVICE" >/dev/null 2>&1; return 0; }  # crashed: service "active" without a process -> reset it
-  echo "dhcpd process outside the service (pid $(pidof dhcpd)) - ending it" >>"${1:-/dev/null}"
+  local out="${1:-/dev/null}" pfs; pfs=$(dhcpd_pidfiles)  # read -pf while a process may still be alive
+  if ! pidof dhcpd >/dev/null 2>&1; then
+    command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$DHCP_SERVICE" 2>/dev/null && systemctl stop "$DHCP_SERVICE" >/dev/null 2>&1  # crashed: service "active" without a process
+    clean_stale_pidfile "$out" $pfs; return 0
+  fi
+  echo "dhcpd process outside the service (pid $(pidof dhcpd)) - ending it" >>"$out"
   log "dhcpd process outside the service (pid $(pidof dhcpd)) - ending it"
   kill $(pidof dhcpd) 2>/dev/null; local i=0
   while [ $i -lt 5 ] && pidof dhcpd >/dev/null 2>&1; do sleep 1; i=$((i+1)); done
   pidof dhcpd >/dev/null 2>&1 && kill -9 $(pidof dhcpd) 2>/dev/null; sleep 1
   command -v systemctl >/dev/null 2>&1 && systemctl reset-failed "$DHCP_SERVICE" 2>/dev/null
-  return 0
+  clean_stale_pidfile "$out" $pfs; return 0
 }
 
 wait_down() { local i=0; while [ $i -lt "$1" ] && [ "$(dhcpd_running)" = 1 ]; do sleep 1; i=$((i+1)); done; }
