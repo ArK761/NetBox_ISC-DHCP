@@ -18,3 +18,7 @@ KEEP_BACKUPS=10
 
 # Extra curl options, e.g. own CA:  CURL_OPTS=(--cacert /etc/ssl/certs/netbox-ca.pem)
 CURL_OPTS=()
+
+# Own log file (empty = journal only) and its size limit in KB (rotated to .1)
+LOG_FILE="/var/log/isc-dhcp-agent.log"
+LOG_MAX_KB=5120

@@ -48,4 +48,4 @@ grep -q '^NETBOX_URL="https\?://[^"]' "$CONF" || { echo "set NETBOX_URL in $CONF
 systemctl daemon-reload
 systemctl enable --now isc-dhcp-agent
 systemctl restart isc-dhcp-agent
-echo "isc-dhcp-agent $("$BIN" --version) installed and running (journalctl -u isc-dhcp-agent -f)"
+echo "isc-dhcp-agent $("$BIN" --version) installed and running (log: /var/log/isc-dhcp-agent.log)"
