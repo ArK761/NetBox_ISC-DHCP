@@ -1,7 +1,7 @@
 {% load isc_dhcp_i18n %}{% url 'plugins:netbox_isc_dhcp:servers_inline' as srv_url %}
 <div id="isc-srv-msg"></div>
 <table class="table mb-0 isc-srvt">
-  <thead><tr><th style="width:2.5rem">#</th><th style="width:4rem">{% tr "srv.first" %}</th><th>{% tr "srv.col_server" %}</th><th>CFG</th><th style="width:5rem">{% tr "hosts.col_enabled" %}</th><th style="width:3rem"></th></tr></thead>
+  <thead><tr><th style="width:2.5rem">#</th><th style="width:4rem">{% tr "srv.first" %}</th><th>{% tr "srv.col_server" %}</th><th style="width:5rem">{% tr "hosts.col_enabled" %}</th><th style="width:3rem"></th></tr></thead>
   {% for x in servers %}
   <tr class="isc-srv{% if not x.s.enabled %} off{% endif %}">
     <td rowspan="2"><span class="badge {% if x.s.pk == first_pk %}text-bg-primary{% else %}text-bg-secondary{% endif %}">{{ forloop.counter }}</span></td>
@@ -12,34 +12,47 @@
       <form method="post" action="{{ srv_url }}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="field" value="edit"><input type="hidden" name="pk" value="{{ x.s.pk }}">
         <input name="name" value="{{ x.s.name }}" class="form-control form-control-sm" required><input name="address" value="{{ x.s.address }}" class="form-control form-control-sm font-monospace" required>
         <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details>
-      <div class="small mt-2 isc-state">
       {% if x.s.last_seen %}
-        <div><span class="isc-dot {% if x.stale %}bad{% else %}ok{% endif %}"></span><strong>{% if x.stale %}{% tr "srv.silent" %}{% else %}{% tr "srv.online" %}{% endif %}</strong> <span class="text-muted">· {{ x.ago }}</span></div>
-        <div class="mt-1">
-          {% if x.s.isc_version == "none" %}<span class="isc-chip red">{% tr "srv.isc_none" %}</span>
+      <dl class="isc-kv small mt-2 mb-0">
+        <dt>{% tr "srv.k_state" %}</dt>
+        <dd><span class="isc-dot {% if x.stale %}bad{% else %}ok{% endif %}"></span><strong>{% if x.stale %}{% tr "srv.silent" %}{% else %}{% tr "srv.online" %}{% endif %}</strong> <span class="text-muted">· {{ x.ago }}</span></dd>
+        <dt>{% tr "srv.k_cfg" %}</dt>
+        <dd>{% if x.run_label %}<code class="isc-cfg {% if x.run_ok %}ok{% else %}old{% endif %}">{{ x.run_label }}</code>
+            {% if x.run_ok %}<span class="text-success"><i class="mdi mdi-check-circle"></i> {% tr "srv.cfg_current" %}</span>
+            {% else %}<span class="text-warning"><i class="mdi mdi-alert"></i> {% tr "srv.cfg_old" %} <code>{{ x.cur_label }}</code></span>{% endif %}
+          {% else %}<span class="text-muted">{% tr "srv.cfg_none" %}</span>{% endif %}</dd>
+        <dt>{% tr "srv.k_last" %}</dt>
+        <dd>{% if x.s.last_report %}
+            {% if x.s.last_result == "ok" %}<span class="text-success"><i class="mdi mdi-check-circle"></i> {% tr "srv.res_ok" %}</span>
+            {% elif not x.s.last_result %}<span class="text-warning"><i class="mdi mdi-timer-sand"></i> {% tr "srv.wait_report" %}</span>
+            {% elif x.s.last_result == "rolled_back" %}<span class="text-danger"><i class="mdi mdi-undo"></i> {% tr "srv.res_rolled_back" %}</span>
+            {% elif x.s.last_result == "test_failed" %}<span class="text-danger"><i class="mdi mdi-close-circle"></i> {% tr "srv.res_test_failed" %}</span>
+            {% else %}<span class="text-danger"><i class="mdi mdi-close-circle"></i> {% tr "srv.res_failed" %}</span>{% endif %}
+            <span class="text-muted">· {% if x.last_label %}CFG {{ x.last_label }} · {% endif %}{{ x.s.last_report|date:"d.m. H:i" }}</span>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+          {% if x.s.disk_broken %}<div class="text-danger"><i class="mdi mdi-alert-octagon-outline"></i> {% tr "srv.disk_broken" %}</div>{% endif %}
+          {% if x.s.released_hash == current_hash %}<div class="text-warning">{% tr "srv.released" %}</div>{% endif %}
+          {% if x.wait %}<div class="text-warning"><i class="mdi mdi-timer-sand"></i> {{ x.wait }}</div>{% endif %}</dd>
+        <dt>{% tr "srv.k_service" %}</dt>
+        <dd>{% if x.s.isc_version == "none" %}<span class="isc-chip red">{% tr "srv.isc_none" %}</span>
           {% else %}<span class="isc-chip {% if isc_lock %}red{% else %}green{% endif %}">ISC {{ x.s.isc_version|default:"?" }}</span>
-            {% if x.s.dhcpd_running is True %}<span class="isc-chip green" title="{{ x.dhcpd_since }}">▶ dhcpd {% tr "srv.runs" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>
-            {% elif x.s.dhcpd_running is False and x.s.dhcpd_by == "admin" %}<span class="isc-chip yellow" title="{{ x.dhcpd_since }}">⏹ {% tr "srv.dhcpd_admin_off" %}</span>
-            {% elif x.s.dhcpd_running is False %}<span class="isc-chip red" title="{{ x.dhcpd_since }}">⏹ {% tr "srv.dhcpd_down" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>{% endif %}
-          {% endif %}
-        </div>
-        <div class="mt-1"><span class="isc-chip">agent {{ x.s.agent_version|default:"?" }}</span>{% if x.outdated %}<span class="isc-chip yellow"><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.agent_new" %} {{ agent_latest }}</span>{% endif %}
-          {% if x.key_pending %}<span class="isc-chip yellow"><i class="mdi mdi-key-variant"></i> {% tr "srv.key_old_used" %}</span>{% endif %}</div>
-      {% else %}<span class="isc-dot none"></span><span class="text-muted">{% tr "srv.never_seen" %}</span>{% endif %}
-      </div></td>
-    <td class="small">
-      {% if x.run_label %}<div>{% tr "srv.runs" %} <code class="{% if x.run_ok %}text-success{% else %}text-danger{% endif %}">{{ x.run_label }}</code>{% if x.run_ok %} <i class="mdi mdi-check text-success"></i>{% endif %}</div>{% endif %}
-      {% if x.s.last_report %}<div class="mt-1"><span class="isc-chip {% if x.s.last_result == 'ok' %}green{% elif not x.s.last_result %}yellow{% else %}red{% endif %}">{% if x.s.last_result %}{{ x.s.last_result }}{% else %}{% tr "srv.wait_report" %}{% endif %}</span><span class="text-muted">{{ x.s.last_report|date:"d.m. H:i" }}</span></div>{% elif not x.run_label %}<span class="text-muted">—</span>{% endif %}
-      {% if x.s.disk_broken %}<div class="text-danger mt-1"><i class="mdi mdi-alert-octagon-outline"></i> {% tr "srv.disk_broken" %}</div>{% endif %}
-      {% if x.s.released_hash == current_hash %}<div class="text-warning">{% tr "srv.released" %}</div>{% endif %}
-      {% if x.wait %}<div class="text-warning mt-1"><i class="mdi mdi-timer-sand"></i> {{ x.wait }}</div>{% endif %}
+            {% if x.s.dhcpd_running is True %}<span class="isc-chip green">▶ dhcpd {% tr "srv.runs" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>
+            {% elif x.s.dhcpd_running is False and x.s.dhcpd_by == "admin" %}<span class="isc-chip yellow">⏹ {% tr "srv.dhcpd_admin_off" %}</span>
+            {% elif x.s.dhcpd_running is False %}<span class="isc-chip red">⏹ {% tr "srv.dhcpd_down" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>{% endif %}
+            {% if x.dhcpd_since %}<span class="text-muted">{% tr "srv.since" %} {{ x.dhcpd_since }}</span>{% endif %}
+          {% endif %}</dd>
+        <dt>{% tr "srv.k_agent" %}</dt>
+        <dd><span class="isc-chip">{{ x.s.agent_version|default:"?" }}</span>{% if x.outdated %}<span class="isc-chip yellow"><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.agent_new" %} {{ agent_latest }}</span>{% else %}<span class="text-muted">{% tr "srv.agent_current" %}</span>{% endif %}
+          {% if x.key_pending %}<span class="isc-chip yellow"><i class="mdi mdi-key-variant"></i> {% tr "srv.key_old_used" %}</span>{% endif %}</dd>
+      </dl>
+      {% else %}<div class="small mt-2"><span class="isc-dot none"></span><span class="text-muted">{% tr "srv.never_seen" %}</span></div>{% endif %}
     </td>
     <td class="keep"><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="toggle"><input type="hidden" name="pk" value="{{ x.s.pk }}">
       <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if x.s.enabled %} checked{% endif %} onchange="this.form.requestSubmit()"></label></form></td>
     <td class="text-end keep"><form method="post" action="{{ srv_url }}" class="m-0" onsubmit="return confirm('{% tr 'srv.del_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="delete"><input type="hidden" name="pk" value="{{ x.s.pk }}">
       <button class="btn btn-sm btn-outline-danger isc-srv-del" title="{% tr 'srv.del' %}"><i class="mdi mdi-trash-can-outline"></i></button></form></td>
   </tr>
-  <tr class="isc-srv-actions{% if not x.s.enabled %} off{% endif %}"><td colspan="5" class="pt-0 border-top-0">
+  <tr class="isc-srv-actions{% if not x.s.enabled %} off{% endif %}"><td colspan="4" class="pt-0 border-top-0">
     <div class="d-flex flex-wrap gap-2 align-items-center small">
       {% if x.s.last_seen and x.s.isc_version and x.s.isc_version != "none" %}
         <form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="start"><input type="hidden" name="pk" value="{{ x.s.pk }}">
@@ -58,9 +71,8 @@
       {% if x.blocks %}<form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="release"><input type="hidden" name="pk" value="{{ x.s.pk }}">
         <button class="btn btn-sm btn-outline-warning py-0" title="{% tr 'srv.release_hint' %}"><i class="mdi mdi-skip-next"></i> {% tr "srv.release" %}</button></form>{% endif %}
       {% if x.cmd_pending %}<span class="text-warning"><i class="mdi mdi-timer-sand"></i> {% tr "srv.cmd_pending" %}: <strong>{{ x.cmd_pending }}</strong></span>{% endif %}
-      {% if x.dhcpd_since %}<span class="text-muted ms-auto">dhcpd {% if x.s.dhcpd_running %}{% tr "srv.runs" %}{% else %}{% tr "srv.stopped" %}{% endif %} {% tr "srv.since" %} {{ x.dhcpd_since }}{% if x.dhcpd_by %} ({{ x.dhcpd_by }}){% endif %}</span>{% endif %}
     </div></td></tr>
-  {% empty %}<tr><td colspan="6" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
+  {% empty %}<tr><td colspan="5" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
 </table>
 <div class="small text-muted mt-1"><i class="mdi mdi-update"></i> {% tr "srv.agent_newest" %}: <strong>{{ agent_src.ver }}</strong>
   ({% if agent_src.src == "github" %}GitHub{% else %}{% tr "srv.agent_in_plugin" %}{% endif %}) ·

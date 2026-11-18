@@ -174,7 +174,7 @@ def _server_rows():
                     "stale": srv.enabled and srv.last_seen is not None and stale(srv, interval),
                     "ago": _ago(srv.last_seen) if srv.last_seen else "",
                     "run_label": lab.get(srv.running_hash, srv.running_hash[:12]) if srv.running_hash else "",
-                    "run_ok": srv.running_hash == mh, "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else ""})
+                    "run_ok": srv.running_hash == mh, "cur_label": lab.get(mh, mh[:12]), "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else ""})
     waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}
     for r in out:
         r["blocks"] = r["s"].name in waited  # others wait for this server: admin may let them go on
