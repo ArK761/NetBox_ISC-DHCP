@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.1.0"
+AGENT_VERSION="1.2.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -27,14 +27,71 @@ LOG_MAX_KB=5120                                 # rotated to .1 when bigger
 AUTH=()
 [ -n "$NETBOX_TOKEN" ] && AUTH=(-H "Authorization: Token $NETBOX_TOKEN")
 
+usage() {
+  cat <<USAGE
+isc-dhcp-agent $AGENT_VERSION
+  (no option)          run as daemon (systemd service isc-dhcp-agent)
+  --once               one contact with NetBox (apply the plan if any) and exit
+  --setup              ask for the NetBox agent API address and key, save, restart the service
+  --set-url <url>      save the NetBox agent API address
+  --set-token <key>    save the agent API key
+  --set <NAME> <value> save another setting (e.g. START_WAIT 10, LOG_FILE /var/log/x.log)
+  --show               show the settings (key hidden)
+  --version            print the version
+USAGE
+}
+
+conf_set() {  # conf_set NAME value: replace or add NAME="value" in the config file
+  local name="$1" val="$2"
+  [[ "$name" =~ ^[A-Z_]+$ ]] || { echo "bad name: $name" >&2; exit 2; }
+  touch "$CONF_FILE" && chmod 600 "$CONF_FILE" || { echo "cannot write $CONF_FILE (run as root)" >&2; exit 1; }
+  case "$val" in *[\"\\\$\`\|&]*) echo "value must not contain quotes, \\, \$, \`, | or &" >&2; exit 2 ;; esac
+  if grep -q "^$name=" "$CONF_FILE"; then
+    sed -i "s|^$name=.*|$name=\"$val\"|" "$CONF_FILE"
+  else
+    echo "$name=\"$val\"" >>"$CONF_FILE"
+  fi
+  echo "$name saved in $CONF_FILE"
+}
+
+restart_service() {
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet isc-dhcp-agent 2>/dev/null; then
+    systemctl restart isc-dhcp-agent && echo "service isc-dhcp-agent restarted"
+  fi
+}
+
+show() {
+  echo "config:   $CONF_FILE"
+  echo "version:  $AGENT_VERSION"
+  echo "url:      ${NETBOX_URL:-<not set>}"
+  if [ -n "$NETBOX_TOKEN" ]; then echo "key:      ****${NETBOX_TOKEN: -4}"; else echo "key:      <not set>"; fi
+  echo "log:      ${LOG_FILE:-<journal only>}"
+  echo "state:    $STATE_DIR (running CFG: $(cat "$STATE_DIR/label" 2>/dev/null || echo -))"
+  echo "service:  $(systemctl is-active isc-dhcp-agent 2>/dev/null || echo unknown)"
+}
+
 ONCE=0
 case "${1:-}" in
   --version) echo "$AGENT_VERSION"; exit 0 ;;
+  --help|-h) usage; exit 0 ;;
+  --show) show; exit 0 ;;
+  --set-url) [ -n "${2:-}" ] || { usage; exit 2; }; conf_set NETBOX_URL "$2"; restart_service; exit 0 ;;
+  --set-token) [ -n "${2:-}" ] || { usage; exit 2; }; conf_set NETBOX_TOKEN "$2"; restart_service; exit 0 ;;
+  --set) [ -n "${2:-}" ] && [ $# -ge 3 ] || { usage; exit 2; }; conf_set "$2" "$3"; restart_service; exit 0 ;;
+  --setup)
+    echo "NetBox agent API address (CFG pluginu -> DHCP servery -> API adresa agenta)"
+    read -r -p "URL [${NETBOX_URL}]: " u; u="${u:-$NETBOX_URL}"
+    [ -n "$u" ] || { echo "URL is required" >&2; exit 2; }
+    echo "Agent API key (CFG pluginu -> DHCP servery -> API kľúč agenta); Enter = keep the current one"
+    read -r -s -p "key: " k; echo
+    conf_set NETBOX_URL "$u"
+    [ -n "$k" ] && conf_set NETBOX_TOKEN "$k"
+    restart_service
+    exit 0 ;;
   --once) ONCE=1 ;;
   "") ;;
-  *) echo "usage: $0 [--once|--version]" >&2; exit 2 ;;
+  *) usage >&2; exit 2 ;;
 esac
-
 log() {
   local line; line="$(date '+%F %T') $*"
   logger -t isc-dhcp-agent -- "$*" 2>/dev/null
