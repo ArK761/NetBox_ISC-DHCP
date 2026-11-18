@@ -26,3 +26,5 @@ LOG_MAX_KB=5120
 
 # AppArmor: when dhcpd has an AppArmor profile, allow it to read the base path from NetBox (yes/no)
 APPARMOR_FIX=yes
+# /etc/default/isc-dhcp-server: the agent sets INTERFACESv4 (all IPv4 interfaces) and switches the IPv6 server off when wrong
+DEFAULT_FIX=yes

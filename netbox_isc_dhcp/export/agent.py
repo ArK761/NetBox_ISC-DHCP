@@ -263,6 +263,9 @@ def heartbeat(server, request, data):
         server.dhcpd_running = dhcpd
     if dup:
         msgs.append(t("aud.dup", txt=dup))
+    fix = str(data.get("fix", ""))[:300]
+    if fix:
+        msgs.append(t("aud.fix", txt=fix))
     if svc and (svc != server.svc_state or (svc not in ("active", "none") and svc_why and svc_why != server.svc_why)):
         if svc in ("active", "none"):
             if server.svc_state not in ("", "active", "none"):

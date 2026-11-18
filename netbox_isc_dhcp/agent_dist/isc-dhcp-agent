@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.12.4"
+AGENT_VERSION="1.13.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -18,6 +18,7 @@ RUNNING_CHECK=""                                # empty = service active AND dhc
 START_WAIT=5                                    # seconds after restart before checking dhcpd
 KEEP_BACKUPS=10
 APPARMOR_FIX=yes                                # AppArmor profile of dhcpd found -> allow it to read the base path
+DEFAULT_FIX=yes                                 # /etc/default/isc-dhcp-server: IPv4 interfaces set, IPv6 server off (fixed when wrong)
 CURL_OPTS=()                                    # e.g. (--cacert /etc/ssl/netbox.pem)
 LOCK_FILE="/run/isc-dhcp-agent.lock"
 LOG_FILE="/var/log/isc-dhcp-agent.log"               # own log file (also syslog / journal)
@@ -246,6 +247,41 @@ restore() {  # copy the backup back, remove files that did not exist before
   n=$( [ -d "$BK" ] && find "$BK" -type f | wc -l || echo 0)
   [ -d "$BK" ] && cp -a "$BK/." / 2>>"$OUT"
   step restore "$n" "restored $n file(s) from the backup $BK, removed ${#NEW_FILES[@]} new file(s)"
+}
+
+default_fix() {  # Debian init script: empty INTERFACESv4 (or no file) = it starts IPv4 AND IPv6; IPv6 fails -> service failed. Fix it.
+  [ "$DEFAULT_FIX" = yes ] || return 0
+  local f=/etc/default/"$DHCP_SERVICE" ifs v4 v6 changed=""
+  [ -f /etc/init.d/"$DHCP_SERVICE" ] || return 0  # only the LSB init script reads this file
+  ifs=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $2}' | sort -u | tr '\n' ' ' | sed 's/ $//')
+  [ -n "$ifs" ] || return 0
+  if [ ! -f "$f" ]; then
+    printf '# created by isc-dhcp-agent: IPv4 DHCP only (IPv6 server off)\nINTERFACESv4="%s"\nINTERFACESv6=""\n' "$ifs" >"$f"
+    changed="created $f: INTERFACESv4=\"$ifs\" INTERFACESv6=\"\""
+  else
+    v4=$(sed -n 's/^INTERFACESv4="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$f" | tail -1)
+    v6=$(sed -n 's/^INTERFACESv6="\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$f" | tail -1)
+    if [ -z "$v4" ] || [ -n "$v6" ]; then
+      [ -f "$f.bak-agent" ] || cp -p "$f" "$f.bak-agent"
+      [ -z "$v4" ] && v4="$ifs"
+      sed -i '/^INTERFACESv4=/d; /^INTERFACESv6=/d' "$f"
+      printf '# set by isc-dhcp-agent: IPv4 DHCP only (IPv6 server off), original in %s.bak-agent\nINTERFACESv4="%s"\nINTERFACESv6=""\n' "$f" "$v4" >>"$f"
+      changed="fixed $f: INTERFACESv4=\"$v4\" INTERFACESv6=\"\" (original in $f.bak-agent)"
+    fi
+  fi
+  # a separate IPv6 unit (newer packages) must not start either
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files "${DHCP_SERVICE}6.service" 2>/dev/null | grep -q "^${DHCP_SERVICE}6.service" \
+     && [ "$(systemctl is-enabled "${DHCP_SERVICE}6" 2>/dev/null)" != masked ]; then
+    systemctl disable --now "${DHCP_SERVICE}6" >/dev/null 2>&1; systemctl mask "${DHCP_SERVICE}6" >/dev/null 2>&1
+    changed="${changed:+$changed; }${DHCP_SERVICE}6 (IPv6) disabled and masked"
+  fi
+  [ -n "$changed" ] || return 0
+  log "service settings: $changed"; echo "service settings: $changed" >>"${OUT:-/dev/null}"
+  FIXED="${FIXED:+$FIXED; }$changed"
+  if [ "$(svc_state)" != active ] && [ "$(state admin_stopped)" != 1 ]; then  # the fix takes effect only with a clean restart
+    local p0; p0=$(pid_now); kill_stray "${OUT:-/dev/null}"; mark_agent; svc restart >/dev/null 2>&1; sleep "$START_WAIT"
+    pid_step "restart after service settings fix" "$p0"; log "service $DHCP_SERVICE: $(svc_state)"
+  fi
 }
 
 apparmor_fix() {  # dhcpd confined by AppArmor cannot read <base path>: allow it (only when the kernel uses AppArmor for dhcpd)
@@ -578,13 +614,14 @@ contact() {
   while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' -exec sha256sum {} + >>"$have"; done < <(state dirs)
   local url alt
   DUP_FIXED=""; dedupe_dhcpd
+  FIX_NOW="${FIXED:-}"; FIXED=""  # server settings the agent fixed (sent once)
   EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); WHY=""
   case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start) WHY=$(why_changed start) ;; esac
   for url in "$NETBOX_URL" "$(other_scheme "$NETBOX_URL")"; do  # try https and http, keep the one that works
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
@@ -634,6 +671,7 @@ contact() {
     fi
   fi
   OUT="$WORK/aa"; apparmor_fix  # AppArmor is watched on every contact
+  [ "$(isc_version)" != none ] && default_fix  # /etc/default/isc-dhcp-server is watched on every contact
   [ ${#DIRS[@]} -gt 0 ] && printf '%s\n' "${DIRS[@]}" >"$STATE_DIR/dirs"
   for f in "${DL_PATH[@]}"; do [ "$(dirname "$f")" = "$CONF_DIR" ] && echo "$f" >"$STATE_DIR/conf"; done
   [ -z "$(state conf)" ] && [ -n "$CONF_DIR" ] && echo "$CONF_DIR/dhcpd.conf" >"$STATE_DIR/conf"
