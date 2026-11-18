@@ -379,6 +379,16 @@ class ServersInlineView(LoginRequiredMixin, View):
             srv.save(update_fields=["agent_cmd"])
             log = [(f"{action} {srv.name}", "", srv.agent_cmd)]
             messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name))
+        elif action == "gh_check":  # look for a new agent on GitHub now (otherwise every 5 minutes in the background)
+            from .agent import _checking, _fetch_github, agent_source
+
+            _checking["on"] = True
+            _fetch_github()
+            ver, src, _, err = agent_source()
+            if err:
+                messages.warning(request, t("srv.agent_gh_err") + f" ({err})")
+            else:
+                messages.success(request, t("srv.agent_gh_done", v=ver))
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""

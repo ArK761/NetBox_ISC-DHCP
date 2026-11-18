@@ -74,6 +74,8 @@
     </div></td></tr>
   {% empty %}<tr><td colspan="5" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
 </table>
-<div class="small text-muted mt-1"><i class="mdi mdi-update"></i> {% tr "srv.agent_newest" %}: <strong>{{ agent_src.ver }}</strong>
+<div class="small text-muted mt-2 d-flex flex-wrap align-items-center gap-1"><i class="mdi mdi-update"></i> {% tr "srv.agent_newest" %}: <strong>{{ agent_src.ver }}</strong>
   ({% if agent_src.src == "github" %}GitHub{% else %}{% tr "srv.agent_in_plugin" %}{% endif %}) ·
-  {% tr "srv.agent_gh_check" %} {% if agent_src.when %}{{ agent_src.when }}{% else %}{% tr "srv.agent_gh_running" %}{% endif %}{% if agent_src.err %} – <span class="text-warning">{% tr "srv.agent_gh_err" %} ({{ agent_src.err }})</span>{% endif %}</div>
+  {% tr "srv.agent_gh_check" %} {% if agent_src.when %}{{ agent_src.when }}{% else %}{% tr "srv.agent_gh_running" %}{% endif %}{% if agent_src.err %} – <span class="text-warning">{% tr "srv.agent_gh_err" %} ({{ agent_src.err }})</span>{% endif %}
+  <form method="post" action="{{ srv_url }}" class="d-inline m-0 ms-2">{% csrf_token %}<input type="hidden" name="field" value="gh_check">
+    <button class="btn btn-sm btn-outline-secondary py-0"><i class="mdi mdi-refresh"></i> {% tr "srv.agent_gh_now" %}</button></form></div>

@@ -266,7 +266,7 @@ def first_block(server):
 # ---- agent shipped with the plugin (NetBox knows the newest version and can push it) ----
 GITHUB_AGENT = "https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/claude/skeleton-pool-planner/netbox_isc_dhcp/agent_dist/isc-dhcp-agent"
 _REMOTE_KEY = "isc_dhcp_agent_github"
-_CHECK_EVERY = 3600
+_CHECK_EVERY = 300
 _checking = {"on": False}
 
 
