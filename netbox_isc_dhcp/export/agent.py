@@ -190,11 +190,20 @@ def heartbeat(server, request, data):
             msgs.append(t("aud.ag_" + event))
         else:
             msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
+        recent_admin = server.dhcpd_by == "admin" and server.dhcpd_since and (timezone.now() - server.dhcpd_since).total_seconds() < 600
+        pending = server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart")
         server.dhcpd_since = timezone.now()
-        server.dhcpd_by = "manual" if event.startswith("manual") else ("agent" if event.startswith("agent") else "")
+        if event.startswith("agent") and (pending or recent_admin):
+            server.dhcpd_by = "admin"  # started / stopped by a button in NetBox
+        else:
+            server.dhcpd_by = "manual" if event.startswith("manual") else ("agent" if event.startswith("agent") else "")
     done = str(data.get("cmd_done", ""))[:200]  # <id>:<ok|failed>:<text>
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]
+        if res == "ok" and server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart"):
+            if server.dhcpd_by != "admin":
+                server.dhcpd_since = timezone.now()
+            server.dhcpd_by = "admin"
         msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_%s" % server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
         server.agent_cmd = ""
     if running and running != server.running_hash:
@@ -255,19 +264,92 @@ def first_block(server):
 
 
 # ---- agent shipped with the plugin (NetBox knows the newest version and can push it) ----
-def agent_script():
-    """(version, sha256, bytes) of the agent bundled in this plugin version."""
-    import hashlib
+GITHUB_AGENT = "https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/claude/skeleton-pool-planner/netbox_isc_dhcp/agent_dist/isc-dhcp-agent"
+_REMOTE_KEY = "isc_dhcp_agent_github"
+_CHECK_EVERY = 3600
+_checking = {"on": False}
+
+
+def _local_agent():
     import os
-    import re
 
     path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "agent_dist", "isc-dhcp-agent")
     try:
-        raw = open(path, "rb").read()
+        return open(path, "rb").read()
     except OSError:
+        return b""
+
+
+def _ver(raw):
+    import re
+
+    m = re.search(rb'^AGENT_VERSION="([^"]+)"', raw or b"", re.M)
+    return m.group(1).decode() if m else ""
+
+
+def _fetch_github():
+    """Background: download the newest agent from GitHub (once per hour), keep it in the cache."""
+    import time
+
+    from django.core.cache import cache
+
+    try:
+        import requests
+        from django.conf import settings
+
+        r = requests.get(GITHUB_AGENT, timeout=15, proxies=getattr(settings, "HTTP_PROXIES", None) or None)
+        raw = r.content if r.status_code == 200 else b""
+        ok = raw.startswith(b"#!") and _ver(raw)
+        if ok:  # only a script that bash can parse
+            import subprocess
+
+            ok = subprocess.run(["bash", "-n"], input=raw, capture_output=True, timeout=10).returncode == 0
+        cache.set(_REMOTE_KEY, {"raw": raw if ok else b"", "checked": time.time(),
+                                "error": "" if ok else f"HTTP {r.status_code}"}, None)
+    except Exception as e:
+        cache.set(_REMOTE_KEY, {"raw": b"", "checked": time.time(), "error": type(e).__name__}, None)
+    finally:
+        _checking["on"] = False
+
+
+def github_agent():
+    """Cached GitHub copy {raw, checked, error}; starts a background check when older than an hour (never blocks)."""
+    import threading
+    import time
+
+    from django.core.cache import cache
+
+    try:
+        data = cache.get(_REMOTE_KEY)
+    except Exception:
+        data = None
+    if (not data or time.time() - data.get("checked", 0) > _CHECK_EVERY) and not _checking["on"]:
+        _checking["on"] = True
+        threading.Thread(target=_fetch_github, daemon=True).start()
+    return data or {}
+
+
+def agent_source():
+    """(version, 'github'|'plugin', checked_epoch, error) of the agent NetBox offers."""
+    gh = github_agent()
+    local = _local_agent()
+    gv = _ver(gh.get("raw"))
+    if gv and _vkey(gv) > _vkey(_ver(local)):
+        return gv, "github", gh.get("checked"), gh.get("error", "")
+    return _ver(local), "plugin", gh.get("checked"), gh.get("error", "")
+
+
+def agent_script():
+    """(version, sha256, bytes) of the newest agent: GitHub copy when newer than the one bundled in this plugin."""
+    import hashlib
+
+    raw = _local_agent()
+    gh = github_agent().get("raw") or b""
+    if _ver(gh) and _vkey(_ver(gh)) > _vkey(_ver(raw)):
+        raw = gh
+    if not raw:
         return "", "", b""
-    m = re.search(rb'^AGENT_VERSION="([^"]+)"', raw, re.M)
-    return (m.group(1).decode() if m else ""), hashlib.sha256(raw).hexdigest(), raw
+    return _ver(raw), hashlib.sha256(raw).hexdigest(), raw
 
 
 def _vkey(v):

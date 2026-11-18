@@ -194,7 +194,18 @@ class ServersTableView(LoginRequiredMixin, View):
             raise PermissionDenied
         return render(request, "netbox_isc_dhcp/_servers_table.html", {
             "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(),
-            "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0]})
+            "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0], "agent_src": _agent_src()})
+
+
+def _agent_src():
+    import datetime
+
+
+    from .export.agent import GITHUB_AGENT, agent_source
+
+    ver, src, checked, err = agent_source()
+    when = _ago(datetime.datetime.fromtimestamp(checked, tz=datetime.timezone.utc)) if checked else ""
+    return {"ver": ver, "src": src, "when": when, "err": err, "url": GITHUB_AGENT}
 
 
 def _first_pk():
@@ -213,6 +224,7 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "intervals": [(v, f"{v} s" if v < 60 else f"{v // 60} min") for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).INTERVALS],
           "isc_lock": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).isc_mismatch(),
           "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0],
+          "agent_src": _agent_src(),
           "bundle_choices": (1, 5, 10, 20, 50, 100),
           "agent_api_url": request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_plan")),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),

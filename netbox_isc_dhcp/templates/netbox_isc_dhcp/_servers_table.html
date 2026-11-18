@@ -19,6 +19,7 @@
           {% if x.s.isc_version == "none" %}<span class="isc-chip red">{% tr "srv.isc_none" %}</span>
           {% else %}<span class="isc-chip {% if isc_lock %}red{% else %}green{% endif %}">ISC {{ x.s.isc_version|default:"?" }}</span>
             {% if x.s.dhcpd_running is True %}<span class="isc-chip green" title="{{ x.dhcpd_since }}">▶ dhcpd {% tr "srv.runs" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>
+            {% elif x.s.dhcpd_running is False and x.s.dhcpd_by == "admin" %}<span class="isc-chip yellow" title="{{ x.dhcpd_since }}">⏹ {% tr "srv.dhcpd_admin_off" %}</span>
             {% elif x.s.dhcpd_running is False %}<span class="isc-chip red" title="{{ x.dhcpd_since }}">⏹ {% tr "srv.dhcpd_down" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>{% endif %}
           {% endif %}
         </div>
@@ -61,3 +62,6 @@
     </div></td></tr>
   {% empty %}<tr><td colspan="6" class="text-warning small">{% tr "srv.none" %}</td></tr>{% endfor %}
 </table>
+<div class="small text-muted mt-1"><i class="mdi mdi-update"></i> {% tr "srv.agent_newest" %}: <strong>{{ agent_src.ver }}</strong>
+  ({% if agent_src.src == "github" %}GitHub{% else %}{% tr "srv.agent_in_plugin" %}{% endif %}) ·
+  {% tr "srv.agent_gh_check" %} {% if agent_src.when %}{{ agent_src.when }}{% else %}{% tr "srv.agent_gh_running" %}{% endif %}{% if agent_src.err %} – <span class="text-warning">{% tr "srv.agent_gh_err" %} ({{ agent_src.err }})</span>{% endif %}</div>
