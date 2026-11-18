@@ -184,6 +184,7 @@ def why_text(raw):
 _SVC = (  # agent service reason (English) -> i18n key
     ("IPv6 server (dhcpd6) fails:", "svc.v6"),
     ("is missing: the service starts IPv4 AND IPv6 - set", "svc.nodefault"),
+    ("has an empty INTERFACESv4: the service starts IPv4 AND IPv6 - set", "svc.emptyv4"),
 )
 
 

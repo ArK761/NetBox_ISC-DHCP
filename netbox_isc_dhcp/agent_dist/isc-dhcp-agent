@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.12.3"
+AGENT_VERSION="1.12.4"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -152,8 +152,13 @@ svc_why() {  # short reason from the unit journal why the service is not active 
   if [ -n "$v6" ]; then
     l="IPv6 server (dhcpd6) fails: $l"
     ifc=$(echo "$j" | grep -oE 'No subnet6 declaration for [^ ]+' | head -1 | awk '{print $NF}')
-    [ -f /etc/init.d/"$DHCP_SERVICE" ] && [ ! -f /etc/default/"$DHCP_SERVICE" ] && \
-      hint=" | /etc/default/$DHCP_SERVICE is missing: the service starts IPv4 AND IPv6 - set INTERFACESv4=\"${ifc:-<interface>}\" INTERFACESv6=\"\""
+    if [ -f /etc/init.d/"$DHCP_SERVICE" ]; then
+      if [ ! -f /etc/default/"$DHCP_SERVICE" ]; then
+        hint=" | /etc/default/$DHCP_SERVICE is missing: the service starts IPv4 AND IPv6 - set INTERFACESv4=\"${ifc:-<interface>}\" INTERFACESv6=\"\""
+      elif ! grep -qE '^INTERFACESv4="?[^" ]' /etc/default/"$DHCP_SERVICE"; then
+        hint=" | /etc/default/$DHCP_SERVICE has an empty INTERFACESv4: the service starts IPv4 AND IPv6 - set INTERFACESv4=\"${ifc:-<interface>}\" INTERFACESv6=\"\""
+      fi
+    fi
   fi
   echo "$l$hint" | cut -c1-290
 }
