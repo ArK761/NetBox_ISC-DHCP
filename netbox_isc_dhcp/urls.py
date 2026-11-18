@@ -7,6 +7,7 @@ app = "netbox_isc_dhcp"
 
 urlpatterns = [
     path("dhcp/", views.DHCPHubView.as_view(), name="dhcp_hub"),
+    path("manual/", views.manual_pdf, name="manual"),
     path("dhcp/hosts/", include("netbox_isc_dhcp.hosts.urls")),
     path("dhcp/export/", include("netbox_isc_dhcp.export.urls")),
     path("audit/", __import__("netbox_isc_dhcp.export.views", fromlist=["AuditView"]).AuditView.as_view(), name="audit"),

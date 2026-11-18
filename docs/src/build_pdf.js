@@ -14,7 +14,7 @@ const fs = require('fs'), path = require('path');
       displayHeaderFooter: true, headerTemplate: '<span></span>',
       footerTemplate: '<div style="font-size:8px;width:100%;text-align:center;color:#64748b">NetBox ISC DHCP ' + version + ' – <span class="pageNumber"></span>/<span class="totalPages"></span></div>',
       margin: { top: '16mm', bottom: '16mm', left: '14mm', right: '14mm' } });
-    fs.unlinkSync(tmp); console.log('built', pdf);
+    fs.unlinkSync(tmp); fs.mkdirSync(path.join(out, '..', 'netbox_isc_dhcp', 'manual'), { recursive: true }); fs.copyFileSync(path.join(out, pdf), path.join(out, '..', 'netbox_isc_dhcp', 'manual', pdf)); console.log('built', pdf);
   }
   await b.close();
 })();

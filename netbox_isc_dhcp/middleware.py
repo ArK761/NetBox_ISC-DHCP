@@ -12,7 +12,8 @@ _PILL = (
     '<i class="mdi mdi-tag-outline me-1"></i>%s</span>'
 )
 # Right-aligned, in the normal page flow (overlaps nothing), above the page messages.
-_BADGE = '<div id="isc-dhcp-version" class="text-end mb-2">' + _PILL + "</div>"
+_BADGE = ('<div id="isc-dhcp-version" class="text-end mb-2"><a href="%s" target="_blank" class="me-2 small fw-semibold">'
+          '<i class="mdi mdi-file-pdf-box"></i> %s</a>' + _PILL + "</div>")
 _MARKER = '<div class="container-fluid tab-content py-3">'
 
 
@@ -37,7 +38,15 @@ def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
     body = response.content.decode(charset)
     if 'id="isc-dhcp-version"' in body:
         return response
-    badge = _BADGE % escape(label())
+    from django.urls import reverse
+
+    from .i18n import t
+
+    try:
+        manual = reverse("plugins:netbox_isc_dhcp:manual")
+    except Exception:
+        manual = "/plugins/isc-dhcp/manual/"
+    badge = _BADGE % (manual, escape(t("lbl.manual")), escape(label()))
     if notices:
         badge += _TREE_CSS
     for level, icon, text, url, link_text, *rest in notices:  # plugin warnings at the top of the page (never cover buttons)

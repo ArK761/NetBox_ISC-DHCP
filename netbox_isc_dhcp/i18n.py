@@ -154,6 +154,7 @@ TR = {
     "srv.since": ("od", "since"),
     "srv.by_agent": ("agent", "agent"),
     "srv.by_manual": ("ručne", "by hand"),
+    "lbl.manual": ("Návod (PDF)", "Manual (PDF)"),
     "srv.by_admin": ("admin v NetBoxe", "admin in NetBox"),
     "srv.dhcpd_admin_off": ("dhcpd nebeží – vypol admin v NetBoxe", "dhcpd is not running – stopped by the admin in NetBox"),
     "aud.ag_manual_start": ("dhcpd spustený ručne (mimo agenta)", "dhcpd started by hand (outside the agent)"),

@@ -1,4 +1,4 @@
-__version__ = "0.39.0"
+__version__ = "0.39.1"
 
 try:
     from netbox.plugins import PluginConfig

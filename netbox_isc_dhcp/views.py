@@ -973,3 +973,20 @@ class VariablesJSONView(LoginRequiredMixin, View):
         from django.http import JsonResponse
 
         return JsonResponse({"vars": _editor_vars() + (_editor_classes() if request.GET.get("classes") else [])})
+
+
+def manual_pdf(request):
+    """The manual (PDF) in the plugin language: Slovak NAVOD_SK.pdf or English MANUAL_EN.pdf."""
+    import os
+
+    from django.http import FileResponse, Http404
+
+    from .i18n import current_language
+
+    if not request.user.is_authenticated:
+        raise PermissionDenied
+    name = "NAVOD_SK.pdf" if current_language() == "sk" else "MANUAL_EN.pdf"
+    path = os.path.join(os.path.dirname(__file__), "manual", name)
+    if not os.path.exists(path):
+        raise Http404
+    return FileResponse(open(path, "rb"), content_type="application/pdf", filename=name)
