@@ -100,7 +100,12 @@ def _groups_with(instance, label):
 def _cause(sender, instance, kw):
     from ..i18n import t
 
-    key = "aud.c_deleted" if kw.get("signal") is post_delete else "aud.c_saved"
+    if kw.get("signal") is post_delete:
+        key = "aud.c_deleted"
+    elif kw.get("created"):
+        key = "aud.c_added"
+    else:
+        key = "aud.c_saved"
     return t(key, what=str(sender._meta.verbose_name), name=str(instance))
 
 
