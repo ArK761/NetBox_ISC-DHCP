@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.5.3"
+AGENT_VERSION="1.5.4"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -159,18 +159,29 @@ restore() {  # copy the backup back, remove files that did not exist before
   log "restored backup $BK"
 }
 
-apparmor_fix() {  # dhcpd confined by AppArmor cannot read <base path>: add a local rule and reload the profile (only if AppArmor exists)
+apparmor_fix() {  # dhcpd confined by AppArmor cannot read <base path>: allow it (only when the kernel uses AppArmor for dhcpd)
   [ "$APPARMOR_FIX" = yes ] && [ -n "${BASE:-}" ] || return 0
   local prof=/etc/apparmor.d/usr.sbin.dhcpd loc=/etc/apparmor.d/local/usr.sbin.dhcpd rule="$BASE/** r,"
-  [ -f "$prof" ] && command -v apparmor_parser >/dev/null 2>&1 || return 0
-  grep -qxF "  $rule" "$loc" 2>/dev/null && return 0
-  mkdir -p "$(dirname "$loc")"
-  { echo "  # added by isc-dhcp-agent: dhcpd reads the CFG files from NetBox"; echo "  $BASE/ r,"; echo "  $rule"; } >>"$loc"
-  if apparmor_parser -r "$prof" 2>>"$OUT"; then
-    log "AppArmor: dhcpd may now read $BASE (rule added to $loc, profile reloaded)"
-    echo "AppArmor: rule '$rule' added to $loc" >>"$OUT"
-  else
-    log "AppArmor: rule added to $loc but the profile reload failed"
+  local sec=/sys/kernel/security/apparmor loaded=0
+  [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" = Y ] || return 0
+  grep -q '^/usr/sbin/dhcpd ' "$sec/profiles" 2>/dev/null && loaded=1
+  # 1) local rule (used whenever the profile is loaded again, e.g. after a reboot)
+  if [ -f "$prof" ] && ! grep -qxF "  $rule" "$loc" 2>/dev/null; then
+    mkdir -p "$(dirname "$loc")"
+    { echo "  # added by isc-dhcp-agent: dhcpd reads the CFG files from NetBox"; echo "  $BASE/ r,"; echo "  $rule"; } >>"$loc"
+    log "AppArmor: rule '$rule' added to $loc"; echo "AppArmor: rule '$rule' added to $loc" >>"$OUT"
+    if command -v apparmor_parser >/dev/null 2>&1 && apparmor_parser -r "$prof" 2>>"$OUT"; then
+      log "AppArmor: dhcpd profile reloaded with the rule"; return 0
+    fi
+  fi
+  # 2) no apparmor_parser (AppArmor tools removed) but the kernel still enforces the old profile: unload it
+  if [ "$loaded" = 1 ] && ! command -v apparmor_parser >/dev/null 2>&1; then
+    if printf '%s' /usr/sbin/dhcpd >"$sec/.remove" 2>>"$OUT"; then
+      log "AppArmor: dhcpd profile unloaded from the kernel (no apparmor_parser to reload it with the rule)"
+      echo "AppArmor: dhcpd profile unloaded from the kernel" >>"$OUT"
+    else
+      log "AppArmor: cannot unload the dhcpd profile - dhcpd cannot read $BASE"
+    fi
   fi
 }
 
