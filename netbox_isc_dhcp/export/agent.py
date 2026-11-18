@@ -322,7 +322,10 @@ def _fetch_github():
         import requests
         from django.conf import settings
 
-        r = requests.get(GITHUB_AGENT, timeout=15, proxies=getattr(settings, "HTTP_PROXIES", None) or None)
+        bust = {"_": str(int(time.time()))}  # raw.githubusercontent.com is CDN-cached per region; a unique query hits the origin
+        r = requests.get(GITHUB_AGENT, params=bust, timeout=15,
+                         headers={"Cache-Control": "no-cache"},
+                         proxies=getattr(settings, "HTTP_PROXIES", None) or None)
         raw = r.content if r.status_code == 200 else b""
         ok = raw.startswith(b"#!") and _ver(raw)
         if ok:  # only a script that bash can parse
