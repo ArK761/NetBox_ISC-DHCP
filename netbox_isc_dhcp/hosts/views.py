@@ -61,13 +61,18 @@ class HostsView(LoginRequiredMixin, View):
         edit = request.GET.get("edit", "")
         ov = groups_overview(cfg, int(edit) if edit.isdigit() else None)
         refs = references() if ov["groups"] else {}
+        from .classes import class_files, stored_usage
+
+        su, cfiles = (stored_usage(), class_files()) if ov["groups"] else ({}, {})
         for r in ov["groups"]:
             r["warnings"] = [tmsg(w) for w in r["warnings"]]
             text = render_files(r["hg"], r, {k: r["hg"].code(k) for k in ("dynamic", "static")})["dynamic"][0]
             u = usage_of(defined_classes(text), refs)
             main = u[0] if u else None
             r["usage"] = {"ok": bool(main and main["used"]), "unused": [x["name"] for x in u if not x["used"]],
-                          "text": (t("hosts.used_subnets", n=main["subnets"]) if main and main["subnets"] else t("hosts.used_static")) if main and main["used"] else t("hosts.not_used")}
+                          "text": (t("hosts.used_subnets", n=main["subnets"]) if main and main["subnets"] else t("hosts.used_static")) if main and main["used"] else t("hosts.not_used"),
+                          "detail": [{"name": x["name"], "file": cfiles.get(x["name"]), "uses": su.get(x["name"], []),
+                                      "static": x["in_static"]} for x in u if su.get(x["name"]) or x["in_static"]]}
         gfields = field_options(ov["group_model"])
         st = settings_obj()
         return render(request, "netbox_isc_dhcp/hosts/hosts.html", {

@@ -10,6 +10,11 @@ def tr(key):
     return t(key)
 
 
+@register.simple_tag
+def tr_fmt(key, **kw):
+    return t(key, **kw)
+
+
 @register.filter
 def isc_highlight(text):
     """Escape code and mark own-variable lines yellow: USE lines, the marker comment, generated lines."""

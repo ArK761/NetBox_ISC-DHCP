@@ -1,5 +1,5 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
-{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
+{% block content %}<style>details.isc-use>summary{cursor:pointer;list-style:none}details.isc-use>summary::before{content:"\25B8  ";}details.isc-use[open]>summary::before{content:"\25BE  ";}mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0 2px;border-radius:2px}mark.isc-cls{background:rgba(56,189,248,.30);color:inherit;padding:0 2px;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
 {% url 'plugins:netbox_isc_dhcp:subnetconfig_inline' pk=object.pk as inline_url %}
 <div class="row"><div class="col-12 col-xl-10">
   <div class="card mb-3">
@@ -95,10 +95,15 @@
     {% elif not has_pool_key %}<div class="card-body text-muted">{% tr "lbl.no_pool_key" %}</div>
     {% else %}
     <table class="table table-hover mb-0">
-      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.prefixes" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "lbl.use_for" %}</th><th>{% tr "lbl.incompat_short" %}</th><th>{% tr "lbl.generate" %}</th>{% if object.include_subnets and object.include_each %}<th>{% tr "hosts.col_include" %}</th>{% endif %}<th></th></tr></thead>
+      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.prefixes" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "use.col" %}</th><th>{% tr "lbl.use_for" %}</th><th>{% tr "lbl.incompat_short" %}</th><th>{% tr "lbl.generate" %}</th>{% if object.include_subnets and object.include_each %}<th>{% tr "hosts.col_include" %}</th>{% endif %}<th></th></tr></thead>
       {% for p in pools %}
       <tr><td><a href="{{ p.obj.get_absolute_url }}"><strong>{{ p.obj.name }}</strong></a></td><td>{{ p.count }}</td>
         <td class="text-nowrap">{% include "netbox_isc_dhcp/_code_state.html" with pool=p.obj ovr=p.ovr %}{% if p.lit %} <span class="badge text-bg-warning" title="{% tr 'cls.hint_title' %}"><i class="mdi mdi-lightbulb-on-outline"></i> {{ p.lit }}× class</span>{% endif %}</td>
+        <td>{% if p.uses.classes or p.uses.vars %}<details class="isc-use"><summary class="small">{% tr_fmt "use.summary" c=p.uses.classes|length v=p.uses.vars|length %}</summary>
+          <div class="small mt-1">{% if p.uses.classes %}<div class="text-muted">{% tr "use.classes" %}:</div>{% for c in p.uses.classes %}<div class="text-nowrap">{% if c.use %}<mark class="isc-cls">USE</mark>{% else %}<span class="badge text-bg-secondary">{% tr "use.manual" %}</span>{% endif %}
+            <code>"{{ c.name }}"</code> {% for m in c.modes %}<span class="badge {% if m == 'deny' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ m }}</span> {% endfor %}
+            {% if c.file %}<span class="text-muted">← <code>{{ c.file }}</code></span>{% else %}<span class="text-danger">{% tr "use.missing" %}</span>{% endif %}</div>{% endfor %}{% endif %}
+            {% if p.uses.vars %}<div class="text-muted mt-1">{% tr "use.vars" %}:</div>{% for v in p.uses.vars %}<mark class="isc-var">{{ v }}</mark> {% endfor %}{% endif %}</div></details>{% else %}<span class="text-muted">—</span>{% endif %}</td>
         <td><code>{{ p.range }}</code></td><td>{% if p.bad %}<span class="badge text-bg-danger">{{ p.bad }}</span>{% else %}<span class="text-success">0</span>{% endif %}</td>
         <td>{% if p.obj.enabled %}<span class="text-success">{% tr "lbl.yes" %}</span>{% else %}{% tr "lbl.no" %}{% endif %}</td>
         {% if object.include_subnets and object.include_each %}<td>{% url 'plugins:netbox_isc_dhcp:pooltemplate_inline' pk=p.obj.pk as pin_url %}<form method="post" action="{{ pin_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="include"><input type="hidden" name="next" value="{{ request.path }}"><input type="hidden" name="value" value="{% if p.obj.include %}0{% else %}1{% endif %}">

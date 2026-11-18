@@ -221,3 +221,71 @@ def connect():
 
     post_save.connect(group_saved, dispatch_uid="isc_dhcp_class_rename")
     pre_delete.connect(group_deleting, dispatch_uid="isc_dhcp_class_protect")
+
+
+# ---- where classes are used (for the expandable lists on Hosty and Subnety) ----
+_REF_LINE = re.compile(r'\b(allow|deny|ignore)\s+members\s+of\s+"([^"]+)"', re.I)
+
+
+def stored_usage() -> dict:
+    """{class: [{"where": pool|override, "name", "pk", "modes", "count"}]} counted over the STORED subnet CFG files."""
+    from ..export.build import _subnet_plan
+    from ..export.models import ExportFile
+
+    plan = _subnet_plan()
+    out = {}
+    for key, content in ExportFile.objects.filter(area="subnet").values_list("key", "content"):
+        p = plan.get(int(key.split(":")[1]))
+        if p is None:
+            continue
+        obj, pt, _, is_ovr = p
+        found = {}
+        for line in (content or "").splitlines():
+            code = line.split("#", 1)[0]
+            for mode, name in _REF_LINE.findall(code):
+                found.setdefault(name, set()).add(mode.lower())
+        for name, modes in found.items():
+            lst = out.setdefault(name, [])
+            ident = ("override", str(obj.prefix)) if is_ovr else ("pool", pt.name)
+            e = next((x for x in lst if (x["where"], x["name"]) == ident), None)
+            if e is None:
+                e = {"where": ident[0], "name": ident[1], "pk": pt.pk, "modes": set(), "count": 0}
+                lst.append(e)
+            e["modes"] |= modes
+            e["count"] += 1
+    for lst in out.values():
+        for e in lst:
+            e["modes"] = sorted(e["modes"])
+        lst.sort(key=lambda e: (-e["count"], e["name"]))
+    return out
+
+
+def class_files() -> dict:
+    """{class: path of the stored group file that defines it}."""
+    from ..export.models import ExportFile
+    from .usage import defined_classes
+
+    out = {}
+    for path, content in ExportFile.objects.filter(area="table").order_by("path").values_list("path", "content"):
+        for c in defined_classes(content):
+            out.setdefault(c, path)
+    return out
+
+
+def code_uses(text, files=None) -> dict:
+    """Classes and variables used by one code: {"classes": [{name, modes, use, file}], "vars": [names]}."""
+    from ..variables import USE_CLASS_RE, used_names
+
+    files = class_files() if files is None else files
+    cls = {}
+    for m in USE_CLASS_RE.finditer(text or ""):
+        e = cls.setdefault(m.group("name"), {"name": m.group("name"), "modes": set(), "use": True})
+        e["modes"].add(m.group("mode").lower())
+    for line in (text or "").splitlines():
+        for mode, name in _REF_LINE.findall(line.split("#", 1)[0]):
+            e = cls.setdefault(name, {"name": name, "modes": set(), "use": False})
+            e["modes"].add(mode.lower())
+    rows = sorted(cls.values(), key=lambda e: e["name"].lower())
+    for e in rows:
+        e["modes"], e["file"] = sorted(e["modes"]), files.get(e["name"])
+    return {"classes": rows, "vars": sorted(used_names(text or ""), key=str.lower)}
