@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.3.0"
+AGENT_VERSION="1.3.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -187,7 +187,9 @@ apply() {
   echo "\$ $cmd" >>"$OUT"
   bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
   if [ $rc -ne 0 ]; then
-    log "test failed (rc=$rc), restoring"; restore; report test_failed "$OUT"; return
+    log "test failed (rc=$rc), restoring - dhcpd -t says:"
+    grep -v '^\$ \|^backup: \|^Internet Systems\|^Copyright\|^All rights\|^For info\|^$' "$OUT" | tail -n 25 | while IFS= read -r l; do log "  $l"; done
+    restore; report test_failed "$OUT"; return
   fi
   # 5. restart + check that dhcpd runs
   cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
