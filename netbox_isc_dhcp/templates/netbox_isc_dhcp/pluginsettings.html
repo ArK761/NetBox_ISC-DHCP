@@ -1,6 +1,6 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
-<div class="row"><div class="col-12 col-xl-8">
+<div class="row"><div class="col-12">
 
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.settings" %}</h5>
@@ -93,7 +93,14 @@
       .isc-dot.ok{background:#2fb344}.isc-dot.bad{background:#d63939}.isc-dot.none{background:#8a8f98}
       .isc-chip{display:inline-block;font-size:.72rem;padding:.05rem .45rem;border-radius:1rem;border:1px solid var(--tblr-border-color,#555);margin:.1rem .2rem .1rem 0;white-space:nowrap}
       .isc-chip.red{border-color:#d63939;color:#d63939}.isc-chip.green{border-color:#2fb344;color:#2fb344}.isc-chip.yellow{border-color:#f59f00;color:#f59f00}
-      .isc-srvt .srv-name{font-weight:600;font-size:1rem}
+      .isc-srvt .srv-name{font-weight:600;font-size:1.05rem}
+      .isc-srvt{width:100%;table-layout:auto}
+      .isc-srvt th:nth-child(3){width:22%}.isc-srvt th:nth-child(4){width:40%}.isc-srvt th:nth-child(5){width:22%}
+      .isc-srvt td .mt-1{display:inline}.isc-srvt td .mt-1::before{content:" "}
+      .isc-srvt .isc-chip{font-size:.75rem;padding:.12rem .55rem}
+      .isc-srvt tr.isc-srv td{border-bottom:0}
+      .isc-srvt tr.isc-srv-actions td{padding-bottom:.9rem}
+      #isc-servers{max-width:none}
     </style>
     <div class="d-flex flex-wrap align-items-center gap-3 px-3 py-2 border-top" style="background:var(--tblr-bg-surface-secondary,rgba(127,127,127,.06))">
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-agent-interval">{% csrf_token %}<input type="hidden" name="field" value="interval">
