@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_not_required
 import json
 
 from django.conf import settings
@@ -27,6 +28,7 @@ def _client_allowed(request):
     return audit.client_ip(request) in ips
 
 
+@method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 class ManifestView(View):
     def get(self, request):
         if not _client_allowed(request):
@@ -35,6 +37,7 @@ class ManifestView(View):
         return HttpResponse(json.dumps(build.manifest(), indent=1), content_type="application/json")
 
 
+@method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 class FileView(View):
     def get(self, request, path):
         if not _client_allowed(request):
@@ -262,6 +265,7 @@ def _agent_data(request):
     return request.POST if request.method == "POST" else request.GET
 
 
+@method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 @method_decorator(csrf_exempt, name="dispatch")
 class PlanView(View):
     """Agent contact. POST (form: files=<sha256sum output>, agent, isc, dhcpd, running | JSON {"files": {path: sha}})
@@ -331,6 +335,7 @@ class PlanView(View):
         return self._plan(request, have, data)
 
 
+@method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 @method_decorator(csrf_exempt, name="dispatch")
 class ReportView(View):
     """Agent result. POST form or JSON: hash, result ok|test_failed|rolled_back|failed, output, done."""
