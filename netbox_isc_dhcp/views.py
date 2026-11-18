@@ -174,6 +174,21 @@ def _server_rows():
     return out
 
 
+class ServersTableView(LoginRequiredMixin, View):
+    """Live part of CFG pluginu -> DHCP servery (refreshed every 5 s on the page)."""
+
+    def get(self, request):
+        from django.shortcuts import render
+
+        from .export import build
+        from .export.agent import isc_mismatch
+
+        if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
+            raise PermissionDenied
+        return render(request, "netbox_isc_dhcp/_servers_table.html", {
+            "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash()})
+
+
 def _first_pk():
     from .export.models import DHCPServer
 

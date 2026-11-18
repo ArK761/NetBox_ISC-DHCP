@@ -117,6 +117,7 @@ TR = {
     "srv.keep_failed_hint": ("agent chybný CFG nevráti, nereštartuje dhcpd (beží ďalej so starým v pamäti) – dá sa opravovať priamo na serveri. Vypnuté = vráti zálohu.", "the agent does not restore, does not restart dhcpd (keeps running with the old one in memory) – you can debug on the server. Off = restore the backup."),
     "srv.disk_broken": ("na disku je chybný CFG – pri reštarte servera dhcpd nenaštartuje", "a broken CFG is on disk – dhcpd will not start after a reboot"),
     "warn.disk_broken": ("Na disku je chybný CFG (ladenie): {names} – pri reštarte dhcpd nenaštartuje.", "Broken CFG on disk (debugging): {names} – dhcpd will not start after a reboot."),
+    "srv.wait_report": ("čaká na hlásenie", "waiting for a report"),
     "srv.col_server": ("Server", "Server"),
     "srv.col_agent": ("Agent", "Agent"),
     "srv.online": ("online", "online"),
