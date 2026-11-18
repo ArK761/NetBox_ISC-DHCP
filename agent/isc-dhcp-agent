@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.2.0"
+AGENT_VERSION="1.2.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -80,10 +80,12 @@ case "${1:-}" in
   --set) [ -n "${2:-}" ] && [ $# -ge 3 ] || { usage; exit 2; }; conf_set "$2" "$3"; restart_service; exit 0 ;;
   --setup)
     echo "NetBox agent API address (CFG pluginu -> DHCP servery -> API adresa agenta)"
-    read -r -p "URL [${NETBOX_URL}]: " u; u="${u:-$NETBOX_URL}"
+    def="$NETBOX_URL"
+    case "$def" in */plugins/isc-dhcp/dhcp/export/agent/) def="${def%/plugins/isc-dhcp/dhcp/export/agent/}/api/plugins/isc-dhcp/agent/" ;; esac
+    read -r -p "URL [$def]: " u; u="${u:-$def}"
     [ -n "$u" ] || { echo "URL is required" >&2; exit 2; }
     echo "Agent API key (CFG pluginu -> DHCP servery -> API kľúč agenta); Enter = keep the current one"
-    read -r -s -p "key: " k; echo
+    read -r -p "key: " k
     conf_set NETBOX_URL "$u"
     [ -n "$k" ] && conf_set NETBOX_TOKEN "$k"
     restart_service
