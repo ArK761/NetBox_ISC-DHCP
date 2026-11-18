@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.9.5"
+AGENT_VERSION="1.10.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -333,12 +333,38 @@ dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop since t
   [ "$now" = 1 ] && echo "${who}_start" || echo "${who}_stop"
 }
 
+why_changed() {  # $1 = start|stop: what the system logged since the last contact (sudo command, systemd unit, kernel crash)
+  command -v journalctl >/dev/null 2>&1 || { echo "no journal - cannot tell"; return; }
+  local since; since=$(state contact_ts); since="@${since:-$(( $(date +%s) - 600 ))}"
+  local l
+  if [ "$1" = stop ]; then
+    l=$(journalctl -k --since "$since" --no-pager -q 2>/dev/null | grep -iE 'dhcpd.*(segfault|killed process|out of memory|general protection)|oom-kill.*dhcpd' | tail -1)
+    [ -n "$l" ] && { echo "CRASH: $(echo "$l" | sed -E 's/^.{16}[^ ]+ kernel: //' | cut -c1-200)"; return; }
+  fi
+  l=$(journalctl --since "$since" --no-pager -q _COMM=sudo 2>/dev/null | grep -E 'COMMAND=.*(isc-dhcp-server|dhcpd)' | tail -1)
+  [ -n "$l" ] && { echo "command (sudo): $(echo "$l" | sed -E 's/.*sudo\[[0-9]+\]: *([^ ]+) *:.*COMMAND=/\1: /' | cut -c1-200)"; return; }
+  if [ "$1" = stop ]; then
+    l=$(journalctl -u "$DHCP_SERVICE" --since "$since" --no-pager -q 2>/dev/null | grep -E 'Stopping|Stopped|Deactivated' | tail -1)
+    [ -n "$l" ] && { echo "command: systemctl/service stop (root)"; return; }
+    l=$(journalctl -u "$DHCP_SERVICE" --since "$since" --no-pager -q 2>/dev/null | grep -iE 'exit|fail|signal|killed' | tail -1)
+    [ -n "$l" ] && { echo "crash/kill: $(echo "$l" | sed -E 's/^.{16}[^ ]+ //' | cut -c1-150)"; return; }
+    l=$(journalctl --since "$since" --no-pager -q 2>/dev/null | grep -E 'dhcpd\[[0-9]+\]' | tail -1)
+    [ -n "$l" ] && { echo "crash/kill (no stop command), last dhcpd log: $(echo "$l" | sed -E 's/^.{16}[^ ]+ //' | cut -c1-150)"; return; }
+    echo "crash/kill (no stop command in the journal)"
+  else
+    l=$(journalctl -u "$DHCP_SERVICE" --since "$since" --no-pager -q 2>/dev/null | grep -E 'Starting|Started' | tail -1)
+    [ -n "$l" ] && { echo "command: systemctl/service start (root)"; return; }
+    echo "dhcpd started directly (not through the service)"
+  fi
+}
+
 event_sent() {  # NetBox accepted the contact: remember the state (an event is never lost on 503 / NetBox down)
   [ -n "${EVENT_NOW:-}" ] && echo "$EVENT_NOW" >"$STATE_DIR/dhcpd_prev"
   rm -f "$STATE_DIR/agent_did"
+  date +%s >"$STATE_DIR/contact_ts"
   case "$EVENT" in
-    manual_stop) log "dhcpd stopped outside the agent (by hand or crashed) - reported to NetBox" ;;
-    manual_start) log "dhcpd started outside the agent (by hand) - reported to NetBox" ;;
+    manual_stop) log "dhcpd stopped outside the agent: $WHY - reported to NetBox" ;;
+    manual_start) log "dhcpd started outside the agent: $WHY - reported to NetBox" ;;
   esac
 }
 
@@ -420,12 +446,13 @@ contact() {
   f=$(state conf); [ -n "$f" ] && [ -f "$f" ] && sha256sum "$f" >>"$have"
   while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' -exec sha256sum {} + >>"$have"; done < <(state dirs)
   local url alt
-  EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running)
+  EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); WHY=""
+  case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start) WHY=$(why_changed start) ;; esac
   for url in "$NETBOX_URL" "$(other_scheme "$NETBOX_URL")"; do  # try https and http, keep the one that works
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done

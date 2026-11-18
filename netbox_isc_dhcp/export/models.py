@@ -77,6 +77,7 @@ class DHCPServer(models.Model):
     agent_cmd = models.CharField(max_length=40, blank=True, default="", help_text="Command for the agent: <start|stop|restart|update>:<id> (done once).")
     dhcpd_since = models.DateTimeField(null=True, blank=True, help_text="dhcpd running / stopped since.")
     dhcpd_by = models.CharField(max_length=10, blank=True, default="", help_text="Who started/stopped dhcpd last: agent | manual.")
+    dhcpd_why = models.CharField(max_length=300, blank=True, default="", help_text="Why dhcpd stopped/started outside the agent (journal: command, sudo user, crash).")
     restart_req = models.CharField(max_length=20, blank=True, default="", help_text="Manual dhcpd restart asked in NetBox (id; the agent does it once).")
     disk_broken = models.CharField(max_length=64, blank=True, default="", help_text="Failed CFG kept on disk (debugging) - dhcpd would not start after a reboot.")
     key_hash = models.CharField(max_length=16, blank=True, default="", help_text="Short hash of the key the agent used last.")

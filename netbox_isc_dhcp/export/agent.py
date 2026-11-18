@@ -158,6 +158,29 @@ def parse_have(text: str) -> dict:
     return out
 
 
+_WHY = (  # agent text (English) -> i18n key; the rest after ':' is kept (command / log line)
+    ("crash/kill (no stop command), last dhcpd log:", "why.kill_log"),
+    ("crash/kill (no stop command in the journal)", "why.kill_none"),
+    ("crash/kill:", "why.kill"),
+    ("CRASH:", "why.crash"),
+    ("command (sudo):", "why.sudo"),
+    ("command: systemctl/service stop (root)", "why.root_stop"),
+    ("command: systemctl/service start (root)", "why.root_start"),
+    ("dhcpd started directly (not through the service)", "why.direct"),
+    ("no journal - cannot tell", "why.nojournal"),
+)
+
+
+def why_text(raw):
+    """Translate the agent's reason why dhcpd stopped/started (plugin language)."""
+    from ..i18n import t
+
+    for prefix, key in _WHY:
+        if raw.startswith(prefix):
+            return t(key) + raw[len(prefix):]
+    return raw
+
+
 def heartbeat(server, request, data):
     """Store what the agent says about itself; audit what changed, in plain words."""
     from ..i18n import t
@@ -186,13 +209,15 @@ def heartbeat(server, request, data):
             msgs.append(t("aud.ag_isc_changed", old=server.isc_version, new=isc))
     event = str(data.get("dhcpd_event", ""))[:20]  # agent_start | agent_stop | manual_start | manual_stop
     if isc != "none" and dhcpd is not None and (dhcpd != server.dhcpd_running or first or server.isc_version in ("", "none")):
+        why = str(data.get("dhcpd_why", ""))[:300]
         if event in ("manual_start", "manual_stop", "agent_start", "agent_stop"):
-            msgs.append(t("aud.ag_" + event))
+            msgs.append(t("aud.ag_" + event) + (f" – {why_text(why)}" if why and event.startswith("manual") else ""))
         else:
             msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
         recent_admin = server.dhcpd_by == "admin" and server.dhcpd_since and (timezone.now() - server.dhcpd_since).total_seconds() < 600
         pending = server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart")
         server.dhcpd_since = timezone.now()
+        server.dhcpd_why = why if event.startswith("manual") else ""
         if event.startswith("agent") and (pending or recent_admin):
             server.dhcpd_by = "admin"  # started / stopped by a button in NetBox
         else:
@@ -216,7 +241,7 @@ def heartbeat(server, request, data):
         changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(dhcpd)})
         server.dhcpd_running = dhcpd
     server.last_seen = timezone.now()
-    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "agent_cmd"])
+    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

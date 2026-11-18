@@ -40,6 +40,7 @@
             {% elif x.s.dhcpd_running is False and x.s.dhcpd_by == "admin" %}<span class="isc-chip yellow">⏹ {% tr "srv.dhcpd_admin_off" %}</span>
             {% elif x.s.dhcpd_running is False %}<span class="isc-chip red">⏹ {% tr "srv.dhcpd_down" %}{% if x.dhcpd_by %} · {{ x.dhcpd_by }}{% endif %}</span>{% endif %}
             {% if x.dhcpd_since %}<span class="text-muted">{% tr "srv.since" %} {{ x.dhcpd_since }}</span>{% endif %}
+            {% if x.s.dhcpd_why and x.s.dhcpd_by == "manual" %}<div class="small {% if 'crash' in x.s.dhcpd_why or 'CRASH' in x.s.dhcpd_why %}text-danger{% else %}text-warning{% endif %}"><i class="mdi mdi-information-outline"></i> {{ x.why }}</div>{% endif %}
           {% endif %}</dd>
         <dt>{% tr "srv.k_agent" %}</dt>
         <dd><span class="isc-chip">{{ x.s.agent_version|default:"?" }}</span>{% if x.outdated %}<span class="isc-chip yellow"><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.agent_new" %} {{ agent_latest }}</span>{% else %}<span class="text-muted">{% tr "srv.agent_current" %}</span>{% endif %}
