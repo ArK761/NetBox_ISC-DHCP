@@ -9,5 +9,6 @@ urlpatterns = [
     path("agent/", views.PlanView.as_view(), name="export_plan"),
     path("plan/", views.PlanView.as_view()),  # old address (v0.26)
     path("report/", views.ReportView.as_view(), name="export_report"),
+    path("bundle/", views.BundleView.as_view(), name="export_bundle"),
     path("file/<path:path>", views.FileView.as_view(), name="export_file"),
 ]

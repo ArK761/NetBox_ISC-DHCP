@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.4.2"
+AGENT_VERSION="1.5.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -17,6 +17,7 @@ ALLOWED_RESTART_CMDS=("systemctl restart isc-dhcp-server")
 RUNNING_CHECK=""                                # empty = systemctl is-active / pidof dhcpd
 START_WAIT=5                                    # seconds after restart before checking dhcpd
 KEEP_BACKUPS=10
+APPARMOR_FIX=yes                                # AppArmor profile of dhcpd found -> allow it to read the base path
 CURL_OPTS=()                                    # e.g. (--cacert /etc/ssl/netbox.pem)
 LOCK_FILE="/run/isc-dhcp-agent.lock"
 LOG_FILE="/var/log/isc-dhcp-agent.log"               # own log file (also syslog / journal)
@@ -158,11 +159,46 @@ restore() {  # copy the backup back, remove files that did not exist before
   log "restored backup $BK"
 }
 
+apparmor_fix() {  # dhcpd confined by AppArmor cannot read <base path>: add a local rule and reload the profile (only if AppArmor exists)
+  [ "$APPARMOR_FIX" = yes ] && [ -n "${BASE:-}" ] || return 0
+  local prof=/etc/apparmor.d/usr.sbin.dhcpd loc=/etc/apparmor.d/local/usr.sbin.dhcpd rule="$BASE/** r,"
+  [ -f "$prof" ] && command -v apparmor_parser >/dev/null 2>&1 || return 0
+  grep -qxF "  $rule" "$loc" 2>/dev/null && return 0
+  mkdir -p "$(dirname "$loc")"
+  { echo "  # added by isc-dhcp-agent: dhcpd reads the CFG files from NetBox"; echo "  $BASE/ r,"; echo "  $rule"; } >>"$loc"
+  if apparmor_parser -r "$prof" 2>>"$OUT"; then
+    log "AppArmor: dhcpd may now read $BASE (rule added to $loc, profile reloaded)"
+    echo "AppArmor: rule '$rule' added to $loc" >>"$OUT"
+  else
+    log "AppArmor: rule added to $loc but the profile reload failed"
+  fi
+}
+
 apply() {
   local i tmp rc cmd now prev
   OUT="$WORK/output"; : >"$OUT"
   # 1. download everything to a staging dir and check sha256 (nothing is changed when a file is bad)
-  for i in "${!DL_PATH[@]}"; do
+  #    fast way: all files in ONE tar.gz; if that fails, file by file
+  local bundled=0
+  if [ -n "$BUNDLE" ] && command -v tar >/dev/null 2>&1; then
+    printf '%s\n' "${DL_PATH[@]}" >"$WORK/paths"
+    mkdir -p "$WORK/b"
+    if curl -fsS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 300 -X POST "$BUNDLE" --data-urlencode "paths@$WORK/paths" -o "$WORK/b.tgz" 2>>"$OUT" \
+       && tar -xzf "$WORK/b.tgz" -C "$WORK/b" 2>>"$OUT"; then
+      bundled=1
+      for i in "${!DL_PATH[@]}"; do
+        safe_path "${DL_PATH[$i]}" || { echo "refused path ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
+        if [ -f "$WORK/b${DL_PATH[$i]}" ] && [ "$(sha256sum "$WORK/b${DL_PATH[$i]}" | cut -d' ' -f1)" = "${DL_SHA[$i]}" ]; then
+          mv "$WORK/b${DL_PATH[$i]}" "$WORK/f$i"
+        else
+          bundled=0; echo "bundle: missing or bad ${DL_PATH[$i]} - downloading file by file" >>"$OUT"; break
+        fi
+      done
+    else
+      echo "bundle download failed - downloading file by file" >>"$OUT"
+    fi
+  fi
+  [ "$bundled" = 1 ] || for i in "${!DL_PATH[@]}"; do
     safe_path "${DL_PATH[$i]}" || { echo "refused path ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
     curl -fsS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 120 -o "$WORK/f$i" "${DL_URL[$i]}" 2>>"$OUT" \
       || { echo "download failed: ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
@@ -183,7 +219,8 @@ apply() {
     mkdir -p -m 755 "$(dirname "$tmp")" && chmod 755 "$(dirname "$tmp")" && install -m 644 "$WORK/f$i" "$tmp.isc-new" && mv -f "$tmp.isc-new" "$tmp" \
       || { echo "install failed: $tmp" >>"$OUT"; restore; report failed "$OUT"; return; }
   done
-  # 4. test
+  # 4. test (AppArmor rule first, if the system uses AppArmor for dhcpd)
+  apparmor_fix
   cmd=$(allowed "$TEST_CMD" "${ALLOWED_TEST_CMDS[@]}") || echo "test command from NetBox not allowed locally, used: $cmd" >>"$OUT"
   echo "\$ $cmd" >>"$OUT"
   bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
@@ -243,13 +280,14 @@ contact() {
   local redir="${code#* }"; code="${code%% *}"
   if [ "$url" != "$NETBOX_URL" ]; then NETBOX_URL="$url"; save_url "$url"; fi
   DL_PATH=(); DL_SHA=(); DL_URL=(); BACKUP_PATHS=(); DELETES=(); DIRS=()
-  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"
+  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"; BUNDLE=""
   local key a b c
   while IFS=$'\t' read -r key a b c; do
     case "$key" in
       interval) [[ "$a" =~ ^[0-9]+$ ]] && INTERVAL="$a" ;;
       key) NEWKEY="$a" ;;
       on_test_fail) ON_FAIL="$a" ;;
+      bundle) BUNDLE="$a" ;;
       hash) HASH="$a" ;; cfg) CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
       backup) BACKUP_TO="$a"; IFS=$'\t' read -r -a BACKUP_PATHS <<<"$b${c:+	$c}" ;;

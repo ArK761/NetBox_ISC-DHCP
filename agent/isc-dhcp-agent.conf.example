@@ -23,3 +23,6 @@ CURL_OPTS=()
 # Own log file (empty = journal only) and its size limit in KB (rotated to .1)
 LOG_FILE="/var/log/isc-dhcp-agent.log"
 LOG_MAX_KB=5120
+
+# AppArmor: when dhcpd has an AppArmor profile, allow it to read the base path from NetBox (yes/no)
+APPARMOR_FIX=yes

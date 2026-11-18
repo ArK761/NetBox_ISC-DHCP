@@ -102,6 +102,38 @@ class ManifestView(View):
 
 
 @method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
+@method_decorator(csrf_exempt, name="dispatch")
+class BundleView(View):
+    """All requested files in one tar.gz (POST paths=<one path per line>) - the agent downloads a whole CFG in one request."""
+
+    def post(self, request):
+        import io
+        import tarfile
+
+        if not _client_allowed(request):
+            _refused_contact(request)
+            raise PermissionDenied
+        data = _agent_data(request) or {}
+        wanted = [p.strip() for p in str(data.get("paths", "")).splitlines() if p.strip()]
+        rows = {r.path: r for r in ExportFile.objects.filter(path__in=wanted)}
+        buf = io.BytesIO()
+        now = timezone.now().timestamp()
+        with tarfile.open(fileobj=buf, mode="w:gz", compresslevel=6) as tar:
+            for p in wanted:
+                r = rows.get(p)
+                if r is None:
+                    continue
+                raw = (r.content or "").encode()
+                info = tarfile.TarInfo(name=p.lstrip("/"))
+                info.size, info.mode, info.mtime = len(raw), 0o644, now
+                tar.addfile(info, io.BytesIO(raw))
+        audit.download(request, f"bundle ({len(rows)} files)")
+        resp = HttpResponse(buf.getvalue(), content_type="application/gzip")
+        resp["X-Files"] = str(len(rows))
+        return resp
+
+
+@method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 class FileView(View):
     def get(self, request, path):
         if not _client_allowed(request):
@@ -414,6 +446,7 @@ class PlanView(View):
             api = request.path_info.startswith("/api/")
             fname = "plugins-api:netbox_isc_dhcp-api:agent_file" if api else "plugins:netbox_isc_dhcp:export_file"
             rname = "plugins-api:netbox_isc_dhcp-api:agent_report" if api else "plugins:netbox_isc_dhcp:export_report"
+            info["bundle"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_bundle" if api else "plugins:netbox_isc_dhcp:export_bundle"))
             steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse(fname, kwargs={"path": quote(p.lstrip("/"))})),
                               request.build_absolute_uri(reverse(rname)), mh, mode)
         if steps:

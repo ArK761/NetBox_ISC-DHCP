@@ -22,6 +22,7 @@ from ..export import views as export_views
 urlpatterns = router.urls + [
     path("agent/", export_views.PlanView.as_view(), name="agent_plan"),
     path("agent/report/", export_views.ReportView.as_view(), name="agent_report"),
+    path("agent/bundle/", export_views.BundleView.as_view(), name="agent_bundle"),
     path("agent/manifest.json", export_views.ManifestView.as_view(), name="agent_manifest"),
     path("agent/file/<path:path>", export_views.FileView.as_view(), name="agent_file"),
 ]
