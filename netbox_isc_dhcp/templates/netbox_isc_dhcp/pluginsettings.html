@@ -66,6 +66,18 @@
     <h5 class="card-header"><i class="mdi mdi-server-network me-1"></i>{% tr "srv.title" %}</h5>
     <div class="card-body pb-2"><div class="small text-success"><i class="mdi mdi-information-outline"></i> {% tr "srv.hint" %}</div>
       <div class="small text-muted mt-1"><i class="mdi mdi-robot-outline"></i> {{ agent_hint }}</div>
+      <div class="border rounded p-2 mt-2" id="isc-agent-key">
+        <div class="d-flex flex-wrap gap-2 align-items-center"><i class="mdi mdi-key-variant"></i><strong class="small">{% tr "srv.key" %}:</strong>
+          {% if object.agent_key %}<details class="ie"><summary title="{% tr 'srv.key_show' %}"><code>••••••••••••{{ object.agent_key|slice:"-4:" }}</code> <i class="mdi mdi-eye-outline text-muted"></i></summary><code class="user-select-all">{{ object.agent_key }}</code></details>
+          {% else %}<span class="text-warning small">{% tr "srv.key_none" %}</span>{% endif %}
+          <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return {% if object.agent_key %}confirm('{% tr 'srv.key_confirm' %}'){% else %}true{% endif %}">{% csrf_token %}<input type="hidden" name="field" value="key_new">
+            <button class="btn btn-sm btn-outline-primary py-0"><i class="mdi mdi-refresh"></i> {% if object.agent_key %}{% tr "srv.key_regen" %}{% else %}{% tr "srv.key_gen" %}{% endif %}</button></form>
+          {% if object.agent_key %}<form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return confirm('{% tr 'srv.key_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="key_del">
+            <button class="btn btn-sm btn-outline-danger py-0"><i class="mdi mdi-key-remove"></i> {% tr "srv.key_del" %}</button></form>{% endif %}</div>
+        <div class="small text-muted mt-1">{% tr "srv.key_hint" %}</div>
+        <div class="small mt-1">{% tr "srv.api_url" %}: <code class="user-select-all">{{ agent_api_url }}</code></div>
+        {% if object.agent_key %}<details class="small mt-1"><summary>{% tr "srv.install_cmd" %}</summary><code class="user-select-all d-block p-2 mt-1" style="white-space:pre-wrap;word-break:break-all">curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/claude/skeleton-pool-planner/agent/install.sh | sudo bash -s -- --url {{ agent_api_url }} --token {{ object.agent_key }}</code></details>{% endif %}
+      </div>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center mt-2" id="isc-agent-mode">{% csrf_token %}<input type="hidden" name="field" value="mode">
         <strong class="small">{% tr "srv.mode" %}:</strong>
         <select name="value" class="form-select form-select-sm" style="max-width:20rem" onchange="this.form.submit()">

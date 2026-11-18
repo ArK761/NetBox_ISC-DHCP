@@ -3,11 +3,12 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.0.4"
+AGENT_VERSION="1.1.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
-NETBOX_URL=""                                   # .../plugins/isc-dhcp/dhcp/export/agent/
+NETBOX_URL=""                                   # agent API address shown in CFG pluginu -> DHCP servery (/api/plugins/isc-dhcp/agent/)
+NETBOX_TOKEN=""                                 # agent API key from CFG pluginu -> DHCP servery
 STATE_DIR="/var/lib/isc-dhcp-agent"
 DHCP_SERVICE="isc-dhcp-server"
 DHCPD_BIN="dhcpd"
@@ -22,6 +23,9 @@ LOG_FILE="/var/log/isc-dhcp-agent.log"               # own log file (also syslog
 LOG_MAX_KB=5120                                 # rotated to .1 when bigger
 # shellcheck disable=SC1090
 [ -r "$CONF_FILE" ] && . "$CONF_FILE"
+
+AUTH=()
+[ -n "$NETBOX_TOKEN" ] && AUTH=(-H "Authorization: Token $NETBOX_TOKEN")
 
 ONCE=0
 case "${1:-}" in
@@ -82,7 +86,7 @@ allowed() {  # allowed <cmd from NetBox> <local list...> -> the command to run (
 report() {  # report <result> <output file>
   local url="$REPORT_URL" res="$1" out="$2"
   [ -n "$url" ] || return 0
-  curl -sS "${CURL_OPTS[@]}" --max-time 60 -o /dev/null -X POST "$url" \
+  curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o /dev/null -X POST "$url" \
     --data-urlencode "result=$res" --data-urlencode "hash=$HASH" --data-urlencode "running=$(state running)" \
     --data-urlencode "output@$out" || log "report failed (network)"
 }
@@ -100,7 +104,7 @@ apply() {
   # 1. download everything to a staging dir and check sha256 (nothing is changed when a file is bad)
   for i in "${!DL_PATH[@]}"; do
     safe_path "${DL_PATH[$i]}" || { echo "refused path ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
-    curl -fsS "${CURL_OPTS[@]}" --max-time 120 -o "$WORK/f$i" "${DL_URL[$i]}" 2>>"$OUT" \
+    curl -fsS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 120 -o "$WORK/f$i" "${DL_URL[$i]}" 2>>"$OUT" \
       || { echo "download failed: ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
     [ "$(sha256sum "$WORK/f$i" | cut -d' ' -f1)" = "${DL_SHA[$i]}" ] \
       || { echo "sha256 mismatch: ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
@@ -162,7 +166,7 @@ contact() {
   while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' -exec sha256sum {} + >>"$have"; done < <(state dirs)
   local url alt
   for url in "$NETBOX_URL" "$(other_scheme "$NETBOX_URL")"; do  # try https and http, keep the one that works
-    code=$(curl -sS "${CURL_OPTS[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
+    code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
@@ -186,8 +190,8 @@ contact() {
   done <"$resp"
   if [ "$code" != 200 ]; then
     case "$code" in
-      403) log "NetBox answered 403: this server's IP is not in CFG pluginu -> DHCP servery (or the server is switched off)" ;;
-      301|302|307|308) log "NetBox answered $code (redirect to $redir): login page = update the plugin (v0.33.3+), https = use the https URL" ;;
+      403) log "NetBox answered 403: this server's IP is not in CFG pluginu -> DHCP servery, the server is switched off, or NETBOX_TOKEN is missing/wrong (see Audit -> Agent)" ;;
+      301|302|307|308) log "NetBox answered $code (redirect to $redir): login page = use the agent API address (/api/plugins/isc-dhcp/agent/) + NETBOX_TOKEN, https = use the https URL" ;;
       000) log "NetBox not reachable (DNS, firewall or TLS certificate - see CURL_OPTS)" ;;
       *) log "NetBox answered $code ${ERR}" ;;
     esac

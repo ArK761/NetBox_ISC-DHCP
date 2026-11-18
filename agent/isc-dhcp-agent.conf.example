@@ -1,8 +1,9 @@
 # /etc/isc-dhcp-agent.conf - local settings of isc-dhcp-agent (everything else comes from NetBox:
 # interval, paths, backup dir, test/restart commands, which files to download or delete).
 
-# Agent URL of the plugin (CFG pluginu -> DHCP servery shows it)
+# Agent API address and key (both shown in CFG pluginu -> DHCP servery)
 NETBOX_URL=""
+NETBOX_TOKEN=""
 
 # Safety: test / restart commands from NetBox are run ONLY when they are listed here.
 # Otherwise the first command of the list is used (and the report says so).

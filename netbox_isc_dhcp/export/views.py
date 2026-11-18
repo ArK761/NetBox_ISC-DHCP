@@ -18,14 +18,34 @@ from . import audit, build
 from .models import ExportFile
 
 
+def _key_ok(request):
+    """The agent key from CFG pluginu (Authorization: Token <key>); no key generated yet = not required."""
+    import hmac
+
+    from ..models import settings_obj
+
+    st = settings_obj()
+    key = (st.agent_key if st else "") or ""
+    if not key:
+        return True
+    parts = request.headers.get("Authorization", "").split(" ", 1)
+    return len(parts) == 2 and parts[0].lower() in ("token", "bearer") and hmac.compare_digest(parts[1].strip(), key)
+
+
 def _client_allowed(request):
-    """Logged-in user with view right, or a client IP from PLUGINS_CONFIG allowed_client_ips (DHCP servers)."""
+    """Logged-in user with view right, or a DHCP server: its IP is in the list AND it sends the agent key (when one exists)."""
     if request.user.is_authenticated and request.user.has_perm("netbox_isc_dhcp.view_exportfile"):
         return True
     from .servers import allowed_ips
 
     ips = set(settings.PLUGINS_CONFIG.get("netbox_isc_dhcp", {}).get("allowed_client_ips", []) or []) | allowed_ips()
-    return audit.client_ip(request) in ips
+    if audit.client_ip(request) not in ips:
+        request._isc_refused = "ip"
+        return False
+    if not _key_ok(request):
+        request._isc_refused = "key"
+        return False
+    return True
 
 
 @method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
@@ -209,6 +229,19 @@ class ServersInlineView(LoginRequiredMixin, View):
             srv.released_hash = build.manifest_hash()
             srv.save(update_fields=["released_hash"])
             log = [("release", "", srv.name)]
+        elif action == "key_new":  # new agent API key (the old one stops working at once)
+            import secrets
+
+            st = _st()
+            had = bool(st.agent_key)
+            st.agent_key = secrets.token_hex(20)
+            st.save(update_fields=["agent_key"])
+            log = [("agent_key", "***" if had else "", "*** (" + st.agent_key[-4:] + ")")]
+        elif action == "key_del":
+            st = _st()
+            log = [("agent_key", "***", "")] if st.agent_key else []
+            st.agent_key = ""
+            st.save(update_fields=["agent_key"])
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""
@@ -249,7 +282,8 @@ def _refused_contact(request):
     ip = audit.client_ip(request)
     if AuditEvent.objects.filter(kind="agent", client_ip=ip, result="refused", time__gte=timezone.now() - timedelta(minutes=10)).exists():
         return
-    AuditEvent.objects.create(time=timezone.now(), kind="agent", client_ip=ip, result="refused", cause=t("aud.agent_refused", ip=ip),
+    AuditEvent.objects.create(time=timezone.now(), kind="agent", client_ip=ip, result="refused",
+                              cause=t("aud.agent_refused_key", ip=ip) if getattr(request, "_isc_refused", "") == "key" else t("aud.agent_refused", ip=ip),
                               output=f"REMOTE_ADDR={request.META.get('REMOTE_ADDR', '')} X-Forwarded-For={request.META.get('HTTP_X_FORWARDED_FOR', '')}")
 
 
@@ -309,8 +343,11 @@ class PlanView(View):
         if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh:
             steps = []  # export = everything, but only when the set changed since this server's last OK (no restart on every poll)
         else:
-            steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_file", kwargs={"path": quote(p.lstrip("/"))})),
-                              request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report")), mh, mode)
+            api = request.path_info.startswith("/api/")
+            fname = "plugins-api:netbox_isc_dhcp-api:agent_file" if api else "plugins:netbox_isc_dhcp:export_file"
+            rname = "plugins-api:netbox_isc_dhcp-api:agent_report" if api else "plugins:netbox_isc_dhcp:export_report"
+            steps = make_plan(have, server, lambda p: request.build_absolute_uri(reverse(fname, kwargs={"path": quote(p.lstrip("/"))})),
+                              request.build_absolute_uri(reverse(rname)), mh, mode)
         if steps:
             AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
                                       user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,
@@ -348,6 +385,7 @@ class ReportView(View):
         from .models import AuditEvent
 
         if not _client_allowed(request):
+            _refused_contact(request)
             raise PermissionDenied
         body = _agent_data(request)
         if body is None or body.get("result") not in self.RESULTS:

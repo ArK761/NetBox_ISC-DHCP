@@ -259,6 +259,7 @@ class PluginSettings(NetBoxModel):
                                    help_text="Subdirectory of the subnet (prefix) files.")
     agent_mode = models.CharField(max_length=10, default="plan", choices=(("plan", "Plan"), ("export", "Export")),
                                   help_text="For all DHCP servers: plan = only changes, export = download everything.")
+    agent_key = models.CharField(max_length=64, blank=True, default="", help_text="Agent API key (Authorization: Token <key>); empty = IP check only.")
     agent_interval = models.PositiveIntegerField(default=60, help_text="Seconds between two agent contacts (10 s - 30 min).")
     agent_dirs = models.JSONField(default=list, blank=True, help_text="Every directory the plugin ever managed (old files there are deleted).")
     agent_test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test for all DHCP servers; {conf} = path of dhcpd.conf.")

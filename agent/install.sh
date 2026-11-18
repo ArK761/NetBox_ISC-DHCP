@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Installer of isc-dhcp-agent (systemd service).
 #   install:    sudo bash install.sh --url https://<netbox>/plugins/isc-dhcp/dhcp/export/agent/
-#   from git:   curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/<ref>/agent/install.sh | sudo bash -s -- --ref <ref> --url <agent url>
+#   from git:   curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/<ref>/agent/install.sh | sudo bash -s -- --ref <ref> --url <agent API url> --token <key>
 #   uninstall:  sudo bash install.sh --uninstall      (keeps /etc/isc-dhcp-agent.conf and the backups)
 set -eu
 REPO="https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP"
 REF="claude/skeleton-pool-planner"
 URL=""
+TOKEN=""
 MODE="install"
 while [ $# -gt 0 ]; do
   case "$1" in
     --url) URL="$2"; shift 2 ;;
     --ref) REF="$2"; shift 2 ;;
+    --token) TOKEN="$2"; shift 2 ;;
     --uninstall) MODE="uninstall"; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
@@ -43,6 +45,10 @@ if [ ! -f "$CONF" ]; then
   [ -n "$URL" ] && sed -i "s|^NETBOX_URL=.*|NETBOX_URL=\"$URL\"|" "$CONF"
 elif [ -n "$URL" ]; then
   sed -i "s|^NETBOX_URL=.*|NETBOX_URL=\"$URL\"|" "$CONF"
+fi
+if [ -n "$TOKEN" ]; then
+  if grep -q '^NETBOX_TOKEN=' "$CONF"; then sed -i "s|^NETBOX_TOKEN=.*|NETBOX_TOKEN=\"$TOKEN\"|" "$CONF"; else echo "NETBOX_TOKEN=\"$TOKEN\"" >>"$CONF"; fi
+  chmod 600 "$CONF"
 fi
 grep -q '^NETBOX_URL="https\?://[^"]' "$CONF" || { echo "set NETBOX_URL in $CONF, then: systemctl enable --now isc-dhcp-agent"; exit 0; }
 systemctl daemon-reload
