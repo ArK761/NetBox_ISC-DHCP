@@ -22,6 +22,8 @@
           {% if x.wait %}<div class="text-warning mt-1"><i class="mdi mdi-timer-sand"></i> {{ x.wait }}</div>{% endif %}
           {% if x.reason == "failed_same" %}<form method="post" action="{{ srv_url }}" class="m-0 mt-1">{% csrf_token %}<input type="hidden" name="field" value="retry"><input type="hidden" name="pk" value="{{ x.s.pk }}">
             <button class="btn btn-sm btn-outline-warning py-0" title="{% tr 'srv.retry_hint' %}"><i class="mdi mdi-reload"></i> {% tr "srv.retry" %}</button></form>{% endif %}
+          {% if x.s.last_seen and x.s.isc_version and x.s.isc_version != "none" and x.s.dhcpd_running is not True %}<form method="post" action="{{ srv_url }}" class="m-0 mt-1" onsubmit="return confirm('{% tr 'srv.restart_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="restart"><input type="hidden" name="pk" value="{{ x.s.pk }}">
+            <button class="btn btn-sm btn-outline-danger py-0"><i class="mdi mdi-restart"></i> {% tr "srv.restart_btn" %}</button></form>{% endif %}
           {% if x.blocks %}<form method="post" action="{{ srv_url }}" class="m-0 mt-1">{% csrf_token %}<input type="hidden" name="field" value="release"><input type="hidden" name="pk" value="{{ x.s.pk }}">
             <button class="btn btn-sm btn-outline-warning py-0" title="{% tr 'srv.release_hint' %}"><i class="mdi mdi-skip-next"></i> {% tr "srv.release" %}</button></form>{% endif %}</td>
         <td class="keep"><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="toggle"><input type="hidden" name="pk" value="{{ x.s.pk }}">

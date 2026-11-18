@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.7.0"
+AGENT_VERSION="1.7.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -285,14 +285,19 @@ save_url() {  # remember the working URL in the config file
   [ -w "$CONF_FILE" ] && sed -i "s|^NETBOX_URL=.*|NETBOX_URL=\"$1\"|" "$CONF_FILE" && log "NETBOX_URL changed to $1 (saved in $CONF_FILE)"
 }
 
-heal() {  # the disk has exactly the current CFG (NetBox says so) and dhcpd does not run: test it and start dhcpd
-  [ "$DISK" = current ] && [ "$(isc_version)" != none ] && [ "$(dhcpd_running)" != 1 ] || return 0
-  [ "${LAST_HEAL:-}" = "$HASH" ] && return 0  # one attempt per CFG (no restart loop)
-  LAST_HEAL="$HASH"
+heal() {  # (a) manual restart asked in NetBox, or (b) the disk has exactly the current CFG and dhcpd does not run
+  [ "$(isc_version)" != none ] || return 0
+  if [ -n "$RESTART_REQ" ] && [ "$RESTART_REQ" != "$(state restart_req)" ]; then
+    echo "$RESTART_REQ" >"$STATE_DIR/restart_req"; log "manual restart asked in NetBox"
+  else
+    [ "$DISK" = current ] && [ "$(dhcpd_running)" != 1 ] || return 0
+    [ "$(state heal)" = "$HASH" ] && return 0  # one automatic attempt per CFG (no restart loop) - then only a new CFG or a manual restart
+  fi
+  echo "$HASH" >"$STATE_DIR/heal"
   OUT="$WORK/heal"; : >"$OUT"
   local cmd rc
   cmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; cmd=$(allowed "$cmd" "${ALLOWED_TEST_CMDS[@]}")
-  log "dhcpd is not running and the disk has the current CFG $CFG - testing and starting it"
+  log "testing CFG $CFG on disk and (re)starting dhcpd"
   echo "\$ $cmd" >>"$OUT"; bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
   if [ $rc -ne 0 ]; then
     log "test failed (rc=$rc) - dhcpd stays down:"; grep -v '^\$ \|^Internet Systems\|^Copyright\|^All rights\|^For info\|^$' "$OUT" | tail -n 15 | while IFS= read -r l; do log "  $l"; done
@@ -325,7 +330,7 @@ contact() {
   local redir="${code#* }"; code="${code%% *}"
   if [ "$url" != "$NETBOX_URL" ]; then NETBOX_URL="$url"; save_url "$url"; fi
   DL_PATH=(); DL_SHA=(); DL_URL=(); BACKUP_PATHS=(); DELETES=(); DIRS=()
-  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"; BUNDLE=""; DISK=""
+  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"; BUNDLE=""; DISK=""; RESTART_REQ=""
   local key a b c
   while IFS=$'\t' read -r key a b c; do
     case "$key" in
@@ -335,6 +340,7 @@ contact() {
       on_test_fail) ON_FAIL="$a" ;;
       bundle) BUNDLE="$a" ;;
       disk) DISK="$a" ;;
+      restart_req) RESTART_REQ="$a" ;;
       hash) HASH="$a" ;; cfg) CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
       backup) BACKUP_TO="$a"; IFS=$'\t' read -r -a BACKUP_PATHS <<<"$b${c:+	$c}" ;;

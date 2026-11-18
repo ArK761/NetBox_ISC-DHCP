@@ -341,6 +341,10 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_key_old", "***", "")] if st.agent_key_old else []
             st.agent_key_old = ""
             st.save(update_fields=["agent_key_old"])
+        elif action == "restart" and srv:  # manual dhcpd restart: the agent tests the CFG on disk and restarts at the next contact
+            srv.restart_req = timezone.now().strftime("%Y%m%d%H%M%S")
+            srv.save(update_fields=["restart_req"])
+            log = [("restart dhcpd " + srv.name, "", srv.restart_req)]
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""
@@ -442,6 +446,8 @@ class PlanView(View):
             want = dict(ExportFile.objects.values_list("path", "sha256"))
             if want and all(have.get(p) == h for p, h in want.items()):
                 info["disk"] = "current"
+        if server is not None and server.restart_req:
+            info["restart_req"] = server.restart_req  # manual restart from NetBox (the agent does it once per id)
         _key_progress(request, server, info)
         reason, names = gate(server, mh)
         if reason:
