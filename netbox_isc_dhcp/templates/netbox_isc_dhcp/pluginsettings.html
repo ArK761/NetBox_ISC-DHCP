@@ -75,6 +75,10 @@
         <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
           <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-keep-failed">{% csrf_token %}<input type="hidden" name="field" value="keep_failed">
+        <input type="hidden" name="value" value="{% if object.agent_keep_failed %}0{% else %}1{% endif %}">
+        <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.agent_keep_failed %} checked{% endif %} onchange="this.form.submit()">
+          <span class="form-check-label small"><strong>{% tr "srv.keep_failed" %}</strong> – {% tr "srv.keep_failed_hint" %}</span></label></form>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3" id="isc-agent-cmds" style="display:grid;grid-template-columns:auto minmax(14rem,24rem) 1fr;gap:.5rem .75rem;align-items:center">{% csrf_token %}<input type="hidden" name="field" value="cmds">
         <div style="grid-column:1/-1" class="small"><strong><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</strong> – {% tr "srv.cmds_hint" %}</div>
         <label class="small">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ object.agent_test_cmd }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.test_cmd_do" %}</span>
@@ -141,6 +145,7 @@
           {% else %}<span class="isc-dot none"></span><span class="text-muted">{% tr "srv.never_seen" %}</span>{% endif %}</td>
         <td class="small">{% if x.run_label %}<div>{% tr "srv.runs" %} <code class="{% if x.run_ok %}text-success{% else %}text-danger{% endif %}">{{ x.run_label }}</code>{% if x.run_ok %} <i class="mdi mdi-check text-success"></i>{% endif %}</div>{% endif %}
           {% if x.s.last_report %}<div class="mt-1"><span class="isc-chip {% if x.s.last_result == 'ok' %}green{% else %}red{% endif %}">{{ x.s.last_result }}</span><span class="text-muted">{{ x.s.last_report|date:"d.m. H:i" }}</span></div>{% elif not x.run_label %}<span class="text-muted">—</span>{% endif %}
+          {% if x.s.disk_broken %}<div class="text-danger mt-1"><i class="mdi mdi-alert-octagon-outline"></i> {% tr "srv.disk_broken" %}</div>{% endif %}
           {% if x.s.released_hash == current_hash %}<div class="text-warning">{% tr "srv.released" %}</div>{% endif %}
           {% if x.wait %}<div class="text-warning mt-1"><i class="mdi mdi-timer-sand"></i> {{ x.wait }}</div>{% endif %}
           {% if x.reason == "failed_same" %}<form method="post" action="{{ srv_url }}" class="m-0 mt-1">{% csrf_token %}<input type="hidden" name="field" value="retry"><input type="hidden" name="pk" value="{{ x.s.pk }}">

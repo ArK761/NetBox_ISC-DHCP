@@ -261,6 +261,7 @@ class PluginSettings(NetBoxModel):
                                   help_text="For all DHCP servers: plan = only changes, export = download everything.")
     agent_key = models.CharField(max_length=64, blank=True, default="", help_text="Agent API key (Authorization: Token <key>); empty = IP check only.")
     agent_key_old = models.CharField(max_length=64, blank=True, default="", help_text="Previous key, valid until every server uses the new one ('-' = no key was required).")
+    agent_keep_failed = models.BooleanField(default=False, help_text="On a failed test the agent keeps the new CFG on disk (debugging), no restart.")
     agent_interval = models.PositiveIntegerField(default=60, help_text="Seconds between two agent contacts (10 s - 30 min).")
     agent_dirs = models.JSONField(default=list, blank=True, help_text="Every directory the plugin ever managed (old files there are deleted).")
     agent_test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test for all DHCP servers; {conf} = path of dhcpd.conf.")

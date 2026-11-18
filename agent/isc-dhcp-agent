@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.3.1"
+AGENT_VERSION="1.4.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -147,7 +147,7 @@ report() {  # report <result> <output file>
   [ -n "$url" ] || return 0
   curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o /dev/null -X POST "$url" \
     --data-urlencode "result=$res" --data-urlencode "hash=$HASH" --data-urlencode "running=$(state running)" \
-    --data-urlencode "output@$out" || log "report failed (network)"
+    --data-urlencode "kept=${KEPT:-}" --data-urlencode "output@$out" || log "report failed (network)"
 }
 
 restore() {  # copy the backup back, remove files that did not exist before
@@ -187,9 +187,14 @@ apply() {
   echo "\$ $cmd" >>"$OUT"
   bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
   if [ $rc -ne 0 ]; then
-    log "test failed (rc=$rc), restoring - dhcpd -t says:"
+    log "test failed (rc=$rc) - dhcpd -t says:"
     grep -v '^\$ \|^backup: \|^Internet Systems\|^Copyright\|^All rights\|^For info\|^$' "$OUT" | tail -n 25 | while IFS= read -r l; do log "  $l"; done
-    restore; report test_failed "$OUT"; return
+    if [ "$ON_FAIL" = keep ]; then  # NetBox: keep the broken CFG on disk for debugging, never restart
+      echo "KEPT: the new CFG stays on disk (debugging), dhcpd was not restarted" >>"$OUT"
+      log "new CFG kept on disk (NetBox: keep on failed test) - dhcpd NOT restarted, it would not start after a reboot"
+      KEPT=1; report test_failed "$OUT"; KEPT=""; return
+    fi
+    log "restoring the backup"; restore; report test_failed "$OUT"; return
   fi
   # 5. restart + check that dhcpd runs
   cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
@@ -237,12 +242,13 @@ contact() {
   local redir="${code#* }"; code="${code%% *}"
   if [ "$url" != "$NETBOX_URL" ]; then NETBOX_URL="$url"; save_url "$url"; fi
   DL_PATH=(); DL_SHA=(); DL_URL=(); BACKUP_PATHS=(); DELETES=(); DIRS=()
-  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""
+  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""; ON_FAIL="restore"
   local key a b c
   while IFS=$'\t' read -r key a b c; do
     case "$key" in
       interval) [[ "$a" =~ ^[0-9]+$ ]] && INTERVAL="$a" ;;
       key) NEWKEY="$a" ;;
+      on_test_fail) ON_FAIL="$a" ;;
       hash) HASH="$a" ;; cfg) CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
       backup) BACKUP_TO="$a"; IFS=$'\t' read -r -a BACKUP_PATHS <<<"$b${c:+	$c}" ;;

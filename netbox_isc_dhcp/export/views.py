@@ -254,6 +254,11 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("staged_rollout", str(st.staged_rollout), str(request.POST.get("value") == "1"))]
             st.staged_rollout = request.POST.get("value") == "1"
             st.save()
+        elif action == "keep_failed":
+            st = _st()
+            log = [("agent_keep_failed", str(st.agent_keep_failed), str(request.POST.get("value") == "1"))]
+            st.agent_keep_failed = request.POST.get("value") == "1"
+            st.save(update_fields=["agent_keep_failed"])
         elif action == "interval":
             from .agent import INTERVALS
 
@@ -388,7 +393,7 @@ class PlanView(View):
         mode = st.agent_mode if st else "plan"
         info = {"mode": mode, "hash": mh, "cfg": ver.label if ver else "", "server": server.name if server else "",
                 "interval": st.agent_interval if st else 60, "conf_dir": CONF_DIR, "base": base_path(),
-                "dir": managed_dirs()}  # the agent sends sha256 of every file in these dirs (+ dhcpd.conf) next time
+                "dir": managed_dirs(), "on_test_fail": "keep" if st and st.agent_keep_failed else "restore"}  # the agent sends sha256 of every file in these dirs (+ dhcpd.conf) next time
         text = _wants_text(request)
 
         def reply(steps, extra=None, status=200):
@@ -465,7 +470,9 @@ class ReportView(View):
                                   changes=[{"path": str(x), "action": "done"} for x in done][:2000])
         if server:
             server.last_hash, server.last_result, server.last_report = h, body["result"], now
-            fields = ["last_hash", "last_result", "last_report"]
+            fields = ["last_hash", "last_result", "last_report", "disk_broken"]
+            kept = str(body.get("kept", "")) in ("1", "true", "yes")
+            server.disk_broken = h if body["result"] == "test_failed" and kept else ("" if body["result"] == "ok" else server.disk_broken)
             run = str(body.get("running", "") or (h if body["result"] == "ok" else ""))[:64]
             if run:
                 server.running_hash = run

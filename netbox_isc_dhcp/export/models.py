@@ -74,6 +74,7 @@ class DHCPServer(models.Model):
     isc_version = models.CharField(max_length=100, blank=True, default="", help_text="ISC dhcpd version; 'none' = not installed.")
     dhcpd_running = models.BooleanField(null=True, blank=True)
     running_hash = models.CharField(max_length=64, blank=True, default="", help_text="CFG set the agent says it runs.")
+    disk_broken = models.CharField(max_length=64, blank=True, default="", help_text="Failed CFG kept on disk (debugging) - dhcpd would not start after a reboot.")
     key_hash = models.CharField(max_length=16, blank=True, default="", help_text="Short hash of the key the agent used last.")
     released_hash = models.CharField(max_length=64, blank=True, default="", help_text="Admin let the next servers go on without this server's OK for this set.")
 
