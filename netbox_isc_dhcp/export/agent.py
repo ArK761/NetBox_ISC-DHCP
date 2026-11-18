@@ -68,7 +68,7 @@ def gate(server, manifest_hash):
         return "failed_same", []  # never send the set that already failed here again (no endless restore loop)
     st = settings_obj()
     if (st and st.staged_rollout) or running_mismatch():
-        before = [s for s in enabled_servers() if s.order < server.order]
+        before = [s for s in enabled_servers() if s.order < server.order and s.last_seen]  # no agent yet = blocks nobody
         waiting = [s.name for s in before if not ((s.last_result == "ok" and s.last_hash == manifest_hash)
                                                   or s.released_hash == manifest_hash or s.isc_version == "none")]
         if waiting:

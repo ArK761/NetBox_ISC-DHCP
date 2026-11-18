@@ -159,7 +159,7 @@ def _server_rows():
     out = []
     for srv in DHCPServer.objects.order_by("pk"):
         ips, err = resolve(srv.address)
-        reason, names = gate(srv, mh) if srv.enabled else ("", [])
+        reason, names = gate(srv, mh) if srv.enabled and srv.last_seen else ("", [])  # no agent yet: nothing to wait for
         wait = t(f"srv.wait_{reason}", names=", ".join(names)) if reason else ""
         fb = first_block(srv)
         out.append({"s": srv, "ips": ips, "err": err, "wait": wait, "reason": reason, "names": names, "first_why": t(fb) if fb else "",
