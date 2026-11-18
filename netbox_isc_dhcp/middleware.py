@@ -168,6 +168,9 @@ class DNSWarningMiddleware:
         silent = [s.name for s in srvs if s.last_seen and stale(s, st.agent_interval if st else 60)]
         if silent:
             out.append(("danger", "mdi-lan-disconnect", t("warn.agent_stale", names=", ".join(silent)), url, label))
+        svcbad = [f"{s.name} ({s.svc_state})" for s in srvs if s.last_seen and s.svc_state not in ("", "active", "none")]
+        if svcbad:
+            out.append(("warning", "mdi-cog-off-outline", t("warn.svc_bad", names=", ".join(svcbad)), url, label))
         broken = [s.name for s in srvs if s.disk_broken]
         if broken:
             out.append(("danger", "mdi-alert-octagon-outline", t("warn.disk_broken", names=", ".join(broken)), url, label))

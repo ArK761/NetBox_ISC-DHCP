@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.11.1"
+AGENT_VERSION="1.12.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -120,19 +120,55 @@ isc_version() {
   echo "${v:-unknown}"
 }
 
-dhcpd_running() {
+dhcpd4_pids() {  # PIDs of IPv4 dhcpd processes (a dhcpd -6 is not ours)
+  local p
+  for p in $(pidof dhcpd 2>/dev/null); do
+    tr '\0' ' ' </proc/"$p"/cmdline 2>/dev/null | grep -qE '(^| )-6( |$)' || echo "$p"
+  done
+}
+
+dhcpd_running() {  # REAL state: an IPv4 dhcpd process exists (it serves DHCP). The service state is reported separately (svc_state).
   if [ -n "$RUNNING_CHECK" ]; then bash -c "$RUNNING_CHECK" >/dev/null 2>&1 && echo 1 || echo 0; return; fi
-  # REAL state: the service is active AND a dhcpd process exists (an LSB service stays "active" after dhcpd crashed;
-  # a failed service with a stray dhcpd process is not running either)
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl is-active --quiet "$DHCP_SERVICE" 2>/dev/null && pidof dhcpd >/dev/null 2>&1 && echo 1 || echo 0; return
-  fi
-  pidof dhcpd >/dev/null 2>&1 && echo 1 || echo 0
+  [ -n "$(dhcpd4_pids)" ] && echo 1 || echo 0
+}
+
+svc_state() {  # active | failed | inactive | activating | ... (none = no systemd)
+  command -v systemctl >/dev/null 2>&1 || { echo none; return; }
+  local st; st=$(systemctl is-active "$DHCP_SERVICE" 2>/dev/null | head -1); echo "${st:-unknown}"
+}
+
+svc_is_active() { [ "$(svc_state)" = active ] || { [ "$(svc_state)" = none ] && [ "$(dhcpd_running)" = 1 ]; }; }
+
+svc_why() {  # short reason from the unit journal why the service is not active ("" when active)
+  case "$(svc_state)" in active|none) return 0 ;; esac
+  command -v journalctl >/dev/null 2>&1 || return 0
+  local j l; j=$(journalctl -u "$DHCP_SERVICE" -n 80 --no-pager -q 2>/dev/null)
+  l=$(echo "$j" | grep -iE 'No subnet|Address already in use|Not configured|Can.t |no such file|permission denied' | grep -v 'systemd\[' | tail -1)
+  [ -z "$l" ] && l=$(echo "$j" | grep -iE 'failed!' | tail -1)
+  [ -z "$l" ] && l=$(echo "$j" | grep -iE 'fail' | tail -1)
+  echo "$l" | sed -E 's/^.{15} [^ ]+ //; s/^[^ ]+\[[0-9]+\]: //' | cut -c1-200
+}
+
+diag() {  # full check when something is not OK: last NetBox command, service, every dhcpd process, pidfile, service error
+  local out="${1:-/dev/null}" p pf seen="" w
+  {
+    echo "CHECK last NetBox command: $(state last_cmd || true)"
+    echo "CHECK service $DHCP_SERVICE: $(svc_state)"
+    for p in $(pidof dhcpd 2>/dev/null); do
+      echo "CHECK dhcpd pid $p: $(tr '\0' ' ' </proc/"$p"/cmdline 2>/dev/null | cut -c1-120)$(grep -q "$DHCP_SERVICE" /proc/"$p"/cgroup 2>/dev/null && echo ' (in the service)' || echo ' (OUTSIDE the service)')"
+    done
+    [ -z "$(pidof dhcpd 2>/dev/null)" ] && echo "CHECK dhcpd process: none"
+    for pf in $(dhcpd_pidfiles); do
+      pf=$(readlink -f "$pf" 2>/dev/null || echo "$pf"); case " $seen " in *" $pf "*) continue ;; esac; seen="$seen $pf"
+      [ -f "$pf" ] && { p=$(cat "$pf" 2>/dev/null); echo "CHECK pidfile $pf: ${p:-empty} $(kill -0 "$p" 2>/dev/null && echo alive || echo DEAD)"; }
+    done
+    w=$(svc_why); [ -n "$w" ] && echo "CHECK service error: $w"
+  } | tee -a "$out" | while IFS= read -r l; do log "$l"; done
 }
 
 state() { cat "$STATE_DIR/$1" 2>/dev/null; }
 
-pid_now() { pidof dhcpd 2>/dev/null | tr ' ' '\n' | head -1; }  # first dhcpd PID, empty = none
+pid_now() { dhcpd4_pids | head -1; }  # first IPv4 dhcpd PID, empty = none
 
 pid_step() {  # pid_step <label> <old-pid>: log "dhcpd PID <old> -> <now> (<label>)" to the log and the report
   local new l; new=$(pid_now)
@@ -339,18 +375,18 @@ clean_stale_pidfile() {  # a pidfile left by a crashed / killed dhcpd points to 
 }
 
 kill_stray() {  # dhcpd processes while the service is not active (started by hand / left by a failed start): end them + clear a stale pidfile; both block a clean start
-  [ "$(dhcpd_running)" = 1 ] && return 0
+  svc_is_active && [ "$(dhcpd_running)" = 1 ] && return 0  # healthy service with its dhcpd: never touch it
   local out="${1:-/dev/null}" pfs; pfs=$(dhcpd_pidfiles)  # read -pf while a process may still be alive
-  if ! pidof dhcpd >/dev/null 2>&1; then
+  if [ -z "$(dhcpd4_pids)" ]; then
     command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$DHCP_SERVICE" 2>/dev/null && systemctl stop "$DHCP_SERVICE" >/dev/null 2>&1  # crashed: service "active" without a process
     clean_stale_pidfile "$out" $pfs; return 0
   fi
   local p0; p0=$(pid_now)
-  echo "dhcpd process outside the service (pid $p0) - ending it" >>"$out"
-  log "dhcpd process outside the service (pid $p0) - ending it"
-  kill $(pidof dhcpd) 2>/dev/null; local i=0
-  while [ $i -lt 5 ] && pidof dhcpd >/dev/null 2>&1; do sleep 1; i=$((i+1)); done
-  pidof dhcpd >/dev/null 2>&1 && kill -9 $(pidof dhcpd) 2>/dev/null; sleep 1
+  echo "dhcpd process without a working service (pid $p0, service $(svc_state)) - ending it for a clean start" >>"$out"
+  log "dhcpd process without a working service (pid $p0, service $(svc_state)) - ending it for a clean start"
+  kill $(dhcpd4_pids) 2>/dev/null; local i=0
+  while [ $i -lt 5 ] && [ -n "$(dhcpd4_pids)" ]; do sleep 1; i=$((i+1)); done
+  [ -n "$(dhcpd4_pids)" ] && kill -9 $(dhcpd4_pids) 2>/dev/null; sleep 1
   command -v systemctl >/dev/null 2>&1 && systemctl reset-failed "$DHCP_SERVICE" 2>/dev/null
   clean_stale_pidfile "$out" $pfs; pid_step "kill stray" "$p0"; return 0
 }
@@ -413,7 +449,7 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
       echo 1 >"$STATE_DIR/admin_stopped"; rm -f "$STATE_DIR/want_up"; mark_agent
       svc stop >"$out" 2>&1 || true; wait_down 5
       txt="dhcpd stopped"
-      if [ "$(dhcpd_running)" != 1 ] && pidof dhcpd >/dev/null 2>&1; then kill_stray "$out"; txt="dhcpd stopped (process outside the service ended)"; fi
+      if [ -n "$(dhcpd4_pids)" ]; then kill_stray "$out"; txt="dhcpd stopped (process left by the service ended)"; fi
       [ "$(dhcpd_running)" = 1 ] && { res=failed; txt="dhcpd still running: $(grep -v '^$' "$out" | tail -1)"; } ;;
     start|restart)
       rm -f "$STATE_DIR/admin_stopped"
@@ -446,13 +482,19 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
     *) res=failed; txt="unknown command $CMD" ;;
   esac
   echo "$CMD_ID:$res:$txt" >"$STATE_DIR/cmd_done"
+  echo "$CMD $(date '+%F %T') $res" >"$STATE_DIR/last_cmd"
   log "NetBox command '$CMD': $res - $txt"
+  [ "$res" = ok ] || [ "$CMD" = update ] || diag "$out"
 }
 
 ensure_up() {  # keep dhcpd up after Start/Restart: test CFG, kill a stray dhcpd, remove a stale pidfile, start; retry ~1/min until it runs (NOT a CFG error)
   [ -e "$STATE_DIR/want_up" ] || return 0
   [ "$(state admin_stopped)" = 1 ] && { rm -f "$STATE_DIR/want_up"; return 0; }
-  [ "$(dhcpd_running)" = 1 ] && { rm -f "$STATE_DIR/want_up"; return 0; }
+  if [ "$(dhcpd_running)" = 1 ]; then  # dhcpd serves (maybe started by hand / by the service): done, NetBox gets OK
+    rm -f "$STATE_DIR/want_up"; OUT="$WORK/up"; : >"$OUT"
+    echo "dhcpd is running (pid $(pid_now))" >>"$OUT"; echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
+    log "dhcpd is running (pid $(pid_now)) - retry finished"; report ok "$OUT"; return 0
+  fi
   local now last; now=$(date +%s); last=$(state want_up_ts)
   [ -n "$last" ] && [ $((now - last)) -lt 55 ] && return 0  # at most once per minute
   echo "$now" >"$STATE_DIR/want_up_ts"
@@ -473,8 +515,8 @@ ensure_up() {  # keep dhcpd up after Start/Restart: test CFG, kill a stray dhcpd
     rm -f "$STATE_DIR/want_up"; echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
     log "dhcpd is UP (pid $(pid_now)) after retry"; report ok "$OUT"
   else
-    log "dhcpd still not up (service failed, NOT a CFG problem) - will try again in ~1 min"
-    report start_failed "$OUT"
+    log "dhcpd still not up (NOT a CFG problem) - will try again in ~1 min"
+    diag "$OUT"; report start_failed "$OUT"
   fi
 }
 
@@ -505,7 +547,7 @@ contact() {
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$have" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "svc=$(svc_state)" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
@@ -561,6 +603,11 @@ contact() {
   run_cmd  # Start / Stop / Restart / Update from NetBox
   heal  # manual restart / self-heal
   ensure_up  # keep retrying dhcpd start every ~minute after Start/Restart until it is up
+  local dk; dk="$(dhcpd_running)|$(svc_state)|$(pid_now)"
+  if [ "$dk" != "$(state diag_key)" ]; then
+    echo "$dk" >"$STATE_DIR/diag_key"
+    [ "$(isc_version)" != none ] && { [ "$(dhcpd_running)" != 1 ] || ! svc_is_active; } && diag "$WORK/diag"
+  fi
   if [ -n "$WAIT" ]; then  # log only when the reason changes (no line every interval)
     [ "$WAIT $CFG" != "${LAST_WAIT:-}" ] && log "waiting ($WAIT) CFG $CFG"
     LAST_WAIT="$WAIT $CFG"; return 0
@@ -573,7 +620,8 @@ contact() {
 }
 
 INTERVAL=60
-log "isc-dhcp-agent $AGENT_VERSION started, NetBox $NETBOX_URL, ISC $(isc_version), dhcpd $([ "$(dhcpd_running)" = 1 ] && echo running || echo NOT running)"
+[ "$(state agent_ver)" = "$AGENT_VERSION" ] || { dhcpd_running >"$STATE_DIR/dhcpd_prev"; echo "$AGENT_VERSION" >"$STATE_DIR/agent_ver"; }
+log "isc-dhcp-agent $AGENT_VERSION started, NetBox $NETBOX_URL, ISC $(isc_version), dhcpd $([ "$(dhcpd_running)" = 1 ] && echo "running (pid $(pid_now))" || echo NOT running), service $(svc_state)"
 while true; do
   WORK=$(mktemp -d) || die "mktemp failed"
   contact

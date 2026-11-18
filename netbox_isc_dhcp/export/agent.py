@@ -195,6 +195,8 @@ def heartbeat(server, request, data):
     run = data.get("dhcpd")
     dhcpd = None if run in (None, "") else str(run) in ("1", "true", "yes")
     pid = "".join(c for c in str(data.get("dhcpd_pid", ""))[:10] if c.isdigit())
+    svc = "".join(c for c in str(data.get("svc", ""))[:20] if c.isalnum() or c in "-_")
+    svc_why = str(data.get("svc_why", ""))[:300]
     first = server.last_seen is None
     msgs, changes = [], []
     if first:
@@ -241,9 +243,21 @@ def heartbeat(server, request, data):
     if dhcpd is not None and dhcpd != server.dhcpd_running:
         changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(dhcpd)})
         server.dhcpd_running = dhcpd
+    if svc and (svc != server.svc_state or (svc not in ("active", "none") and svc_why and svc_why != server.svc_why)):
+        if svc in ("active", "none"):
+            if server.svc_state not in ("", "active", "none"):
+                msgs.append(t("aud.svc_ok", svc=svc))
+        else:
+            msgs.append(t("aud.svc_bad", svc=svc, why=svc_why or "?"))
+    if svc:
+        server.svc_state, server.svc_why = svc, ("" if svc in ("active", "none") else svc_why)
+    # the agent says dhcpd runs the CFG of the last (start) failure: that old "failed" is not true any more (dhcpd -t failures stay)
+    if dhcpd and running and running == server.last_hash and server.last_result in ("failed", "start_failed"):
+        server.last_result = "ok"
+        msgs.append(t("aud.fail_cleared"))
     server.last_seen = timezone.now()
     server.dhcpd_pid = pid if dhcpd else ""
-    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "agent_cmd"])
+    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
