@@ -66,7 +66,7 @@ class ExportPageView(LoginRequiredMixin, View):
             d["size"] = sum(x["r"].size for x in d["files"])
         last = max((r.updated for r in rows), default=None)
         return render(request, "netbox_isc_dhcp/export/export.html", {
-            "cfg_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash()),
+            "cfg_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
             "m": m, "dirs": dirs, "last": last, "total_size": sum(r.size for r in rows),
             "files_text": t("exp.files", n=m["count"]),
         })

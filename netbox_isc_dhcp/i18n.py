@@ -99,6 +99,7 @@ TR = {
     "srv.wait_isc_mismatch": ("čaká – rôzne verzie ISC, CFG ide len na Prvý", "waiting – different ISC versions, CFG goes to First only"),
     "srv.wait_failed_same": ("aktuálny CFG tu zlyhal – čaká na nový CFG", "the current CFG failed here – waiting for a new CFG"),
     "srv.wait_staged": ("čaká na: {names}", "waiting for: {names}"),
+    "srv.cfg_hint": ("Číslo aktuálnej sady súborov (dátum_poradie). Mení sa pri každej zmene CFG (tenant, subnet, kód…); pri serveri vidno, ktoré číslo mu beží.", "Number of the current file set (date_order). Changes with every CFG change (tenant, subnet, code…); each server shows which number it runs."),
     "srv.current_cfg": ("Aktuálne CFG", "Current CFG"),
     "warn.isc_mismatch": ("DHCP servery majú rôzne verzie ISC ({list}) – CFG sa posiela len na server Prvý, kým verzie nezjednotíš.", "DHCP servers run different ISC versions ({list}) – CFG is sent to the First server only until the versions are the same."),
     "warn.isc_missing": ("ISC DHCP nie je nainštalovaný na: {names}", "ISC DHCP is not installed on: {names}"),

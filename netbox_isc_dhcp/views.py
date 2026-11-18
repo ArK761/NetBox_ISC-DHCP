@@ -152,7 +152,9 @@ def _server_rows():
 
     st = settings_obj()
     interval = st.agent_interval if st else 60
-    mh, lab = build.manifest_hash(), versions.labels()
+    mh = build.manifest_hash()
+    versions.ensure(mh)  # the current set always has a number (also right after a plugin update)
+    lab = versions.labels()
     out = []
     for srv in DHCPServer.objects.order_by("pk"):
         ips, err = resolve(srv.address)
@@ -181,7 +183,7 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
       extra_context=lambda request, instance: {
           "servers": _server_rows(), "first_pk": _first_pk(),
           "current_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(),
-          "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(__import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash()),
+          "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(__import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(), create=True),
           "intervals": [(v, f"{v} s" if v < 60 else f"{v // 60} min") for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).INTERVALS],
           "isc_lock": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).isc_mismatch(),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),

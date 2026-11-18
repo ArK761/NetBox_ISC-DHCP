@@ -22,12 +22,12 @@ def ensure(manifest_hash):
         return CfgVersion.objects.filter(hash=manifest_hash).first()
 
 
-def label(manifest_hash) -> str:
+def label(manifest_hash, create=False) -> str:
     from .models import CfgVersion
 
     if not manifest_hash:
         return ""
-    v = CfgVersion.objects.filter(hash=manifest_hash).only("label").first()
+    v = ensure(manifest_hash) if create else CfgVersion.objects.filter(hash=manifest_hash).only("label").first()
     return v.label if v else manifest_hash[:12]
 
 

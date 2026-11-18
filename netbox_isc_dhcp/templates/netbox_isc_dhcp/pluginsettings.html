@@ -71,10 +71,6 @@
         <select name="value" class="form-select form-select-sm" style="max-width:20rem" onchange="this.form.submit()">
           <option value="plan"{% if object.agent_mode != "export" %} selected{% endif %}>{% tr "srv.mode_plan" %}</option>
           <option value="export"{% if object.agent_mode == "export" %} selected{% endif %}>{% tr "srv.mode_export" %}</option></select></form>
-      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center mt-2" id="isc-agent-interval">{% csrf_token %}<input type="hidden" name="field" value="interval">
-        <strong class="small">{% tr "srv.interval" %}:</strong>
-        <select name="value" class="form-select form-select-sm" style="max-width:10rem" onchange="this.form.submit()">{% for v, l in intervals %}<option value="{{ v }}"{% if object.agent_interval == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-        <span class="small text-muted ms-2">{% tr "srv.current_cfg" %}: <code>{{ current_label|default:"—" }}</code></span></form>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-staged">{% csrf_token %}<input type="hidden" name="field" value="staged">
         <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
@@ -95,6 +91,12 @@
       .isc-chip.red{border-color:#d63939;color:#d63939}.isc-chip.green{border-color:#2fb344;color:#2fb344}.isc-chip.yellow{border-color:#f59f00;color:#f59f00}
       .isc-srvt .srv-name{font-weight:600;font-size:1rem}
     </style>
+    <div class="d-flex flex-wrap align-items-center gap-3 px-3 py-2 border-top" style="background:var(--tblr-bg-surface-secondary,rgba(127,127,127,.06))">
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-agent-interval">{% csrf_token %}<input type="hidden" name="field" value="interval">
+        <i class="mdi mdi-timer-outline"></i><span class="small fw-semibold text-nowrap">{% tr "srv.interval" %}</span>
+        <select name="value" class="form-select form-select-sm" style="width:7.5rem" onchange="this.form.submit()">{% for v, l in intervals %}<option value="{{ v }}"{% if object.agent_interval == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>
+      <span class="small text-muted" title="{% tr 'srv.cfg_hint' %}"><i class="mdi mdi-tag-outline"></i> {% tr "srv.current_cfg" %} <span class="isc-chip green ms-1">{{ current_label|default:"—" }}</span></span>
+    </div>
     <table class="table mb-0 isc-srvt">
       <thead><tr><th style="width:2.5rem">#</th><th style="width:4rem">{% tr "srv.first" %}</th><th>{% tr "srv.col_server" %}</th><th>{% tr "srv.col_agent" %}</th><th>CFG</th><th style="width:5rem">{% tr "hosts.col_enabled" %}</th><th style="width:3rem"></th></tr></thead>
       {% for x in servers %}<tr class="isc-srv{% if not x.s.enabled %} off{% endif %}">
