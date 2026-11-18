@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.8.0"
+AGENT_VERSION="1.9.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -152,11 +152,16 @@ report() {  # report <result> <output file>
     --data-urlencode "kept=${KEPT:-}" --data-urlencode "output@$out" || log "report failed (network)"
 }
 
+step() {  # step <code> <n> <text>: one line in the log + a STEP line in the report (NetBox Audit shows the whole flow)
+  echo "STEP $1 $2" >>"$OUT"; log "$3"
+}
+
 restore() {  # copy the backup back, remove files that did not exist before
-  local f
+  local f n
   for f in "${NEW_FILES[@]}"; do rm -f -- "$f"; done
+  n=$( [ -d "$BK" ] && find "$BK" -type f | wc -l || echo 0)
   [ -d "$BK" ] && cp -a "$BK/." / 2>>"$OUT"
-  log "restored backup $BK"
+  step restore "$n" "restored $n file(s) from the backup $BK, removed ${#NEW_FILES[@]} new file(s)"
 }
 
 apparmor_fix() {  # dhcpd confined by AppArmor cannot read <base path>: allow it (only when the kernel uses AppArmor for dhcpd)
@@ -227,12 +232,15 @@ apply() {
     [ "$(sha256sum "$WORK/f$i" | cut -d' ' -f1)" = "${DL_SHA[$i]}" ] \
       || { echo "sha256 mismatch: ${DL_PATH[$i]}" >>"$OUT"; report failed "$OUT"; return; }
   done
-  # 2. backup = cp of the whole current CFG to <backup dir>/<running CFG>_<time>
+  step download "${#DL_PATH[@]}" "downloaded ${#DL_PATH[@]} file(s), sha256 OK"
+  # 2. backup = cp of ONLY the files that will be replaced (a restore puts back exactly these)
   prev=$(state label); now=$(date +%Y%m%d-%H%M%S)
   BK="$BACKUP_TO/${prev:-start}_$now"
   mkdir -p "$BK" || { echo "cannot create backup $BK" >>"$OUT"; report failed "$OUT"; return; }
-  for i in "${BACKUP_PATHS[@]}"; do [ -e "$i" ] && cp -a --parents "$i" "$BK/" 2>>"$OUT"; done
+  local nb=0
+  for i in "${DL_PATH[@]}"; do [ -e "$i" ] && cp -a --parents "$i" "$BK/" 2>>"$OUT" && nb=$((nb + 1)); done
   echo "backup: $BK" >>"$OUT"
+  step backup "$nb" "backup: $nb file(s) that will be replaced -> $BK"
   # 3. install (order from NetBox: included files first, dhcpd.conf last)
   NEW_FILES=()
   for i in "${!DL_PATH[@]}"; do
@@ -241,35 +249,41 @@ apply() {
     mkdir -p -m 755 "$(dirname "$tmp")" && chmod 755 "$(dirname "$tmp")" && install -m 644 "$WORK/f$i" "$tmp.isc-new" && mv -f "$tmp.isc-new" "$tmp" \
       || { echo "install failed: $tmp" >>"$OUT"; restore; report failed "$OUT"; return; }
   done
+  step install "${#DL_PATH[@]}" "applied ${#DL_PATH[@]} file(s) (dhcpd.conf last)"
   # 4. test (AppArmor rule first, if the system uses AppArmor for dhcpd)
   apparmor_fix
   cmd=$(allowed "$TEST_CMD" "${ALLOWED_TEST_CMDS[@]}") || echo "test command from NetBox not allowed locally, used: $cmd" >>"$OUT"
   echo "\$ $cmd" >>"$OUT"
   bash -c "$cmd" >>"$OUT" 2>&1; rc=$?
   if [ $rc -ne 0 ]; then
-    log "test failed (rc=$rc) - dhcpd -t says:"
+    step test fail "test FAILED (rc=$rc) - dhcpd -t says:"
     grep -v '^\$ \|^backup: \|^Internet Systems\|^Copyright\|^All rights\|^For info\|^$' "$OUT" | tail -n 25 | while IFS= read -r l; do log "  $l"; done
     if [ "$ON_FAIL" = keep ] || [ -z "$(state running)" ]; then  # debugging switch, or the FIRST CFG (nothing to go back to): keep it, never restart
       echo "KEPT: the new CFG stays on disk (debugging), dhcpd was not restarted" >>"$OUT"
-      log "new CFG kept on disk (NetBox: keep on failed test) - dhcpd NOT restarted, it would not start after a reboot"
+      step kept 0 "new CFG kept on disk (first CFG or NetBox switch) - dhcpd NOT restarted"
       KEPT=1; report test_failed "$OUT"; KEPT=""; return
     fi
-    log "restoring the backup"; restore; report test_failed "$OUT"; return
+    restore; report test_failed "$OUT"; return
   fi
+  step test ok "test OK (dhcpd -t)"
   # 5. restart + check that dhcpd runs
   cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
   echo "\$ $cmd" >>"$OUT"
   mark_agent; rm -f "$STATE_DIR/admin_stopped"
+  step restart 0 "restarting dhcpd"
   bash -c "$cmd" >>"$OUT" 2>&1
   sleep "$START_WAIT"
   if [ "$(dhcpd_running)" != 1 ]; then
-    log "dhcpd did not start, restoring"; restore
+    step notrunning 0 "dhcpd did NOT start - restoring"; restore
     bash -c "$cmd" >>"$OUT" 2>&1; sleep "$START_WAIT"
     echo "dhcpd after restore: $( [ "$(dhcpd_running)" = 1 ] && echo running || echo NOT running )" >>"$OUT"
     report rolled_back "$OUT"; return
   fi
+  step running 0 "dhcpd is running"
   # 6. delete files the plugin does not generate any more (only managed paths)
-  for i in "${DELETES[@]}"; do safe_path "$i" && rm -f -- "$i" && echo "deleted $i" >>"$OUT"; done
+  local nd=0
+  for i in "${DELETES[@]}"; do safe_path "$i" && rm -f -- "$i" && echo "deleted $i" >>"$OUT" && nd=$((nd + 1)); done
+  [ "$nd" -gt 0 ] && step delete "$nd" "deleted $nd file(s) the plugin no longer generates"
   # 7. remember + report
   echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
   log "CFG $CFG applied (${#DL_PATH[@]} files, ${#DELETES[@]} deleted)"

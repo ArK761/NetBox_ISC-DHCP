@@ -425,6 +425,19 @@ def _refused_contact(request):
                               output=f"REMOTE_ADDR={request.META.get('REMOTE_ADDR', '')} X-Forwarded-For={request.META.get('HTTP_X_FORWARDED_FOR', '')}")
 
 
+def _flow(output):
+    """STEP lines of the agent report -> 'stiahol 1 súbor → zálohoval 1 → aplikoval 1 → test OK → reštart → dhcpd beží'."""
+    parts = []
+    for line in output.splitlines():
+        if not line.startswith("STEP "):
+            continue
+        bits = line.split()
+        code, n = (bits[1], bits[2] if len(bits) > 2 else "0") if len(bits) > 1 else ("", "0")
+        key = f"aud.st_{code}" + ("_" + n if code == "test" else "")
+        parts.append(t(key, n=n))
+    return " → ".join(parts)
+
+
 def _wants_text(request):
     return request.GET.get("format") == "text" or "text/plain" in request.META.get("HTTP_ACCEPT", "")
 
@@ -554,9 +567,11 @@ class ReportView(View):
         h = str(body.get("hash", ""))[:64]
         done = body.get("done", [])
         done = done if isinstance(done, list) else [x for x in str(done).split() if x]
+        output = str(body.get("output", ""))[:20000]
+        flow = _flow(output)
         AuditEvent.objects.create(time=now, kind="report", server=server.name if server else "", client_ip=audit.client_ip(request),
-                                  manifest_hash=h, result=body["result"], output=str(body.get("output", ""))[:20000],
-                                  cause=t("aud.result_" + body["result"]) + (f" · {versions.label(h)}" if h else ""),
+                                  manifest_hash=h, result=body["result"], output=output,
+                                  cause=(flow + " · " if flow else "") + t("aud.result_" + body["result"]) + (f" · {versions.label(h)}" if h else ""),
                                   changes=[{"path": str(x), "action": "done"} for x in done][:2000])
         if server:
             server.last_hash, server.last_result, server.last_report = h, body["result"], now
