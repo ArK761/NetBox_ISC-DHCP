@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.9.0"
+AGENT_VERSION="1.9.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -304,6 +304,8 @@ svc() {  # svc <start|stop|restart>: the DHCP service, without any command from 
   if command -v systemctl >/dev/null 2>&1; then systemctl "$1" "$DHCP_SERVICE"; else service "$DHCP_SERVICE" "$1"; fi
 }
 
+wait_down() { local i=0; while [ $i -lt "$1" ] && [ "$(dhcpd_running)" = 1 ]; do sleep 1; i=$((i+1)); done; }
+
 mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
 
 dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop since the last contact ("" = no change)
@@ -324,8 +326,16 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
   case "$CMD" in
     stop)
       echo 1 >"$STATE_DIR/admin_stopped"; mark_agent
-      svc stop >"$out" 2>&1 || true; sleep 2
-      [ "$(dhcpd_running)" = 1 ] && { res=failed; txt="dhcpd still running"; } || txt="dhcpd stopped" ;;
+      svc stop >"$out" 2>&1 || true; wait_down 5
+      txt="dhcpd stopped"
+      if [ "$(dhcpd_running)" = 1 ] && pidof dhcpd >/dev/null 2>&1; then
+        # dhcpd started outside the service (by hand / other pid file): the service stop cannot see it
+        echo "dhcpd still running after service stop (pid $(pidof dhcpd)), sending TERM" >>"$out"
+        kill $(pidof dhcpd) >>"$out" 2>&1; wait_down 5
+        [ "$(dhcpd_running)" = 1 ] && { kill -9 $(pidof dhcpd) >>"$out" 2>&1; wait_down 3; }
+        txt="dhcpd stopped (process outside the service ended)"
+      fi
+      [ "$(dhcpd_running)" = 1 ] && { res=failed; txt="dhcpd still running: $(grep -v '^$' "$out" | tail -1)"; } ;;
     start|restart)
       rm -f "$STATE_DIR/admin_stopped"
       local tcmd; tcmd="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; tcmd=$(allowed "$tcmd" "${ALLOWED_TEST_CMDS[@]}")
