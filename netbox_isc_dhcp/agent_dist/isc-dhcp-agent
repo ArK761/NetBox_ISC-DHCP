@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.12.2"
+AGENT_VERSION="1.12.3"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -158,16 +158,25 @@ svc_why() {  # short reason from the unit journal why the service is not active 
   echo "$l$hint" | cut -c1-290
 }
 
-dedupe_dhcpd() {  # two or more IPv4 dhcpd at once (e.g. two restarts at the same moment) answer clients twice: keep one
-  local pids keep pf p n; pids=$(dhcpd4_pids); n=$(echo "$pids" | grep -c .)
+dedupe_dhcpd() {  # two or more IPv4 dhcpd at once (e.g. two restarts at the same moment): end ALL, start ONE clean through the service
+  local pids n pfs i; pids=$(dhcpd4_pids); n=$(echo "$pids" | grep -c .)
   [ "$n" -gt 1 ] || return 0
-  for pf in $(dhcpd_pidfiles); do p=$(cat "$pf" 2>/dev/null); echo "$pids" | grep -qx "$p" && { keep=$p; break; }; done
-  [ -z "$keep" ] && keep=$(for p in $pids; do echo "$(stat -c %Y /proc/"$p" 2>/dev/null) $p"; done | sort -n | tail -1 | awk '{print $2}')
-  log "$n dhcpd processes run at once ($(echo $pids)) - keeping $keep (pidfile/newest), ending the others"
-  for p in $pids; do [ "$p" = "$keep" ] || kill "$p" 2>/dev/null; done; sleep 2
-  for p in $pids; do [ "$p" = "$keep" ] || { kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null; }; done
-  log "dhcpd PID: $(echo $pids) -> $(echo $(dhcpd4_pids))  (duplicate ended)"
-  DUP_FIXED="$n dhcpd processes ran at once ($(echo $pids)), kept $keep"
+  [ "${DEDUPE_BUSY:-}" = 1 ] && return 0
+  DEDUPE_BUSY=1; pfs=$(dhcpd_pidfiles)
+  log "$n dhcpd processes run at once ($(echo $pids)) - ending ALL and starting one clean"
+  kill $pids 2>/dev/null; i=0
+  while [ $i -lt 5 ] && [ -n "$(dhcpd4_pids)" ]; do sleep 1; i=$((i+1)); done
+  [ -n "$(dhcpd4_pids)" ] && kill -9 $(dhcpd4_pids) 2>/dev/null; sleep 1
+  clean_stale_pidfile /dev/null $pfs
+  command -v systemctl >/dev/null 2>&1 && systemctl reset-failed "$DHCP_SERVICE" 2>/dev/null
+  if [ "$(state admin_stopped)" = 1 ]; then
+    log "dhcpd PID: $(echo $pids) -> none  (all ended, stays down: stopped from NetBox)"
+  else
+    mark_agent; svc start >/dev/null 2>&1; sleep "$START_WAIT"
+    log "dhcpd PID: $(echo $pids) -> $(echo $(dhcpd4_pids))  (all ended, one started)"
+  fi
+  DUP_FIXED="$n dhcpd processes ran at once ($(echo $pids)) - all ended, now: $(echo $(dhcpd4_pids))"
+  DEDUPE_BUSY=""
 }
 
 diag() {  # full check when something is not OK: last NetBox command, service, every dhcpd process, pidfile, service error
