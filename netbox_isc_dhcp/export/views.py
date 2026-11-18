@@ -18,18 +18,62 @@ from . import audit, build
 from .models import ExportFile
 
 
+def key_hash(key):
+    import hashlib
+
+    return hashlib.sha256(key.encode()).hexdigest()[:16] if key else ""
+
+
 def _key_ok(request):
-    """The agent key from CFG pluginu (Authorization: Token <key>); no key generated yet = not required."""
+    """Agent key (Authorization: Token <key>). The new key always works; the previous one (or no key, '-') works too
+    until every server switched. request._isc_key = "new" | "old" | ""."""
     import hmac
 
     from ..models import settings_obj
 
     st = settings_obj()
-    key = (st.agent_key if st else "") or ""
+    key, old = ((st.agent_key, st.agent_key_old) if st else ("", "")) or ("", "")
+    request._isc_key = ""
     if not key:
         return True
     parts = request.headers.get("Authorization", "").split(" ", 1)
-    return len(parts) == 2 and parts[0].lower() in ("token", "bearer") and hmac.compare_digest(parts[1].strip(), key)
+    sent = parts[1].strip() if len(parts) == 2 and parts[0].lower() in ("token", "bearer") else ""
+    if sent and hmac.compare_digest(sent, key):
+        request._isc_key = "new"
+        return True
+    if old == "-" and not sent:
+        request._isc_key = "old"
+        return True
+    if old and old != "-" and sent and hmac.compare_digest(sent, old):
+        request._isc_key = "old"
+        return True
+    return False
+
+
+def _key_progress(request, server, info):
+    """Key change: hand the new key to an agent that still uses the old one; when every seen server uses the new one,
+    the old key is deleted (audit)."""
+    from ..models import settings_obj
+    from .agent import enabled_servers
+    from .models import AuditEvent
+
+    st = settings_obj()
+    if not st or not st.agent_key or server is None:
+        return
+    used = getattr(request, "_isc_key", "")
+    if used == "old":
+        info["key"] = st.agent_key  # the agent tests it and saves it
+        return
+    if used != "new":
+        return
+    h = key_hash(st.agent_key)
+    if server.key_hash != h:
+        server.key_hash = h
+        server.save(update_fields=["key_hash"])
+    if st.agent_key_old and all(s.key_hash == h for s in enabled_servers() if s.last_seen):
+        type(st).objects.filter(pk=st.pk).update(agent_key_old="")
+        AuditEvent.objects.create(time=timezone.now(), kind="admin", cause=t("aud.key_switched"),
+                                  changes=[{"path": "agent_key_old", "action": "delete", "old": "***", "new": ""}])
 
 
 def _client_allowed(request):
@@ -213,9 +257,15 @@ class ServersInlineView(LoginRequiredMixin, View):
         elif action == "first" and srv:  # only one server can be first; others keep their relative order
             from .agent import first_server, isc_mismatch
 
+            from .agent import first_block
+
             cur = first_server()
             if isc_mismatch() and cur is not None and cur.pk != srv.pk:
                 messages.error(request, t("srv.err_first_isc"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            why = first_block(srv)
+            if why:
+                messages.error(request, t("srv.first_no", why=t(why)))
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]  # list order (pk) never changes
             for i, x in enumerate([srv] + rest, 1):
@@ -229,19 +279,27 @@ class ServersInlineView(LoginRequiredMixin, View):
             srv.released_hash = build.manifest_hash()
             srv.save(update_fields=["released_hash"])
             log = [("release", "", srv.name)]
-        elif action == "key_new":  # new agent API key (the old one stops working at once)
+        elif action == "key_new":  # new agent API key; the old one stays valid until every server switched
             import secrets
 
             st = _st()
-            had = bool(st.agent_key)
+            if st.agent_key and st.agent_key_old:
+                messages.error(request, t("srv.key_busy"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            st.agent_key_old = st.agent_key or "-"
             st.agent_key = secrets.token_hex(20)
-            st.save(update_fields=["agent_key"])
-            log = [("agent_key", "***" if had else "", "*** (" + st.agent_key[-4:] + ")")]
+            st.save(update_fields=["agent_key", "agent_key_old"])
+            log = [("agent_key", "***" if st.agent_key_old != "-" else "", "*** (" + st.agent_key[-4:] + ")")]
+        elif action == "key_finish":  # stop accepting the old key now
+            st = _st()
+            log = [("agent_key_old", "***", "")] if st.agent_key_old else []
+            st.agent_key_old = ""
+            st.save(update_fields=["agent_key_old"])
         elif action == "key_del":
             st = _st()
             log = [("agent_key", "***", "")] if st.agent_key else []
-            st.agent_key = ""
-            st.save(update_fields=["agent_key"])
+            st.agent_key, st.agent_key_old = "", ""
+            st.save(update_fields=["agent_key", "agent_key_old"])
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""
@@ -337,6 +395,7 @@ class PlanView(View):
 
         if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
             return reply([], {"error": "dhcpd.conf is not generated"}, status=409)
+        _key_progress(request, server, info)
         reason, names = gate(server, mh)
         if reason:
             return reply([], {"wait": reason, "wait_for": ",".join(names)})
@@ -351,7 +410,8 @@ class PlanView(View):
         if steps:
             AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
                                       user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,
-                                      cause=t("aud.plan_" + mode, n=len(steps)) + (f" · {ver.label}" if ver else ""),
+                                      cause=t("aud.plan_dl", cfg=ver.label if ver else "", n=sum(1 for x in steps if x["op"] == "download"),
+                                            d=sum(1 for x in steps if x["op"] == "delete")),
                                       changes=[{"path": x.get("path") or x.get("cmd") or ", ".join(x.get("paths", [])) or x.get("url", ""), "action": x["op"]} for x in steps])
         return reply(steps)
 

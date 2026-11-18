@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.2.1"
+AGENT_VERSION="1.3.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -235,11 +235,12 @@ contact() {
   local redir="${code#* }"; code="${code%% *}"
   if [ "$url" != "$NETBOX_URL" ]; then NETBOX_URL="$url"; save_url "$url"; fi
   DL_PATH=(); DL_SHA=(); DL_URL=(); BACKUP_PATHS=(); DELETES=(); DIRS=()
-  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""
+  TEST_CMD=""; RESTART_CMD=""; REPORT_URL=""; BACKUP_TO=""; HASH=""; CFG=""; WAIT=""; ERR=""; CONF_DIR=""; BASE=""; NEWKEY=""
   local key a b c
   while IFS=$'\t' read -r key a b c; do
     case "$key" in
       interval) [[ "$a" =~ ^[0-9]+$ ]] && INTERVAL="$a" ;;
+      key) NEWKEY="$a" ;;
       hash) HASH="$a" ;; cfg) CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
       backup) BACKUP_TO="$a"; IFS=$'\t' read -r -a BACKUP_PATHS <<<"$b${c:+	$c}" ;;
@@ -256,10 +257,24 @@ contact() {
     esac
     return 1
   fi
+  if [ -n "$NEWKEY" ] && [ "$NEWKEY" != "$NETBOX_TOKEN" ]; then  # key change in NetBox: test the new key, then keep it
+    local tc
+    tc=$(curl -sS "${CURL_OPTS[@]}" -H "Authorization: Token $NEWKEY" --max-time 60 -o /dev/null -w '%{http_code}' "${NETBOX_URL}?format=text" 2>/dev/null)
+    if [ "$tc" = 200 ]; then
+      conf_set NETBOX_TOKEN "$NEWKEY" >/dev/null && NETBOX_TOKEN="$NEWKEY" && AUTH=(-H "Authorization: Token $NETBOX_TOKEN")
+      log "new API key received from NetBox, tested OK and saved"
+    else
+      log "new API key from NetBox did not work (HTTP $tc) - keeping the old one"
+    fi
+  fi
   [ ${#DIRS[@]} -gt 0 ] && printf '%s\n' "${DIRS[@]}" >"$STATE_DIR/dirs"
   for f in "${DL_PATH[@]}"; do [ "$(dirname "$f")" = "$CONF_DIR" ] && echo "$f" >"$STATE_DIR/conf"; done
   [ -z "$(state conf)" ] && [ -n "$CONF_DIR" ] && echo "$CONF_DIR/dhcpd.conf" >"$STATE_DIR/conf"
-  if [ -n "$WAIT" ]; then log "waiting ($WAIT) CFG $CFG"; return 0; fi
+  if [ -n "$WAIT" ]; then  # log only when the reason changes (no line every interval)
+    [ "$WAIT $CFG" != "${LAST_WAIT:-}" ] && log "waiting ($WAIT) CFG $CFG"
+    LAST_WAIT="$WAIT $CFG"; return 0
+  fi
+  LAST_WAIT=""
   if [ ${#DL_PATH[@]} -eq 0 ] && [ ${#DELETES[@]} -eq 0 ]; then return 0; fi
   [ "$(isc_version)" = none ] && { log "ISC dhcpd is not installed - plan ignored"; return 0; }
   log "CFG $CFG: ${#DL_PATH[@]} to download, ${#DELETES[@]} to delete"

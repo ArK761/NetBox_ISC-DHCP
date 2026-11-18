@@ -66,18 +66,6 @@
     <h5 class="card-header"><i class="mdi mdi-server-network me-1"></i>{% tr "srv.title" %}</h5>
     <div class="card-body pb-2"><div class="small text-success"><i class="mdi mdi-information-outline"></i> {% tr "srv.hint" %}</div>
       <div class="small text-muted mt-1"><i class="mdi mdi-robot-outline"></i> {{ agent_hint }}</div>
-      <div class="border rounded p-2 mt-2" id="isc-agent-key">
-        <div class="d-flex flex-wrap gap-2 align-items-center"><i class="mdi mdi-key-variant"></i><strong class="small">{% tr "srv.key" %}:</strong>
-          {% if object.agent_key %}<details class="ie"><summary title="{% tr 'srv.key_show' %}"><code>••••••••••••{{ object.agent_key|slice:"-4:" }}</code> <i class="mdi mdi-eye-outline text-muted"></i></summary><code class="user-select-all">{{ object.agent_key }}</code></details>
-          {% else %}<span class="text-warning small">{% tr "srv.key_none" %}</span>{% endif %}
-          <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return {% if object.agent_key %}confirm('{% tr 'srv.key_confirm' %}'){% else %}true{% endif %}">{% csrf_token %}<input type="hidden" name="field" value="key_new">
-            <button class="btn btn-sm btn-outline-primary py-0"><i class="mdi mdi-refresh"></i> {% if object.agent_key %}{% tr "srv.key_regen" %}{% else %}{% tr "srv.key_gen" %}{% endif %}</button></form>
-          {% if object.agent_key %}<form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return confirm('{% tr 'srv.key_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="key_del">
-            <button class="btn btn-sm btn-outline-danger py-0"><i class="mdi mdi-key-remove"></i> {% tr "srv.key_del" %}</button></form>{% endif %}</div>
-        <div class="small text-muted mt-1">{% tr "srv.key_hint" %}</div>
-        <div class="small mt-1">{% tr "srv.api_url" %}: <code class="user-select-all">{{ agent_api_url }}</code></div>
-        {% if object.agent_key %}<details class="small mt-1"><summary>{% tr "srv.install_cmd" %}</summary><code class="user-select-all d-block p-2 mt-1" style="white-space:pre-wrap;word-break:break-all">curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/claude/skeleton-pool-planner/agent/install.sh | sudo bash -s -- --url {{ agent_api_url }} --token {{ object.agent_key }}</code></details>{% endif %}
-      </div>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center mt-2" id="isc-agent-mode">{% csrf_token %}<input type="hidden" name="field" value="mode">
         <strong class="small">{% tr "srv.mode" %}:</strong>
         <select name="value" class="form-select form-select-sm" style="max-width:20rem" onchange="this.form.submit()">
@@ -108,13 +96,40 @@
         <i class="mdi mdi-timer-outline"></i><span class="small fw-semibold text-nowrap">{% tr "srv.interval" %}</span>
         <select name="value" class="form-select form-select-sm" style="width:7.5rem" onchange="this.form.submit()">{% for v, l in intervals %}<option value="{{ v }}"{% if object.agent_interval == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>
       <span class="small text-muted" title="{% tr 'srv.cfg_hint' %}"><i class="mdi mdi-tag-outline"></i> {% tr "srv.current_cfg" %} <span class="isc-chip green ms-1">{{ current_label|default:"—" }}</span></span>
+      <span class="small d-flex flex-wrap align-items-center gap-2" id="isc-agent-key"><i class="mdi mdi-key-variant"></i><span class="fw-semibold">{% tr "srv.key" %}</span>
+        {% if object.agent_key %}<code id="isc-key-mask" class="isc-chip">••••{{ object.agent_key|slice:"-4:" }}</code>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="iscCopy('{{ object.agent_key }}', this)" title="{% tr 'srv.copy' %}"><i class="mdi mdi-content-copy"></i> {% tr "srv.copy" %}</button>
+        {% else %}<span class="text-warning">{% tr "srv.key_none_short" %}</span>{% endif %}
+        <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return {% if object.agent_key %}confirm('{% tr 'srv.key_confirm' %}'){% else %}true{% endif %}">{% csrf_token %}<input type="hidden" name="field" value="key_new">
+          <button class="btn btn-sm btn-outline-primary py-0"{% if object.agent_key and object.agent_key_old %} disabled title="{% tr 'srv.key_busy' %}"{% endif %}><i class="mdi mdi-refresh"></i> {% if object.agent_key %}{% tr "srv.key_regen" %}{% else %}{% tr "srv.key_gen" %}{% endif %}</button></form>
+        {% if object.agent_key %}<form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return confirm('{% tr 'srv.key_del_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="key_del">
+          <button class="btn btn-sm btn-outline-danger py-0" title="{% tr 'srv.key_del' %}"><i class="mdi mdi-key-remove"></i></button></form>{% endif %}
+      </span>
     </div>
+    {% if object.agent_key and object.agent_key_old %}<div class="small text-warning px-3 py-1"><i class="mdi mdi-swap-horizontal"></i> {% tr "srv.key_switching" %}
+      {% for x in servers %}{% if x.key_pending %}<span class="isc-chip yellow">{{ x.s.name }}</span>{% endif %}{% endfor %}
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-inline m-0" onsubmit="return confirm('{% tr 'srv.key_finish_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="key_finish">
+        <button class="btn btn-sm btn-outline-warning py-0 ms-2">{% tr "srv.key_finish" %}</button></form></div>{% endif %}
+    <div class="small px-3 pb-2 text-muted"><i class="mdi mdi-link-variant"></i> {% tr "srv.api_url" %}: <code>{{ agent_api_url }}</code>
+      <button type="button" class="btn btn-sm btn-link py-0" onclick="iscCopy('{{ agent_api_url }}', this)"><i class="mdi mdi-content-copy"></i> {% tr "srv.copy" %}</button>
+      {% if object.agent_key %}<details class="d-inline-block ms-2"><summary>{% tr "srv.install_cmd" %}</summary>
+        <div class="d-flex gap-2 align-items-start mt-1"><code class="d-block p-2" style="white-space:pre-wrap;word-break:break-all;max-width:60rem">curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/claude/skeleton-pool-planner/agent/install.sh | sudo bash -s -- --url {{ agent_api_url }} --token {{ object.agent_key }}</code>
+        <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="iscCopy(this.previousElementSibling.textContent, this)"><i class="mdi mdi-content-copy"></i></button></div></details>{% endif %}
+      <div>{% tr "srv.key_hint" %}</div></div>
+    <script>
+      function iscCopy(text, btn) {
+        var done = function () { var o = btn.innerHTML; btn.innerHTML = '<i class="mdi mdi-check"></i> {% tr "srv.copied" %}'; setTimeout(function () { btn.innerHTML = o; }, 1500); };
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
+        var t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+        try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(t);
+      }
+    </script>
     <table class="table mb-0 isc-srvt">
       <thead><tr><th style="width:2.5rem">#</th><th style="width:4rem">{% tr "srv.first" %}</th><th>{% tr "srv.col_server" %}</th><th>{% tr "srv.col_agent" %}</th><th>CFG</th><th style="width:5rem">{% tr "hosts.col_enabled" %}</th><th style="width:3rem"></th></tr></thead>
       {% for x in servers %}<tr class="isc-srv{% if not x.s.enabled %} off{% endif %}">
         <td><span class="badge {% if x.s.pk == first_pk %}text-bg-primary{% else %}text-bg-secondary{% endif %}">{{ forloop.counter }}</span></td>
         <td><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="first"><input type="hidden" name="pk" value="{{ x.s.pk }}">
-          <label class="form-check form-switch m-0" title="{% tr 'srv.first_hint' %}"><input class="form-check-input" type="checkbox"{% if x.s.pk == first_pk %} checked disabled{% elif isc_lock %} disabled title="{% tr 'srv.err_first_isc' %}"{% endif %} onchange="this.form.submit()"></label></form></td>
+          <label class="form-check form-switch m-0" title="{% tr 'srv.first_hint' %}"><input class="form-check-input" type="checkbox"{% if x.s.pk == first_pk %} checked disabled{% elif isc_lock %} disabled title="{% tr 'srv.err_first_isc' %}"{% elif x.first_why %} disabled title="{{ x.first_why }}"{% endif %} onchange="this.form.submit()"></label></form></td>
         <td><details class="ie"><summary title="{% tr 'lbl.click_edit' %}"><span class="srv-name">{{ x.s.name }}</span> <i class="mdi mdi-pencil-outline text-muted small"></i>
             <div class="small mt-1"><code>{{ x.s.address }}</code>{% if x.ips %}{% for ip in x.ips %}{% if ip != x.s.address %} <span class="text-muted">→</span> <code>{{ ip }}</code>{% endif %}{% endfor %}{% else %} <span class="text-danger"><i class="mdi mdi-alert-circle-outline"></i> {% tr "srv.unresolved" %}</span>{% endif %}</div></summary>
           <form method="post" action="{{ srv_url }}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="field" value="edit"><input type="hidden" name="pk" value="{{ x.s.pk }}">
@@ -122,8 +137,8 @@
             <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></form></details></td>
         <td class="small">{% if x.s.last_seen %}<div><span class="isc-dot {% if x.stale %}bad{% else %}ok{% endif %}"></span><strong>{% if x.stale %}{% tr "srv.silent" %}{% else %}{% tr "srv.online" %}{% endif %}</strong> <span class="text-muted">· {{ x.ago }}</span></div>
             <div class="mt-1">{% if x.s.isc_version == "none" %}<span class="isc-chip red">{% tr "srv.isc_none" %}</span>{% elif x.s.isc_version %}<span class="isc-chip {% if isc_lock %}red{% else %}green{% endif %}">ISC {{ x.s.isc_version }}</span>{% endif %}
-              {% if x.s.dhcpd_running is True %}<span class="isc-chip green">dhcpd ✓</span>{% elif x.s.dhcpd_running is False %}<span class="isc-chip red">{% tr "srv.dhcpd_down" %}</span>{% endif %}
-              {% if x.s.agent_version %}<span class="isc-chip">agent {{ x.s.agent_version }}</span>{% endif %}</div>
+              {% if x.s.isc_version == "none" %}{% elif x.s.dhcpd_running is True %}<span class="isc-chip green">dhcpd ✓</span>{% elif x.s.dhcpd_running is False %}<span class="isc-chip red">{% tr "srv.dhcpd_down" %}</span>{% endif %}
+              {% if x.s.agent_version %}<span class="isc-chip">agent {{ x.s.agent_version }}</span>{% endif %}{% if x.key_pending %}<span class="isc-chip yellow" title="{% tr 'srv.key_switching' %}"><i class="mdi mdi-key-variant"></i> {% tr "srv.key_old_used" %}</span>{% endif %}</div>
           {% else %}<span class="isc-dot none"></span><span class="text-muted">{% tr "srv.never_seen" %}</span>{% endif %}</td>
         <td class="small">{% if x.run_label %}<div>{% tr "srv.runs" %} <code class="{% if x.run_ok %}text-success{% else %}text-danger{% endif %}">{{ x.run_label }}</code>{% if x.run_ok %} <i class="mdi mdi-check text-success"></i>{% endif %}</div>{% endif %}
           {% if x.s.last_report %}<div class="mt-1"><span class="isc-chip {% if x.s.last_result == 'ok' %}green{% else %}red{% endif %}">{{ x.s.last_result }}</span><span class="text-muted">{{ x.s.last_report|date:"d.m. H:i" }}</span></div>{% elif not x.run_label %}<span class="text-muted">—</span>{% endif %}

@@ -147,7 +147,8 @@ def _server_rows():
     from .export.servers import resolve
 
     from .export import build, versions
-    from .export.agent import gate, stale
+    from .export.agent import first_block, gate, stale
+    from .export.views import key_hash
     from .models import settings_obj
 
     st = settings_obj()
@@ -160,7 +161,9 @@ def _server_rows():
         ips, err = resolve(srv.address)
         reason, names = gate(srv, mh) if srv.enabled else ("", [])
         wait = t(f"srv.wait_{reason}", names=", ".join(names)) if reason else ""
-        out.append({"s": srv, "ips": ips, "err": err, "wait": wait, "reason": reason, "names": names,
+        fb = first_block(srv)
+        out.append({"s": srv, "ips": ips, "err": err, "wait": wait, "reason": reason, "names": names, "first_why": t(fb) if fb else "",
+                    "key_pending": bool(st and st.agent_key and st.agent_key_old and srv.enabled and srv.last_seen and srv.key_hash != key_hash(st.agent_key)),
                     "stale": srv.enabled and srv.last_seen is not None and stale(srv, interval),
                     "ago": _ago(srv.last_seen) if srv.last_seen else "",
                     "run_label": lab.get(srv.running_hash, srv.running_hash[:12]) if srv.running_hash else "",

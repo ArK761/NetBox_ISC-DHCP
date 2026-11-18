@@ -159,36 +159,47 @@ def parse_have(text: str) -> dict:
 
 
 def heartbeat(server, request, data):
-    """Store what the agent says about itself; audit only what changed."""
-    from . import audit
+    """Store what the agent says about itself; audit what changed, in plain words."""
+    from ..i18n import t
+    from . import audit, versions
     from .models import AuditEvent
 
     if server is None:
         return
-    new = {
-        "agent_version": str(data.get("agent", ""))[:50],
-        "isc_version": str(data.get("isc", ""))[:100],
-        "running_hash": str(data.get("running", ""))[:64],
-    }
+    agent = str(data.get("agent", ""))[:50]
+    isc = str(data.get("isc", ""))[:100]
+    running = str(data.get("running", ""))[:64]
     run = data.get("dhcpd")
-    new_running = None if run in (None, "") else str(run) in ("1", "true", "yes")
-    changes = []
-    for k, v in new.items():
+    dhcpd = None if run in (None, "") else str(run) in ("1", "true", "yes")
+    first = server.last_seen is None
+    msgs, changes = [], []
+    if first:
+        msgs.append(t("aud.ag_first", v=agent or "?"))
+    elif agent and agent != server.agent_version:
+        msgs.append(t("aud.ag_updated", old=server.agent_version or "?", new=agent))
+    if isc and isc != server.isc_version or (first and isc):
+        if isc == "none":
+            msgs.append(t("aud.ag_isc_none"))
+        elif server.isc_version in ("", "none"):
+            msgs.append(t("aud.ag_isc_new", v=isc))
+        else:
+            msgs.append(t("aud.ag_isc_changed", old=server.isc_version, new=isc))
+    if isc != "none" and dhcpd is not None and (dhcpd != server.dhcpd_running or first or server.isc_version in ("", "none")):
+        msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
+    if running and running != server.running_hash:
+        msgs.append(t("aud.ag_runs", cfg=versions.label(running)))
+    for k, v in (("agent_version", agent), ("isc_version", isc), ("running_hash", running)):
         if v and v != getattr(server, k):
             changes.append({"path": k, "action": "update", "old": getattr(server, k), "new": v})
             setattr(server, k, v)
-    if new_running is not None and new_running != server.dhcpd_running:
-        changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(new_running)})
-        server.dhcpd_running = new_running
-    first_contact = server.last_seen is None
+    if dhcpd is not None and dhcpd != server.dhcpd_running:
+        changes.append({"path": "dhcpd_running", "action": "update", "old": str(server.dhcpd_running), "new": str(dhcpd)})
+        server.dhcpd_running = dhcpd
     server.last_seen = timezone.now()
     server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen"])
-    if changes or first_contact:
-        from ..i18n import t
-
+    if msgs:
         AuditEvent.objects.create(time=server.last_seen, kind="agent", server=server.name, client_ip=audit.client_ip(request),
-                                  manifest_hash=new["running_hash"], cause=t("aud.agent_first") if first_contact else t("aud.agent_state"),
-                                  changes=changes)
+                                  manifest_hash=running, cause="; ".join(msgs), changes=changes)
 
 
 def stale(server, interval) -> bool:
@@ -196,3 +207,19 @@ def stale(server, interval) -> bool:
     if server.last_seen is None:
         return True
     return (timezone.now() - server.last_seen).total_seconds() > 3 * max(interval, 10) + 30
+
+
+def first_block(server):
+    """Why this server cannot become First (i18n key) or "": agent online and ISC installed are required."""
+    from ..models import settings_obj
+
+    st = settings_obj()
+    if not server.enabled:
+        return "srv.fb_off"
+    if server.last_seen is None:
+        return "srv.never_seen"
+    if stale(server, st.agent_interval if st else 60):
+        return "srv.silent"
+    if server.isc_version in ("", "none"):
+        return "srv.isc_none"
+    return ""
