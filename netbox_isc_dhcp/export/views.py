@@ -304,11 +304,6 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_key_old", "***", "")] if st.agent_key_old else []
             st.agent_key_old = ""
             st.save(update_fields=["agent_key_old"])
-        elif action == "key_del":
-            st = _st()
-            log = [("agent_key", "***", "")] if st.agent_key else []
-            st.agent_key, st.agent_key_old = "", ""
-            st.save(update_fields=["agent_key", "agent_key_old"])
         elif action == "retry" and srv:  # the current set failed here; admin fixed the server -> send it again
             log = [("retry " + srv.name, srv.last_result, "")]
             srv.last_result = ""

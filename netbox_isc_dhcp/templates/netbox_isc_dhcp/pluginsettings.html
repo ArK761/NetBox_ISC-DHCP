@@ -102,8 +102,7 @@
         {% else %}<span class="text-warning">{% tr "srv.key_none_short" %}</span>{% endif %}
         <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return {% if object.agent_key %}confirm('{% tr 'srv.key_confirm' %}'){% else %}true{% endif %}">{% csrf_token %}<input type="hidden" name="field" value="key_new">
           <button class="btn btn-sm btn-outline-primary py-0"{% if object.agent_key and object.agent_key_old %} disabled title="{% tr 'srv.key_busy' %}"{% endif %}><i class="mdi mdi-refresh"></i> {% if object.agent_key %}{% tr "srv.key_regen" %}{% else %}{% tr "srv.key_gen" %}{% endif %}</button></form>
-        {% if object.agent_key %}<form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return confirm('{% tr 'srv.key_del_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="key_del">
-          <button class="btn btn-sm btn-outline-danger py-0" title="{% tr 'srv.key_del' %}"><i class="mdi mdi-key-remove"></i></button></form>{% endif %}
+
       </span>
     </div>
     {% if object.agent_key and object.agent_key_old %}<div class="small text-warning px-3 py-1"><i class="mdi mdi-swap-horizontal"></i> {% tr "srv.key_switching" %}
