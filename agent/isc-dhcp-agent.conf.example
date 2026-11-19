@@ -28,3 +28,8 @@ LOG_MAX_KB=5120
 APPARMOR_FIX=yes
 # /etc/default/isc-dhcp-server: the agent sets INTERFACESv4 (all IPv4 interfaces) and switches the IPv6 server off when wrong
 DEFAULT_FIX=yes
+# security (agent 1.14.0+)
+# addresses tried: the set NETBOX_URL (any port) -> same port other scheme -> 443 https -> 80 http; from http it tries https every hour
+ALLOW_HTTP=yes            # no = never plain http (key + CFG would travel unencrypted)
+DHCP_CONF_DIR="/etc/dhcp" # dhcpd.conf directory - fixed here, NetBox cannot change it
+ALLOWED_BASE=""           # base path of the CFG files; empty = the first one NetBox sends is pinned here, a different one is refused

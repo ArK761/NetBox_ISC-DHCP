@@ -214,6 +214,7 @@ def heartbeat(server, request, data):
     svc = "".join(c for c in str(data.get("svc", ""))[:20] if c.isalnum() or c in "-_")
     svc_why = str(data.get("svc_why", ""))[:300]
     dup = str(data.get("dup", ""))[:200]
+    insecure = str(data.get("insecure", "")) == "1"
 
     first = server.last_seen is None
     msgs, changes = [], []
@@ -263,6 +264,9 @@ def heartbeat(server, request, data):
         server.dhcpd_running = dhcpd
     if dup:
         msgs.append(t("aud.dup", txt=dup))
+    if insecure != server.agent_insecure and (insecure or server.last_seen):
+        msgs.append(t("aud.insecure") if insecure else t("aud.secure"))
+    server.agent_insecure = insecure
     fix = str(data.get("fix", ""))[:300]
     if fix:
         msgs.append(t("aud.fix", txt=fix))
@@ -280,7 +284,7 @@ def heartbeat(server, request, data):
         msgs.append(t("aud.fail_cleared"))
     server.last_seen = timezone.now()
     server.dhcpd_pid = pid if dhcpd else ""
-    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_cmd"])
+    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

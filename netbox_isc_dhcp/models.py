@@ -279,6 +279,12 @@ class PluginSettings(NetBoxModel):
     def clean(self):
         super().clean()
         errors = {f: "Must be an absolute path without spaces, quotes or '..'." for f in ("config_path", "base_path") if getattr(self, f) and not is_safe_path(getattr(self, f))}
+        if self.base_path and "base_path" not in errors:
+            from .base_config import is_system_path
+            from .i18n import t
+
+            if is_system_path(self.base_path):
+                errors["base_path"] = t("err.base_system")
         if errors:
             raise ValidationError(errors)
 

@@ -45,7 +45,7 @@
             {% if x.s.dhcpd_why and x.s.dhcpd_by == "manual" %}<div class="small {% if 'crash' in x.s.dhcpd_why or 'CRASH' in x.s.dhcpd_why %}text-danger{% else %}text-warning{% endif %}"><i class="mdi mdi-information-outline"></i> {{ x.why }}</div>{% endif %}
           {% endif %}</dd>
         <dt>{% tr "srv.k_agent" %}</dt>
-        <dd><span class="isc-chip">{{ x.s.agent_version|default:"?" }}</span>{% if x.outdated %}<span class="isc-chip yellow"><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.agent_new" %} {{ agent_latest }}</span>{% else %}<span class="text-muted">{% tr "srv.agent_current" %}</span>{% endif %}
+        <dd><span class="isc-chip">{{ x.s.agent_version|default:"?" }}</span>{% if x.s.agent_insecure %}<span class="isc-chip red" title="{% tr 'srv.insecure_hint' %}"><i class="mdi mdi-lock-open-alert-outline"></i> {% tr "srv.insecure" %}</span>{% endif %}{% if x.outdated %}<span class="isc-chip yellow"><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.agent_new" %} {{ agent_latest }}</span>{% else %}<span class="text-muted">{% tr "srv.agent_current" %}</span>{% endif %}
           {% if x.key_pending %}<span class="isc-chip yellow"><i class="mdi mdi-key-variant"></i> {% tr "srv.key_old_used" %}</span>{% endif %}</dd>
       </dl>
       {% else %}<div class="small mt-2"><span class="isc-dot none"></span><span class="text-muted">{% tr "srv.never_seen" %}</span></div>{% endif %}

@@ -115,7 +115,7 @@
       <span class="small text-muted" title="{% tr 'srv.cfg_hint' %}"><i class="mdi mdi-tag-outline"></i> {% tr "srv.current_cfg" %} <span class="isc-chip green ms-1" id="isc-cur-cfg">{{ current_label|default:"—" }}</span></span>
       <span class="small d-flex flex-wrap align-items-center gap-2" id="isc-agent-key"><i class="mdi mdi-key-variant"></i><span class="fw-semibold">{% tr "srv.key" %}</span>
         {% if object.agent_key %}<code id="isc-key-mask" class="isc-chip">••••{{ object.agent_key|slice:"-4:" }}</code>
-          <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="iscCopy('{{ object.agent_key }}', this)" title="{% tr 'srv.copy' %}"><i class="mdi mdi-content-copy"></i> {% tr "srv.copy" %}</button>
+{% if perms.netbox_isc_dhcp.change_pluginsettings %}          <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="iscCopy('{{ object.agent_key }}', this)" title="{% tr 'srv.copy' %}"><i class="mdi mdi-content-copy"></i> {% tr "srv.copy" %}</button>{% endif %}
         {% else %}<span class="text-warning">{% tr "srv.key_none_short" %}</span>{% endif %}
         <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="m-0" onsubmit="return {% if object.agent_key %}confirm('{% tr 'srv.key_confirm' %}'){% else %}true{% endif %}">{% csrf_token %}<input type="hidden" name="field" value="key_new">
           <button class="btn btn-sm btn-outline-primary py-0"{% if object.agent_key and object.agent_key_old %} disabled title="{% tr 'srv.key_busy' %}"{% endif %}><i class="mdi mdi-refresh"></i> {% if object.agent_key %}{% tr "srv.key_regen" %}{% else %}{% tr "srv.key_gen" %}{% endif %}</button></form>
@@ -128,7 +128,7 @@
         <button class="btn btn-sm btn-outline-warning py-0 ms-2">{% tr "srv.key_finish" %}</button></form></div>{% endif %}
     <div class="small px-3 pb-2 text-muted"><i class="mdi mdi-link-variant"></i> {% tr "srv.api_url" %}: <code>{{ agent_api_url }}</code>
       <button type="button" class="btn btn-sm btn-link py-0" onclick="iscCopy('{{ agent_api_url }}', this)"><i class="mdi mdi-content-copy"></i> {% tr "srv.copy" %}</button>
-      {% if object.agent_key %}<details class="d-inline-block ms-2"><summary>{% tr "srv.install_cmd" %}</summary>
+      {% if object.agent_key and perms.netbox_isc_dhcp.change_pluginsettings %}<details class="d-inline-block ms-2"><summary>{% tr "srv.install_cmd" %}</summary>
         <div class="d-flex gap-2 align-items-start mt-1"><code class="d-block p-2" style="white-space:pre-wrap;word-break:break-all;max-width:60rem">curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/claude/skeleton-pool-planner/agent/install.sh | sudo bash -s -- --url {{ agent_api_url }} --token {{ object.agent_key }}</code>
         <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="iscCopy(this.previousElementSibling.textContent, this)"><i class="mdi mdi-content-copy"></i></button></div></details>{% endif %}
       <div>{% tr "srv.key_hint" %}</div></div>

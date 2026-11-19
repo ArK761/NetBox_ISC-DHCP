@@ -81,6 +81,7 @@ class DHCPServer(models.Model):
     dhcpd_pid = models.CharField(max_length=10, blank=True, default="", help_text="PID of the running dhcpd process, as the agent reports it.")
     svc_state = models.CharField(max_length=20, blank=True, default="", help_text="State of the DHCP service as the agent reports it (active, failed, inactive...).")
     svc_why = models.CharField(max_length=300, blank=True, default="", help_text="Why the DHCP service is not active (unit journal), as the agent reports it.")
+    agent_insecure = models.BooleanField(default=False, help_text="The agent talks to NetBox over plain http (key and CFG unencrypted).")
     restart_req = models.CharField(max_length=20, blank=True, default="", help_text="Manual dhcpd restart asked in NetBox (id; the agent does it once).")
     disk_broken = models.CharField(max_length=64, blank=True, default="", help_text="Failed CFG kept on disk (debugging) - dhcpd would not start after a reboot.")
     key_hash = models.CharField(max_length=16, blank=True, default="", help_text="Short hash of the key the agent used last.")

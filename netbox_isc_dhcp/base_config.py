@@ -58,6 +58,21 @@ def is_safe_name(name: str) -> bool:
     return bool(_SAFE_NAME.match(name or ""))
 
 
+_SYSTEM_DIRS = ("/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/boot", "/root", "/proc", "/sys", "/dev", "/run",
+                "/var/run", "/var/lib/dpkg", "/var/lib/apt", "/var/spool/cron")
+
+
+def is_system_path(path: str) -> bool:
+    """A base path the agent must never write to (it runs as root): '/', one level only, or a system directory.
+    /etc/dhcp and below is allowed. Same rule as base_ok() in the agent."""
+    p = (path or "").rstrip("/")
+    if p.count("/") < 2:
+        return True
+    if p == "/etc/dhcp" or p.startswith("/etc/dhcp/"):
+        return False
+    return any(p == d or p.startswith(d + "/") for d in _SYSTEM_DIRS)
+
+
 def is_safe_path(path: str) -> bool:
     """Absolute path without '..', whitespace, quotes or characters that break dhcpd.conf."""
     return bool(path) and path.startswith("/") and ".." not in path.split("/") and not _BAD_PATH_CHARS.search(path)
