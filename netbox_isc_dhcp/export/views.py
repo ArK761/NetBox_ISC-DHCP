@@ -512,7 +512,7 @@ class PlanView(View):
             if cmd == "update":
                 from .agent import agent_script
 
-                ver, sha, _ = agent_script()
+                _aver, sha, _ = agent_script()  # not "ver": that one is the CFG number used below
                 info["agent_url"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_self" if api else "plugins:netbox_isc_dhcp:export_agent_self"))
                 info["agent_sha"] = sha
         _key_progress(request, server, info)
