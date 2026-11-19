@@ -177,8 +177,9 @@ def why_text(raw):
 
     for prefix, key in _WHY:
         if raw.startswith(prefix):
-            return t(key) + raw[len(prefix):]
-    return raw
+            raw = t(key) + raw[len(prefix):]
+            break
+    return raw.replace(" | logged in:", " | " + t("why.logged_in"))
 
 
 _SVC = (  # agent service reason (English) -> i18n key
@@ -218,6 +219,7 @@ def heartbeat(server, request, data):
 
     first = server.last_seen is None
     msgs, changes = [], []
+    manual_msg = ""
     if first:
         msgs.append(t("aud.ag_first", v=agent or "?"))
     elif agent and agent != server.agent_version:
@@ -232,8 +234,11 @@ def heartbeat(server, request, data):
     event = str(data.get("dhcpd_event", ""))[:20]  # agent_start | agent_stop | manual_start | manual_stop
     if isc != "none" and dhcpd is not None and (dhcpd != server.dhcpd_running or first or server.isc_version in ("", "none")):
         why = str(data.get("dhcpd_why", ""))[:300]
-        if event in ("manual_start", "manual_stop", "agent_start", "agent_stop"):
-            msgs.append(t("aud.ag_" + event) + (f" – {why_text(why)}" if why and event.startswith("manual") else ""))
+        by_netbox = server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart") or bool(server.restart_req)
+        if event.startswith("manual"):  # NOT through NetBox: own highlighted Audit row
+            manual_msg = t("aud.ag_" + event) + (f" – {why_text(why)}" if why else "")
+        elif event in ("agent_start", "agent_stop"):
+            msgs.append(t("aud.ag_" + event + ("_nb" if by_netbox else "_auto")))
         else:
             msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
         recent_admin = server.dhcpd_by == "admin" and server.dhcpd_since and (timezone.now() - server.dhcpd_since).total_seconds() < 600
@@ -275,7 +280,7 @@ def heartbeat(server, request, data):
             if server.svc_state not in ("", "active", "none"):
                 msgs.append(t("aud.svc_ok", svc=svc))
         else:
-            msgs.append(t("aud.svc_bad", svc=svc, why=svc_text(svc_why) or "?"))
+            msgs.append(t("aud.svc_bad", svc=svc, why=svc_text(svc_why)) if svc_why else t("aud.svc_state", svc=svc))
     if svc:
         server.svc_state, server.svc_why = svc, ("" if svc in ("active", "none") else svc_why)
     # the agent says dhcpd runs the CFG of the last (start) failure: that old "failed" is not true any more (dhcpd -t failures stay)
@@ -290,6 +295,9 @@ def heartbeat(server, request, data):
 
         if not AuditEvent.objects.filter(kind="agent", server=server.name, time__gte=server.last_seen - timedelta(hours=1)).exclude(result="refused").exists():
             msgs.append(t("aud.ag_status", state=status_text(server)))
+    if manual_msg:
+        AuditEvent.objects.create(time=server.last_seen, kind="agent", server=server.name, client_ip=audit.client_ip(request),
+                                  result="manual", manifest_hash=running, cause=manual_msg)
     if msgs:
         AuditEvent.objects.create(time=server.last_seen, kind="agent", server=server.name, client_ip=audit.client_ip(request),
                                   manifest_hash=running, cause="; ".join(msgs), changes=changes)

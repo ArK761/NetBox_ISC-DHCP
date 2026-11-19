@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.14.0"
+AGENT_VERSION="1.14.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -539,6 +539,12 @@ dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop since t
   [ "$now" = 1 ] && echo "${who}_start" || echo "${who}_stop"
 }
 
+who_on() {  # " | logged in: user (tty, from)" - who was on the server (root commands are not in the journal with a user)
+  command -v who >/dev/null 2>&1 || return 0
+  local w; w=$(who 2>/dev/null | awk '{f=$NF; if (f ~ /^\(/) {gsub(/[()]/,"",f)} else {f="local"} printf "%s%s (%s, %s)", (NR>1?", ":""), $1, $2, f}')
+  [ -n "$w" ] && printf ' | logged in: %s' "$w" | cut -c1-160
+}
+
 why_changed() {  # $1 = start|stop: what the system logged since the last contact (sudo command, systemd unit, kernel crash)
   command -v journalctl >/dev/null 2>&1 || { echo "no journal - cannot tell"; return; }
   local since; since=$(state contact_ts); since="@${since:-$(( $(date +%s) - 600 ))}"
@@ -551,7 +557,7 @@ why_changed() {  # $1 = start|stop: what the system logged since the last contac
   [ -n "$l" ] && { echo "command (sudo): $(echo "$l" | sed -E 's/.*sudo\[[0-9]+\]: *([^ ]+) *:.*COMMAND=/\1: /' | cut -c1-200)"; return; }
   if [ "$1" = stop ]; then
     l=$(journalctl -u "$DHCP_SERVICE" --since "$since" --no-pager -q 2>/dev/null | grep -E 'Stopping|Stopped|Deactivated' | tail -1)
-    [ -n "$l" ] && { echo "command: systemctl/service stop (root)"; return; }
+    [ -n "$l" ] && { echo "command: systemctl/service stop (root)$(who_on)"; return; }
     l=$(journalctl -u "$DHCP_SERVICE" --since "$since" --no-pager -q 2>/dev/null | grep -iE 'exit|fail|signal|killed' | tail -1)
     [ -n "$l" ] && { echo "crash/kill: $(echo "$l" | sed -E 's/^.{16}[^ ]+ //' | cut -c1-150)"; return; }
     l=$(journalctl --since "$since" --no-pager -q 2>/dev/null | grep -E 'dhcpd\[[0-9]+\]' | tail -1)
@@ -559,8 +565,8 @@ why_changed() {  # $1 = start|stop: what the system logged since the last contac
     echo "crash/kill (no stop command in the journal)"
   else
     l=$(journalctl -u "$DHCP_SERVICE" --since "$since" --no-pager -q 2>/dev/null | grep -E 'Starting|Started' | tail -1)
-    [ -n "$l" ] && { echo "command: systemctl/service start (root)"; return; }
-    echo "dhcpd started directly (not through the service)"
+    [ -n "$l" ] && { echo "command: systemctl/service start (root)$(who_on)"; return; }
+    echo "dhcpd started directly (not through the service)$(who_on)"
   fi
 }
 
