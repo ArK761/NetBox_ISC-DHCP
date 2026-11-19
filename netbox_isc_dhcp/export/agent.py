@@ -104,6 +104,59 @@ def gate(server, manifest_hash):
     return "", []
 
 
+AUTOSYNC_MINUTES = (5, 15, 30, 60)
+
+
+def autosync_due(server, manifest_hash):
+    """Auto CFG sync (CFG pluginu -> DHCP servery): the server runs another CFG than NetBox -> push the full CFG
+    after X minutes of mismatch or once a day at a fixed time. Never: a CFG that already failed here (the old CFG
+    stays), dhcpd stopped from NetBox, no ISC, no CFG running yet. Returns the reason text for the Audit or ""."""
+    from ..i18n import t
+    from ..models import settings_obj
+
+    if server is None:
+        return ""
+    now = timezone.now()
+    mismatch = bool(server.running_hash) and server.running_hash != manifest_hash
+    if not mismatch:
+        if server.mismatch_since:
+            server.mismatch_since = None
+            server.save(update_fields=["mismatch_since"])
+        return ""
+    if not server.mismatch_since:
+        server.mismatch_since = now
+        server.save(update_fields=["mismatch_since"])
+    st = settings_obj()
+    mode = st.agent_autosync if st else "off"
+    if mode not in ("after", "at") or server.isc_version == "none":
+        return ""
+    if server.last_result in FAILED and server.last_hash == manifest_hash:
+        return ""  # this CFG failed here: the old one stays until a fixed CFG comes
+    if server.dhcpd_by == "admin" and server.dhcpd_running is False:
+        return ""  # stopped from NetBox
+    mins = int((now - server.mismatch_since).total_seconds() // 60)
+    if mode == "after":
+        every = st.agent_autosync_min or 15
+        if mins < every or (server.autosync_last and (now - server.autosync_last).total_seconds() < every * 60):
+            return ""
+        why = t("aud.autosync_after", name=server.name, min=mins)
+    else:
+        loc = timezone.localtime(now)
+        try:
+            hh, mm = (int(x) for x in (st.agent_autosync_at or "03:00").split(":"))
+        except ValueError:
+            return ""
+        if (loc.hour, loc.minute) < (hh, mm):
+            return ""
+        if server.autosync_last and timezone.localtime(server.autosync_last).date() == loc.date():
+            return ""  # once a day
+        why = t("aud.autosync_at", name=server.name, at=st.agent_autosync_at, min=mins)
+    server.autosync_last = now
+    server.last_result = ""  # = Download again: the next plan is the full CFG
+    server.save(update_fields=["autosync_last", "last_result"])
+    return why
+
+
 def waiting_for(server, manifest_hash):
     """Kept for callers: names of servers this one waits for (staged rollout / ISC mismatch)."""
     reason, names = gate(server, manifest_hash)

@@ -19,7 +19,7 @@
         <dt>{% tr "srv.k_cfg" %}</dt>
         <dd>{% if x.run_label %}<code class="isc-cfg {% if x.run_ok %}ok{% else %}old{% endif %}">{{ x.run_label }}</code>
             {% if x.run_ok %}<span class="text-success"><i class="mdi mdi-check-circle"></i> {% tr "srv.cfg_current" %}</span>
-            {% else %}<span class="text-warning"><i class="mdi mdi-alert"></i> {% tr "srv.cfg_old" %} <code>{{ x.cur_label }}</code></span>{% endif %}
+            {% else %}<span class="text-warning"><i class="mdi mdi-alert"></i> {% tr "srv.cfg_old" %} <code>{{ x.cur_label }}</code></span>{% if x.sync_hint %} <span class="small text-muted"><i class="mdi mdi-sync"></i> {{ x.sync_hint }}</span>{% endif %}{% endif %}
           {% else %}<span class="text-muted">{% tr "srv.cfg_none" %}</span>{% endif %}</dd>
         <dt>{% tr "srv.k_last" %}</dt>
         <dd>{% if x.s.last_report %}

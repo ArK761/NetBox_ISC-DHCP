@@ -317,6 +317,22 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_keep_failed", str(st.agent_keep_failed), str(request.POST.get("value") == "1"))]
             st.agent_keep_failed = request.POST.get("value") == "1"
             st.save(update_fields=["agent_keep_failed"])
+        elif action == "autosync":  # NetBox pushes the full CFG when a server runs another CFG: off | after X min | at HH:MM
+            import re as _re
+
+            from .agent import AUTOSYNC_MINUTES
+
+            st = _st()
+            mode = request.POST.get("mode", "off")
+            mins = int(request.POST.get("minutes", "0")) if request.POST.get("minutes", "").isdigit() else st.agent_autosync_min
+            at = request.POST.get("at", "").strip() or st.agent_autosync_at
+            if mode not in ("off", "after", "at") or mins not in AUTOSYNC_MINUTES or not _re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
+                messages.error(request, t("srv.err_autosync"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            before = f"{st.agent_autosync} {st.agent_autosync_min} {st.agent_autosync_at}"
+            st.agent_autosync, st.agent_autosync_min, st.agent_autosync_at = mode, mins, at
+            st.save(update_fields=["agent_autosync", "agent_autosync_min", "agent_autosync_at"])
+            log = [("agent_autosync", before, f"{mode} {mins} {at}")]
         elif action == "bundle_min":
             st = _st()
             v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
@@ -519,6 +535,12 @@ class PlanView(View):
         reason, names = gate(server, mh)
         if reason:
             return reply([], {"wait": reason, "wait_for": ",".join(names)})
+        from .agent import autosync_due
+
+        why = autosync_due(server, mh)
+        if why:  # NetBox pushes the full CFG by itself (switch in CFG pluginu -> DHCP servery)
+            AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=audit.client_ip(request),
+                                      manifest_hash=mh, cause=why, level="info")
         if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh:
             steps = []  # export = everything, but only when the set changed since this server's last OK (no restart on every poll)
         else:

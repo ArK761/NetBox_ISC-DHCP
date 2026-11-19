@@ -100,6 +100,8 @@ class DHCPServer(models.Model):
     disk_broken = models.CharField(max_length=64, blank=True, default="", help_text="Failed CFG kept on disk (debugging) - dhcpd would not start after a reboot.")
     key_hash = models.CharField(max_length=16, blank=True, default="", help_text="Short hash of the key the agent used last.")
     released_hash = models.CharField(max_length=64, blank=True, default="", help_text="Admin let the next servers go on without this server's OK for this set.")
+    mismatch_since = models.DateTimeField(null=True, blank=True, help_text="The server runs another CFG than NetBox since.")
+    autosync_last = models.DateTimeField(null=True, blank=True, help_text="Last automatic CFG sync pushed by NetBox.")
 
     class Meta:
         app_label = "netbox_isc_dhcp"

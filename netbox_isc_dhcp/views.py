@@ -142,6 +142,23 @@ def _ago(when):
     return t("ago.d", n=n // 86400)
 
 
+def _sync_hint(srv, st, mh):
+    """Text under an older CFG: when NetBox pushes the full CFG by itself (auto CFG sync), or ""."""
+    from django.utils import timezone
+
+    from .export.agent import FAILED
+
+    if not st or st.agent_autosync not in ("after", "at") or not srv.running_hash or srv.running_hash == mh:
+        return ""
+    if srv.last_result in FAILED and srv.last_hash == mh:
+        return t("srv.autosync_failed")
+    if st.agent_autosync == "after":
+        since = srv.mismatch_since or timezone.now()
+        eta = timezone.localtime(since + __import__("datetime").timedelta(minutes=st.agent_autosync_min or 15))
+        return t("srv.autosync_eta", at=eta.strftime("%H:%M"))
+    return t("srv.autosync_eta", at=st.agent_autosync_at)
+
+
 def _server_rows():
     from django.utils import timezone
     from .export.models import DHCPServer
@@ -174,7 +191,8 @@ def _server_rows():
                     "stale": srv.enabled and srv.last_seen is not None and stale(srv, interval),
                     "ago": _ago(srv.last_seen) if srv.last_seen else "",
                     "run_label": lab.get(srv.running_hash, srv.running_hash[:12]) if srv.running_hash else "",
-                    "run_ok": srv.running_hash == mh, "cur_label": lab.get(mh, mh[:12]), "svc_why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).svc_text(srv.svc_why) if srv.svc_why else "", "why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).why_text(srv.dhcpd_why) if srv.dhcpd_why else "", "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else ""})
+                    "run_ok": srv.running_hash == mh, "cur_label": lab.get(mh, mh[:12]), "svc_why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).svc_text(srv.svc_why) if srv.svc_why else "", "why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).why_text(srv.dhcpd_why) if srv.dhcpd_why else "", "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else "",
+                    "sync_hint": _sync_hint(srv, st, mh)})
     waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}
     for r in out:
         r["blocks"] = r["s"].name in waited  # others wait for this server: admin may let them go on
@@ -227,6 +245,7 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "agent_src": _agent_src(),
           "agent_commands": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).command_rows(),
           "agent_self": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).self_rows(),
+          "autosync_minutes": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).AUTOSYNC_MINUTES,
           "bundle_choices": (1, 5, 10, 20, 50, 100),
           "agent_api_url": request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_plan")),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),

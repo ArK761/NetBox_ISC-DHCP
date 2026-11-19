@@ -79,6 +79,17 @@
         <input type="hidden" name="value" value="{% if object.agent_keep_failed %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.agent_keep_failed %} checked{% endif %} onchange="this.form.submit()">
           <span class="form-check-label small"><strong>{% tr "srv.keep_failed" %}</strong> – {% tr "srv.keep_failed_hint" %}</span></label></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3 d-flex flex-wrap align-items-center gap-2 small" id="isc-autosync">{% csrf_token %}<input type="hidden" name="field" value="autosync">
+        <strong><i class="mdi mdi-sync"></i> {% tr "srv.autosync" %}</strong>
+        <select name="mode" class="form-select form-select-sm no-ts" style="width:auto">
+          <option value="off"{% if object.agent_autosync == "off" %} selected{% endif %}>{% tr "srv.autosync_off" %}</option>
+          <option value="after"{% if object.agent_autosync == "after" %} selected{% endif %}>{% tr "srv.autosync_after" %}</option>
+          <option value="at"{% if object.agent_autosync == "at" %} selected{% endif %}>{% tr "srv.autosync_at" %}</option>
+        </select>
+        <select name="minutes" class="form-select form-select-sm no-ts" style="width:auto" title="{% tr 'srv.autosync_after' %}">{% for m in autosync_minutes %}<option value="{{ m }}"{% if object.agent_autosync_min == m %} selected{% endif %}>{{ m }} min</option>{% endfor %}</select>
+        <input type="time" name="at" value="{{ object.agent_autosync_at }}" class="form-control form-control-sm" style="width:auto" title="{% tr 'srv.autosync_at' %}">
+        <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button>
+        <span class="text-muted w-100">{% tr "srv.autosync_hint" %}</span></form>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3" id="isc-agent-cmds" style="display:grid;grid-template-columns:auto minmax(14rem,24rem) 1fr;gap:.5rem .75rem;align-items:center">{% csrf_token %}<input type="hidden" name="field" value="cmds">
         <div style="grid-column:1/-1" class="small"><strong><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</strong> – {% tr "srv.cmds_hint" %}</div>
         <label class="small">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ object.agent_test_cmd }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.test_cmd_do" %}</span>
