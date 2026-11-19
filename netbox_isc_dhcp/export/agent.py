@@ -12,7 +12,7 @@ AGENT_COMMANDS = (
     "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
     "cmd start", "cmd stop", "cmd restart", "cmd update", "agent_url", "agent_sha",
     "key", "interval", "report", "base", "dir", "conf_dir",
-    "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req",
+    "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check",
 )
 # what the agent does on its own (no command from NetBox) - shown under the list
 AGENT_SELF = ("default_fix", "apparmor", "kill_stray", "keep_up", "pidfile", "dedupe")
@@ -397,7 +397,10 @@ def heartbeat(server, request, data):
         msgs.append(t("aud.fail_cleared"))
     server.last_seen = timezone.now()
     server.dhcpd_pid = pid if dhcpd else ""
-    server.save(update_fields=["agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    dh = str(data.get("disk_hash", "")).lower()
+    if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
+        server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
+    server.save(update_fields=["disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

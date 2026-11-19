@@ -266,6 +266,13 @@ def manifest_hash():
     return hashlib.sha256("".join(f"{p} {s}\n" for p, s in rows).encode()).hexdigest()
 
 
+def check_hash(have=None):
+    """ONE control hash of the whole CFG: sha256 of the sorted lines "path sha256" (byte order).
+    The agent computes the same from the files on its disk (LC_ALL=C sort | sha256sum); equal = disk is exactly NetBox's CFG."""
+    rows = have.items() if have is not None else ExportFile.objects.values_list("path", "sha256")
+    return hashlib.sha256("".join(sorted(f"{p} {s}\n" for p, s in rows)).encode()).hexdigest()
+
+
 def manifest():
     rows = list(ExportFile.objects.order_by("area", "path").values("path", "area", "sha256", "size", "updated"))
     total = hashlib.sha256("".join(f"{r['path']} {r['sha256']}\n" for r in rows).encode()).hexdigest()

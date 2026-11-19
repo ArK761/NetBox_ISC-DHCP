@@ -516,10 +516,18 @@ class PlanView(View):
             return reply([], {"error": "dhcpd.conf is not generated"}, status=409)
         api = request.path_info.startswith("/api/")
         info["report"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_report" if api else "plugins:netbox_isc_dhcp:export_report"))
+        hash_only = False
+        want = dict(ExportFile.objects.values_list("path", "sha256"))
+        info["check"] = build.check_hash(want)  # ONE control hash: the agent sends its file list only when its disk hash differs
+        disk_hash = str((data or {}).get("disk_hash", "")).lower()
+        skipped = request.method == "POST" and str((data or {}).get("nofiles", "")) == "1"  # agent sent only its disk hash
+        if skipped and disk_hash == info["check"]:
+            have = dict(want)  # hash only and equal: the disk is exactly NetBox's CFG
         if have:  # files on the server are exactly the current set -> the agent may (re)start dhcpd itself when it is down
-            want = dict(ExportFile.objects.values_list("path", "sha256"))
             if want and all(have.get(p) == h for p, h in want.items()):
                 info["disk"] = "current"
+        if skipped and disk_hash != info["check"]:
+            hash_only = True  # hash only and different: no plan from an unknown disk, the agent asks again with its file list
         if server is not None and server.restart_req:
             info["restart_req"] = server.restart_req  # manual restart from NetBox (the agent does it once per id)
         if server is not None and server.agent_cmd:  # start | stop | restart | update, done once per id
@@ -532,6 +540,8 @@ class PlanView(View):
                 info["agent_url"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_self" if api else "plugins:netbox_isc_dhcp:export_agent_self"))
                 info["agent_sha"] = sha
         _key_progress(request, server, info)
+        if hash_only:
+            return reply([])
         reason, names = gate(server, mh)
         if reason:
             return reply([], {"wait": reason, "wait_for": ",".join(names)})

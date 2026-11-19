@@ -1,0 +1,4 @@
+{% load isc_dhcp_i18n %}<div class="small"><strong><i class="mdi mdi-pound-box-outline"></i> {% tr "srv.hash_title" %}</strong> – <span class="text-muted">{% tr "srv.hash_hint" %}</span>
+  <dl class="isc-kv mt-2 mb-0"><dt>NetBox</dt><dd><code>{{ check_hash }}</code></dd>
+  {% for x in servers %}<dt>{{ x.s.name }}</dt><dd>{% if x.disk == "ok" %}<span class="isc-chip green">✓ {% tr "srv.hash_ok" %}</span>{% elif x.disk == "bad" %}<span class="isc-chip red">✗ {% tr "srv.hash_bad" %}</span> <code class="text-muted">{{ x.s.disk_hash }}</code>{% else %}<span class="text-muted">{% tr "srv.hash_none" %}</span>{% endif %}</dd>
+  {% endfor %}</dl></div>
