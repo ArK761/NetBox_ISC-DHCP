@@ -319,6 +319,8 @@ def heartbeat(server, request, data):
     dhcpd = None if run in (None, "") else str(run) in ("1", "true", "yes")
     pid = "".join(c for c in str(data.get("dhcpd_pid", ""))[:10] if c.isdigit())
     svc = "".join(c for c in str(data.get("svc", ""))[:20] if c.isalnum() or c in "-_")
+    if svc in ("activating", "deactivating", "reloading", "refreshing"):
+        svc = ""  # a moment during a start/stop: not a state worth a warning (the next contact brings the real one)
     svc_why = str(data.get("svc_why", ""))[:300]
     dup = str(data.get("dup", ""))[:200]
     insecure = str(data.get("insecure", "")) == "1"
@@ -360,6 +362,10 @@ def heartbeat(server, request, data):
         why = str(data.get("dhcpd_why", ""))[:300]
         manual_msg = t("aud.ag_manual_restart", old=server.dhcpd_pid or "?", new=pid or "?") + (f" – {why_text(why)}" if why else "")
         server.dhcpd_since, server.dhcpd_by, server.dhcpd_why = timezone.now(), "manual", why
+    if event == "agent_restart" and isc != "none":  # the running dhcpd (new PID) was restarted by the agent: not "by hand" any more
+        pending = server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart") or bool(server.restart_req)
+        server.dhcpd_since, server.dhcpd_why = timezone.now(), ""
+        server.dhcpd_by = "admin" if pending else "agent"
     done = str(data.get("cmd_done", ""))[:200]  # <id>:<ok|failed>:<text>
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]

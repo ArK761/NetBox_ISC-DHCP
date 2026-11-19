@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.17.0"
+AGENT_VERSION="1.17.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -448,7 +448,7 @@ apply() {
   for i in "${DELETES[@]}"; do [ -n "$BASE" ] && case "$i" in "$BASE"/*) true ;; *) false ;; esac && safe_path "$i" && rm -f -- "$i" && echo "deleted $i" >>"$OUT" && nd=$((nd + 1)); done
   [ "$nd" -gt 0 ] && step delete "$nd" "deleted $nd file(s) the plugin no longer generates"
   # 7. remember + report
-  echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"
+  echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"; APPLIED=1
   log "CFG $CFG applied (${#DL_PATH[@]} files, ${#DELETES[@]} deleted, dhcpd pid $(pid_now))"
   rm -f "$STATE_DIR/want_up"; report ok "$OUT"
   # keep the newest backups only
@@ -588,14 +588,14 @@ wait_down() { local i=0; while [ $i -lt "$1" ] && [ "$(dhcpd_running)" = 1 ]; do
 
 mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
 
-dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop | manual_restart since the last contact NetBox accepted ("" = no change)
+dhcpd_event() {  # agent_start | agent_stop | agent_restart | manual_start | manual_stop | manual_restart since the last contact NetBox accepted ("" = no change)
   local now prev who pp
   now=$(dhcpd_running); prev=$(state dhcpd_prev); pp=$(state pid_prev)
   EVENT_NOW="$now"; PID_NOW=$(pid_now)
   [ -z "$prev" ] && return 0
   who=manual; [ "$(state agent_did)" = 1 ] && who=agent
   if [ "$now" = "$prev" ]; then  # still running, but another PID and not the agent's doing = restarted by hand
-    [ "$now" = 1 ] && [ "$who" = manual ] && [ -n "$pp" ] && [ -n "$PID_NOW" ] && [ "$pp" != "$PID_NOW" ] && echo manual_restart
+    [ "$now" = 1 ] && [ -n "$pp" ] && [ -n "$PID_NOW" ] && [ "$pp" != "$PID_NOW" ] && echo "${who}_restart"  # agent_restart = the agent did it (new PID is the agent's)
     return 0
   fi
   [ "$now" = 1 ] && echo "${who}_start" || echo "${who}_stop"
@@ -741,13 +741,20 @@ heal() {  # (a) manual restart asked in NetBox -> continuous retry; (b) disk = c
   fi
 }
 
+disk_files() {  # sha256sum of every CFG file on disk: dhcpd.conf + the managed dirs (editor files .* and *~ left out)
+  local f d
+  f=$(state conf); [ -n "$f" ] && [ -f "$f" ] && sha256sum "$f"
+  while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' ! -name '.*' ! -name '*~' -exec sha256sum {} +; done < <(state dirs)
+}
+
+hash_of() {  # ONE control hash from sha256sum lines ("path sha" lines, byte order) = the same as NetBox's check hash
+  sed -nE 's/^([0-9a-f]{64}) [ *](.*)$/\2 \1/p' "$1" | LC_ALL=C sort | sha256sum | cut -d' ' -f1
+}
+
 contact() {
-  local have="$WORK/have" resp="$WORK/resp" code f d
-  : >"$have"
-  f=$(state conf); [ -n "$f" ] && [ -f "$f" ] && sha256sum "$f" >>"$have"
-  while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' ! -name '.*' ! -name '*~' -exec sha256sum {} + >>"$have"; done < <(state dirs)
-  # ONE control hash of every CFG file on disk ("path sha" lines, byte order) = the same as NetBox's check hash
-  DISK_HASH=$(sed -nE 's/^([0-9a-f]{64}) [ *](.*)$/\2 \1/p' "$have" | LC_ALL=C sort | sha256sum | cut -d' ' -f1)
+  local have="$WORK/have" resp="$WORK/resp" code
+  disk_files >"$have" 2>/dev/null
+  DISK_HASH=$(hash_of "$have"); APPLIED=""
   local send="$have" nofiles=""
   if [ -n "$(state check)" ] && [ "$(state check)" = "$DISK_HASH" ]; then send="$WORK/none"; : >"$send"; nofiles=1; fi  # equal: hash only, no file list
   local url alt
@@ -860,17 +867,17 @@ contact() {
   apply
 }
 
-watch_wait() {  # sleep INTERVAL, but every 5 s look at dhcpd (PID, running) and the CFG files: a change outside the agent = contact NetBox now
-  local seen now t=0 cf; seen="$(dhcpd_running)|$(pid_now)"; touch "$STATE_DIR/watch_ts"
-  cf=$(state conf)
+watch_wait() {  # sleep INTERVAL, but every 5 s look at dhcpd (PID, running) and the control hash of the CFG files: a change outside the agent = contact NetBox now
+  local seen now t=0 base cur tmp="$STATE_DIR/watch.sha"
+  seen="$(dhcpd_running)|$(pid_now)"
+  base="${DISK_HASH:-}"  # the hash NetBox got: a file written while the agent was hashing is never missed
+  [ -n "${APPLIED:-}" ] || [ -z "$base" ] && { disk_files >"$tmp" 2>/dev/null; base=$(hash_of "$tmp"); }  # the agent itself changed the files
   while [ "$t" -lt "$INTERVAL" ]; do
     sleep 5; t=$((t + 5))
     now="$(dhcpd_running)|$(pid_now)"
     if [ "$now" != "$seen" ]; then log "dhcpd changed outside the agent (running|pid ${seen} -> ${now}) - checking CFG hash and contacting NetBox now"; return 0; fi
-    if [ -n "$({ [ -n "$cf" ] && [ -e "$cf" ] && find "$cf" -newer "$STATE_DIR/watch_ts" ! -name '.*' ! -name '*~' -print -quit
-                while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -newer "$STATE_DIR/watch_ts" ! -name '.*' ! -name '*~' ! -name '*.isc-new' -print -quit; done < <(state dirs); } 2>/dev/null | head -1)" ]; then
-      log "CFG file changed outside the agent - checking CFG hash and contacting NetBox now"; return 0
-    fi
+    disk_files >"$tmp" 2>/dev/null; cur=$(hash_of "$tmp")
+    if [ "$cur" != "$base" ]; then log "CFG files changed outside the agent (control hash ${base:0:12} -> ${cur:0:12}) - contacting NetBox now"; return 0; fi
   done
 }
 
