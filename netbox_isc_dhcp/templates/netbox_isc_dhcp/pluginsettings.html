@@ -161,6 +161,13 @@
         <input type="time" name="at" value="{{ object.agent_autosync_at }}" class="form-control form-control-sm" style="width:auto" title="{% tr 'srv.autosync_at' %}">
         <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button>
         <span class="text-muted w-100">{% tr "srv.autosync_hint" %}</span></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3 pt-3 border-top d-flex flex-wrap align-items-center gap-2 small" id="isc-leases">{% csrf_token %}<input type="hidden" name="field" value="leases">
+        <strong><i class="mdi mdi-database-clock-outline"></i> {% tr "srv.leases" %}</strong>
+        <select name="every" class="form-select form-select-sm no-ts" style="width:auto" title="{% tr 'srv.leases_every' %}">{% for v, l in leases_every %}<option value="{{ v }}"{% if object.agent_leases_every == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+        <span>{% tr "srv.leases_keep" %}</span>
+        <select name="keep" class="form-select form-select-sm no-ts" style="width:auto">{% for v in leases_keep %}<option value="{{ v }}"{% if object.agent_leases_keep == v %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+        <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button>
+        <span class="text-muted w-100">{% tr "srv.leases_hint" %}</span></form>
       <div class="mt-3 pt-3 border-top" id="isc-hash-box">{% include "netbox_isc_dhcp/_cfg_hash.html" %}</div>
     </div>
     <script>

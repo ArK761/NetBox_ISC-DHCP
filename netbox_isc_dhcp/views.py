@@ -194,7 +194,9 @@ def _server_rows():
                     "run_label": lab.get(srv.running_hash, srv.running_hash[:12]) if srv.running_hash else "",
                     "run_ok": srv.running_hash == mh, "cur_label": lab.get(mh, mh[:12]), "svc_why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).svc_text(srv.svc_why) if srv.svc_why else "", "why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).why_text(srv.dhcpd_why) if srv.dhcpd_why else "", "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else "",
                     "sync_hint": _sync_hint(srv, st, mh),
-                    "disk": ("ok" if srv.disk_hash == ck else "bad") if srv.disk_hash and srv.enabled else ""})
+                    "disk": ("ok" if srv.disk_hash == ck else "bad") if srv.disk_hash and srv.enabled else "",
+                    "leases_last": timezone.localtime(srv.leases_last).strftime("%d.%m. %H:%M") if srv.leases_last else "",
+                    "leases_old": bool(srv.leases_last and st and st.agent_leases_every and (timezone.now() - srv.leases_last).total_seconds() > st.agent_leases_every * 60 * 2 + 600)})
     waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}
     for r in out:
         r["blocks"] = r["s"].name in waited  # others wait for this server: admin may let them go on
@@ -213,7 +215,7 @@ class ServersTableView(LoginRequiredMixin, View):
         if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
             raise PermissionDenied
         return render(request, "netbox_isc_dhcp/_servers_table.html", {
-            "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "check_hash": build.check_hash(), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
+            "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "check_hash": build.check_hash(), "leases_on": bool(getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "agent_leases_every", 0)), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
             "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0], "agent_src": _agent_src()})
 
 
@@ -249,6 +251,9 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "agent_commands": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).command_rows(),
           "agent_self": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).self_rows(),
           "autosync_minutes": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).AUTOSYNC_MINUTES,
+          "leases_every": [(v, t("srv.leases_off") if v == 0 else (f"{v} min" if v < 60 else f"{v // 60} h")) for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).LEASES_EVERY],
+          "leases_keep": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).LEASES_KEEP,
+          "leases_on": bool(instance.agent_leases_every) if instance else False,
           "bundle_choices": (1, 5, 10, 20, 50, 100),
           "agent_api_url": request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_plan")),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),

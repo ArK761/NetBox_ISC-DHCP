@@ -333,6 +333,19 @@ class ServersInlineView(LoginRequiredMixin, View):
             st.agent_autosync, st.agent_autosync_min, st.agent_autosync_at = mode, mins, at
             st.save(update_fields=["agent_autosync", "agent_autosync_min", "agent_autosync_at"])
             log = [("agent_autosync", before, f"{mode} {mins} {at}")]
+        elif action == "leases":  # periodic copy of the lease database on every server: interval + copies kept
+            from .agent import LEASES_EVERY, LEASES_KEEP
+
+            st = _st()
+            ev = int(request.POST.get("every", "-1")) if request.POST.get("every", "").isdigit() else -1
+            kp = int(request.POST.get("keep", "0")) if request.POST.get("keep", "").isdigit() else 0
+            if ev not in LEASES_EVERY or kp not in LEASES_KEEP:
+                messages.error(request, t("srv.err_leases"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            before = f"{st.agent_leases_every} {st.agent_leases_keep}"
+            st.agent_leases_every, st.agent_leases_keep = ev, kp
+            st.save(update_fields=["agent_leases_every", "agent_leases_keep"])
+            log = [("agent_leases", before, f"{ev} {kp}")]
         elif action == "bundle_min":
             st = _st()
             v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
@@ -520,6 +533,13 @@ class PlanView(View):
         want = dict(ExportFile.objects.values_list("path", "sha256"))
         check = build.check_hash(want)  # ONE control hash: the agent sends its file list only when its disk hash differs
         disk_hash = str((data or {}).get("disk_hash", "")).lower()
+        if server is not None and _ver_ge(server.agent_version, (1, 18, 0)):  # older agents would log an unknown command
+            from ..base_config import is_backup_path
+            from ..models import BACKUP_DIR
+
+            bdir = st.agent_backup_dir if st and is_backup_path(st.agent_backup_dir) else BACKUP_DIR
+            every = st.agent_leases_every if st else 60
+            info["leases"] = f"{every}\t{st.agent_leases_keep if st else 72}\t{bdir.rstrip('/')}/leases"
         if disk_hash:
             info["check"] = check  # only to agents that send their disk hash (1.16.0+); older ones would log it as an unknown command
         skipped = request.method == "POST" and str((data or {}).get("nofiles", "")) == "1"  # agent sent only its disk hash
@@ -597,6 +617,14 @@ class PlanView(View):
         else:
             have = parse_have(str(files or ""))
         return self._plan(request, have, data)
+
+
+def _ver_ge(v, want):
+    """agent version string >= want tuple (unknown = False)."""
+    try:
+        return tuple(int(x) for x in str(v).split(".")[:3]) >= want
+    except ValueError:
+        return False
 
 
 @method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP

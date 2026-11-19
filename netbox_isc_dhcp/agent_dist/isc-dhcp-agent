@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.17.1"
+AGENT_VERSION="1.18.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -34,7 +34,7 @@ umask 022  # files and dirs must be readable by dhcpd (it may run as its own use
 # THE ONLY commands NetBox can send to this agent - 1:1 with the plugin (export/agent.py AGENT_COMMANDS, shown read-only
 # in CFG pluginu -> DHCP servery). Set after the config file: it cannot be extended. A line from NetBox that is not here is
 # ignored and logged as SECURITY. Test / restart run only what ALLOWED_TEST_CMDS / ALLOWED_RESTART_CMDS allow.
-AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check)
+AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases)
 BACKUP_DEFAULT="/opt/BCK"  # backups ONLY below /opt; rm -rf only there and only on the agent's own backup dirs <CFG>_<YYYYmmdd-HHMMSS>
 
 is_command() { printf '%s\n' "${AGENT_COMMANDS[@]}" | grep -qxF -- "$1"; }
@@ -753,6 +753,7 @@ hash_of() {  # ONE control hash from sha256sum lines ("path sha" lines, byte ord
 
 contact() {
   local have="$WORK/have" resp="$WORK/resp" code
+  leases_tick  # periodic copy of the lease database (settings from NetBox, stored at the last contact) - before the request, so NetBox gets the current time
   disk_files >"$have" 2>/dev/null
   DISK_HASH=$(hash_of "$have"); APPLIED=""
   local send="$have" nofiles=""
@@ -770,7 +771,7 @@ contact() {
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --connect-timeout 10 --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$send" --data-urlencode "nofiles=$nofiles" --data-urlencode "disk_hash=$DISK_HASH" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" --data-urlencode "insecure=$(case "$url" in http://*) echo 1 ;; esac)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "leases_last=$(state leases_ts)" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" --data-urlencode "insecure=$(case "$url" in http://*) echo 1 ;; esac)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
@@ -801,6 +802,9 @@ contact() {
       cmd) [[ "$b" =~ ^[A-Za-z0-9_-]{1,40}$ ]] && { CMD="$a"; CMD_ID="$b"; } ;;
       agent_url) AGENT_URL=$(rebase "$a") ;;
       agent_sha) AGENT_SHA="$a" ;;
+      leases) if [[ "$a" =~ ^[0-9]{1,5}$ ]] && [[ "$b" =~ ^[0-9]{1,4}$ ]] && [ "$b" -ge 1 ] && backup_ok "$c"; then
+                [ "$(state leases_cfg)" = "$a|$b|$c" ] || echo "$a|$b|$c" >"$STATE_DIR/leases_cfg"
+              else log "SECURITY: lease copy settings from NetBox refused (directory only below /opt): $(printf '%s' "$c" | tr -cd 'A-Za-z0-9_./-' | cut -c1-80)"; fi ;;
       check) ;;  # ONE control hash of NetBox's CFG, stored above (next contact sends the file list only when the disk differs)
       hash) [[ "$a" =~ ^[0-9a-f]{64}$ ]] && HASH="$a" ;; cfg) [[ "$a" =~ ^[0-9]{2}\.[0-9]{2}\.[0-9]{2}_[0-9]{1,6}$ ]] && CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;
@@ -867,6 +871,35 @@ contact() {
   apply
 }
 
+leases_tick() {  # copy the lease database every N minutes to <backup dir>/leases/dhcpd.leases_<time> (only below /opt), keep the newest K
+  local cfg ev kp dir now last sum name
+  cfg=$(state leases_cfg); [ -n "$cfg" ] || return 0
+  IFS='|' read -r ev kp dir <<<"$cfg"
+  [[ "$ev" =~ ^[0-9]+$ ]] && [ "$ev" -gt 0 ] || return 0
+  now=$(date +%s); last=$(state leases_ts); [[ "$last" =~ ^[0-9]+$ ]] || last=0
+  [ $((now - last)) -ge $((ev * 60)) ] || return 0
+  [ -f "$LEASES_FILE" ] && [ ! -L "$LEASES_FILE" ] || return 0
+  backup_ok "$dir" || return 0
+  mkdir -p "$dir" || return 0
+  sum=$(sha256sum "$LEASES_FILE" | cut -d' ' -f1)
+  if [ "$sum" != "$(state leases_sum)" ] || ! ls "$dir"/dhcpd.leases_* >/dev/null 2>&1; then  # unchanged = the newest copy is still current
+    name="$dir/dhcpd.leases_$(date +%Y%m%d-%H%M%S)"
+    if cp -a "$LEASES_FILE" "$name.part" && mv -f "$name.part" "$name"; then
+      echo "$sum" >"$STATE_DIR/leases_sum"; log "lease database copied -> $name"
+      prune_leases "$dir" "$kp"
+    else rm -f -- "$name.part"; log "lease database copy FAILED -> $name"; return 0; fi
+  fi
+  echo "$now" >"$STATE_DIR/leases_ts"
+}
+
+prune_leases() {  # rm ONLY its own copies dhcpd.leases_<YYYYmmdd-HHMMSS> in the lease copy dir (below /opt), newest $2 kept
+  local d="$1" k="$2" f
+  backup_ok "$d" && [[ "$k" =~ ^[0-9]+$ ]] && [ "$k" -ge 1 ] || return 0
+  ls -1t "$d" 2>/dev/null | grep -E '^dhcpd\.leases_[0-9]{8}-[0-9]{6}$' | tail -n +"$((k + 1))" | while read -r f; do
+    [ -f "$d/$f" ] && [ ! -L "$d/$f" ] && rm -f -- "$d/$f"
+  done
+}
+
 watch_wait() {  # sleep INTERVAL, but every 5 s look at dhcpd (PID, running) and the control hash of the CFG files: a change outside the agent = contact NetBox now
   local seen now t=0 base cur tmp="$STATE_DIR/watch.sha"
   seen="$(dhcpd_running)|$(pid_now)"
@@ -874,6 +907,7 @@ watch_wait() {  # sleep INTERVAL, but every 5 s look at dhcpd (PID, running) and
   [ -n "${APPLIED:-}" ] || [ -z "$base" ] && { disk_files >"$tmp" 2>/dev/null; base=$(hash_of "$tmp"); }  # the agent itself changed the files
   while [ "$t" -lt "$INTERVAL" ]; do
     sleep 5; t=$((t + 5))
+    leases_tick
     now="$(dhcpd_running)|$(pid_now)"
     if [ "$now" != "$seen" ]; then log "dhcpd changed outside the agent (running|pid ${seen} -> ${now}) - checking CFG hash and contacting NetBox now"; return 0; fi
     disk_files >"$tmp" 2>/dev/null; cur=$(hash_of "$tmp")
