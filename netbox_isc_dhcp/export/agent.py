@@ -360,7 +360,7 @@ def heartbeat(server, request, data):
             server.dhcpd_by = "admin"  # started / stopped by a button in NetBox
         else:
             server.dhcpd_by = "manual" if event.startswith("manual") else ("agent" if event.startswith("agent") else "")
-    if event == "manual_restart" and isc != "none":  # still running, new PID, not the agent: restarted by hand
+    if event == "manual_restart" and isc != "none" and not (pid and pid == server.dhcpd_pid):  # still running, new PID, not the agent: restarted by hand (same PID = already recorded)
         why = str(data.get("dhcpd_why", ""))[:300]
         manual_msg = t("aud.ag_manual_restart", old=server.dhcpd_pid or "?", new=pid or "?") + (f" – {why_text(why)}" if why else "")
         server.dhcpd_since, server.dhcpd_by, server.dhcpd_why = timezone.now(), "manual", why

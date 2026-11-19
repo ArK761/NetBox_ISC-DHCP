@@ -573,7 +573,8 @@ class PlanView(View):
         if why:  # NetBox pushes the full CFG by itself (switch in CFG pluginu -> DHCP servery)
             AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=audit.client_ip(request),
                                       manifest_hash=mh, cause=why, level="info")
-        disk_off = bool(have) and info.get("disk") != "current"  # files on the server differ from NetBox (changed by hand?)
+        # files on the server differ from NetBox (changed / missing / extra file by hand?): by the control hash when the agent sends it
+        disk_off = (disk_hash != check) if (disk_hash and have) else (bool(have) and info.get("disk") != "current")
         if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh and not disk_off:
             steps = []  # export = everything, but only when the set changed since this server's last OK (no restart on every poll)
         else:
