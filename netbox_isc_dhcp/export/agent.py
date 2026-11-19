@@ -6,6 +6,34 @@ from .models import ExportFile
 INTERVALS = (10, 30, 60, 300, 600, 1200, 1800)  # seconds, chosen in CFG pluginu -> DHCP servery
 FAILED = ("test_failed", "rolled_back", "failed")
 
+# THE ONLY commands NetBox can send to the agent - 1:1 with AGENT_COMMANDS in agent_dist/isc-dhcp-agent (test checks it).
+# Shown read-only in CFG pluginu -> DHCP servery. as_text() never writes a line that is not here; the agent ignores it anyway.
+AGENT_COMMANDS = (
+    "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
+    "cmd start", "cmd stop", "cmd restart", "cmd update", "agent_url", "agent_sha",
+    "key", "interval", "report", "base", "dir", "conf_dir",
+    "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req",
+)
+# what the agent does on its own (no command from NetBox) - shown under the list
+AGENT_SELF = ("default_fix", "apparmor", "kill_stray", "keep_up", "pidfile", "dedupe")
+
+
+def command_rows():
+    """[(command, what it does, limit on the agent side)] for the read-only list in the plugin (i18n cmd.<name>.do / .lim)."""
+    from ..i18n import t
+
+    out = []
+    for c in AGENT_COMMANDS:
+        k = c.replace(" ", "_")
+        out.append((c, t(f"cmd.{k}.do"), t(f"cmd.{k}.lim")))
+    return out
+
+
+def self_rows():
+    from ..i18n import t
+
+    return [t(f"self.{k}") for k in AGENT_SELF]
+
 
 def server_for(request):
     """DHCPServer of the client IP (or ?server=<pk> for a logged-in admin)."""
@@ -108,7 +136,9 @@ def make_plan(have: dict, server, file_url, report_url, manifest_hash, mode="pla
         return []
     conf = next((r["path"] for r in rows if r["area"] == "conf"), "")
     st = settings_obj()
-    backup = (st.agent_backup_dir if st and st.agent_backup_dir else BACKUP_DIR)
+    from ..base_config import is_backup_path
+
+    backup = st.agent_backup_dir if st and is_backup_path(st.agent_backup_dir) else BACKUP_DIR  # only below /opt
     cur = sorted({r["path"].rsplit("/", 1)[0] for r in rows if r["area"] != "conf"})
     steps = [{"op": "backup", "paths": ([conf] if conf else []) + cur, "to": backup}]
     # included files first, dhcpd.conf last: dhcpd.conf never points to a file that is not there yet
@@ -145,7 +175,12 @@ def as_text(info: dict, steps: list) -> str:
             lines.append(f"delete\t{s['path']}")
         elif op == "report":
             lines.append(f"report\t{s['url']}")
-    return "\n".join(lines) + "\n"
+
+    def allowed(line):  # only commands from AGENT_COMMANDS go out
+        key, _, rest = line.partition("\t")
+        return (f"cmd {rest.split(chr(9), 1)[0]}" if key == "cmd" else key) in AGENT_COMMANDS
+
+    return "\n".join(x for x in lines if allowed(x)) + "\n"
 
 
 def parse_have(text: str) -> dict:

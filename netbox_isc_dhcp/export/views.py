@@ -288,11 +288,11 @@ class ServersInlineView(LoginRequiredMixin, View):
                 srv.name, srv.address = name, addr
                 srv.save()
         elif action == "cmds":  # shared by all DHCP servers
-            from ..base_config import is_safe_path
+            from ..base_config import is_backup_path
 
             bdir = request.POST.get("backup_dir", "").strip()[:255]
-            if bdir and not is_safe_path(bdir):
-                messages.error(request, t("srv.err_path"))
+            if bdir and not is_backup_path(bdir):
+                messages.error(request, t("srv.err_backup"))
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             st = _st()
             before = (st.agent_test_cmd, st.agent_restart_cmd, st.agent_backup_dir)

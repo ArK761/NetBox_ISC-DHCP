@@ -53,8 +53,8 @@ elif [ -n "$URL" ]; then
 fi
 if [ -n "$TOKEN" ]; then
   if grep -q '^NETBOX_TOKEN=' "$CONF"; then sed -i "s|^NETBOX_TOKEN=.*|NETBOX_TOKEN=\"$TOKEN\"|" "$CONF"; else echo "NETBOX_TOKEN=\"$TOKEN\"" >>"$CONF"; fi
-  chmod 600 "$CONF"
 fi
+chown root:root "$CONF" 2>/dev/null; chmod 600 "$CONF"  # the key is in it: root only, always
 grep -q '^NETBOX_URL="https\?://[^"]' "$CONF" || { echo "set NETBOX_URL in $CONF, then: systemctl enable --now isc-dhcp-agent"; exit 0; }
 systemctl daemon-reload
 systemctl enable --now isc-dhcp-agent

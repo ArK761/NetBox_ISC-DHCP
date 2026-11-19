@@ -73,6 +73,15 @@ def is_system_path(path: str) -> bool:
     return any(p == d or p.startswith(d + "/") for d in _SYSTEM_DIRS)
 
 
+_BACKUP_RE = re.compile(r"^/opt/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*/?$")
+
+
+def is_backup_path(path: str) -> bool:
+    """Agent backup dir: ONLY below /opt (the agent deletes old backups there). Same rule as backup_ok() in the agent."""
+    p = (path or "").strip()
+    return bool(_BACKUP_RE.match(p)) and not any(x in (".", "..") for x in p.split("/"))
+
+
 def is_safe_path(path: str) -> bool:
     """Absolute path without '..', whitespace, quotes or characters that break dhcpd.conf."""
     return bool(path) and path.startswith("/") and ".." not in path.split("/") and not _BAD_PATH_CHARS.search(path)
