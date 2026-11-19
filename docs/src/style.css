@@ -11,3 +11,6 @@ th, td { border: 1px solid #cbd5e1; padding: 4pt 6pt; text-align: left; vertical
 th { background: #f0fdfa; }
 .note { background: #fef9c3; border-left: 4px solid #eab308; padding: 6pt 8pt; margin: 8pt 0; }
 .meta { color: #64748b; font-size: 9pt; margin-bottom: 14pt; }
+.toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4pt; padding: 6pt 10pt; margin: 0 0 12pt; font-size: 9.5pt; columns: 2; }
+.toc ol { margin: 4pt 0 0 14pt; padding: 0; }
+.toc b { column-span: all; display: block; }
