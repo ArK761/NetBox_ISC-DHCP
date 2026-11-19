@@ -518,15 +518,17 @@ class PlanView(View):
         info["report"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_report" if api else "plugins:netbox_isc_dhcp:export_report"))
         hash_only = False
         want = dict(ExportFile.objects.values_list("path", "sha256"))
-        info["check"] = build.check_hash(want)  # ONE control hash: the agent sends its file list only when its disk hash differs
+        check = build.check_hash(want)  # ONE control hash: the agent sends its file list only when its disk hash differs
         disk_hash = str((data or {}).get("disk_hash", "")).lower()
+        if disk_hash:
+            info["check"] = check  # only to agents that send their disk hash (1.16.0+); older ones would log it as an unknown command
         skipped = request.method == "POST" and str((data or {}).get("nofiles", "")) == "1"  # agent sent only its disk hash
-        if skipped and disk_hash == info["check"]:
+        if skipped and disk_hash == check:
             have = dict(want)  # hash only and equal: the disk is exactly NetBox's CFG
         if have:  # files on the server are exactly the current set -> the agent may (re)start dhcpd itself when it is down
             if want and all(have.get(p) == h for p, h in want.items()):
                 info["disk"] = "current"
-        if skipped and disk_hash != info["check"]:
+        if skipped and disk_hash != check:
             hash_only = True  # hash only and different: no plan from an unknown disk, the agent asks again with its file list
         if server is not None and server.restart_req:
             info["restart_req"] = server.restart_req  # manual restart from NetBox (the agent does it once per id)
