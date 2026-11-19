@@ -198,6 +198,24 @@ def svc_text(raw):
     return raw
 
 
+_WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto")
+_INFO = ("aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
+         "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
+
+
+def _level(msgs, failed=False):
+    """Severity of an agent Audit row from the messages it holds: warn (red) > info (yellow) > ok (green)."""
+    from ..i18n import t
+
+    def hit(keys):
+        pre = [t(k).split("{")[0] for k in keys]
+        return any(p and m.startswith(p) for m in msgs for p in pre)
+
+    if failed or hit(_WARN):
+        return "warn"
+    return "info" if hit(_INFO) else "ok"
+
+
 def heartbeat(server, request, data):
     """Store what the agent says about itself; audit what changed, in plain words."""
     from ..i18n import t
@@ -220,6 +238,7 @@ def heartbeat(server, request, data):
     first = server.last_seen is None
     msgs, changes = [], []
     manual_msg = ""
+    cmd_failed = False
     if first:
         msgs.append(t("aud.ag_first", v=agent or "?"))
     elif agent and agent != server.agent_version:
@@ -252,6 +271,7 @@ def heartbeat(server, request, data):
     done = str(data.get("cmd_done", ""))[:200]  # <id>:<ok|failed>:<text>
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]
+        cmd_failed = res != "ok"
         if res == "ok" and server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart"):
             if server.dhcpd_by != "admin":
                 server.dhcpd_since = timezone.now()
@@ -297,10 +317,10 @@ def heartbeat(server, request, data):
             msgs.append(t("aud.ag_status", state=status_text(server)))
     if manual_msg:
         AuditEvent.objects.create(time=server.last_seen, kind="agent", server=server.name, client_ip=audit.client_ip(request),
-                                  result="manual", manifest_hash=running, cause=manual_msg)
+                                  result="manual", level="warn", manifest_hash=running, cause=manual_msg)
     if msgs:
         AuditEvent.objects.create(time=server.last_seen, kind="agent", server=server.name, client_ip=audit.client_ip(request),
-                                  manifest_hash=running, cause="; ".join(msgs), changes=changes)
+                                  manifest_hash=running, cause="; ".join(msgs), changes=changes, level=_level(msgs, cmd_failed))
 
 
 def status_text(server):

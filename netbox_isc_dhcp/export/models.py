@@ -42,6 +42,7 @@ class AuditEvent(models.Model):
     duration_ms = models.PositiveIntegerField(default=0)
     manifest_hash = models.CharField(max_length=64, blank=True, default="")
     changes = models.JSONField(default=list, blank=True, help_text="[{path, action add|update|delete, old, new, diff}] or downloaded paths.")
+    level = models.CharField(max_length=8, blank=True, default="", help_text="Severity: ok (green), info (yellow), warn (red); empty = derived from kind/result.")
 
     class Meta:
         app_label = "netbox_isc_dhcp"
@@ -50,6 +51,19 @@ class AuditEvent(models.Model):
 
     def __str__(self):
         return f"{self.time:%Y-%m-%d %H:%M:%S} {self.kind}"
+
+    @property
+    def severity(self):
+        """ok (green) | info (yellow) | warn (red) - stored for agent events, derived for the rest (also old rows)."""
+        if self.level:
+            return self.level
+        if self.kind == "report":
+            return "ok" if self.result == "ok" else "warn"
+        if self.result in ("manual", "refused"):
+            return "warn"
+        if self.kind == "admin":
+            return "info"
+        return "ok"
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_isc_dhcp:audit") + f"#a{self.pk}"

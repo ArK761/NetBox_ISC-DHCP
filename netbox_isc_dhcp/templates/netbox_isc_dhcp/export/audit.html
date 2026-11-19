@@ -5,6 +5,12 @@
   .isc-aud td { vertical-align: top; }
   .isc-aud .isc-ch { font-family: var(--tblr-font-monospace, monospace); font-size: .8rem; }
   .isc-diff { background: #0d1117; color: #c9d1d9; border-radius: .35rem; padding: .4rem .6rem; font-size: .75rem; white-space: pre; overflow-x: auto; max-height: 22rem; margin: .25rem 0 .5rem; }
+  .isc-aud tr.isc-lvl-ok > td:first-child { box-shadow: inset 4px 0 0 #2fb344; }
+  .isc-aud tr.isc-lvl-info > td:first-child { box-shadow: inset 4px 0 0 #f59f00; }
+  .isc-aud tr.isc-lvl-warn > td:first-child { box-shadow: inset 4px 0 0 #d63939; }
+  .isc-aud tr.isc-lvl-warn > td { background: rgba(214, 57, 57, .07); }
+  .isc-lvl { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .03em; padding: .05rem .4rem; border-radius: .25rem; margin-right: .35rem; color: #fff; }
+  .isc-lvl.ok { background: #2fb344; } .isc-lvl.info { background: #f59f00; color: #1a1a1a; } .isc-lvl.warn { background: #d63939; }
   .isc-act-add { color: var(--tblr-success, #2fb344); } .isc-act-update { color: var(--tblr-warning, #f59f00); } .isc-act-delete { color: var(--tblr-danger, #d63939); }
 </style>
 <div class="row"><div class="col-12">
@@ -19,11 +25,11 @@
     <div class="px-3 pb-3 d-flex gap-2">{% for k, l in kinds %}<a class="btn btn-sm {% if k == kind %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?kind={{ k }}">{{ l }}</a>{% endfor %}</div>
     <div class="table-responsive"><table class="table table-sm mb-0 isc-aud">
       <thead><tr><th>{% tr "aud.time" %}</th><th>{% tr "aud.kind" %}</th><th>{% tr "aud.who" %}</th><th>{% tr "aud.cause" %}</th><th class="text-end">{% tr "aud.duration" %}</th><th>{% tr "aud.files" %}</th></tr></thead>
-      {% for e in events %}<tr id="a{{ e.pk }}">
+      {% for e in events %}<tr id="a{{ e.pk }}" class="isc-lvl-{{ e.severity }}">
         <td class="text-nowrap">{{ e.time|date:"Y-m-d H:i:s" }}</td>
         <td>{% if e.kind == "regen" %}<span class="badge text-bg-info">{% tr "aud.regen" %}</span>{% elif e.kind == "download" %}<span class="badge text-bg-success">{% tr "aud.download" %}</span>{% elif e.kind == "plan" %}<span class="badge text-bg-secondary">{% tr "aud.plan_kind" %}</span>{% elif e.kind == "agent" %}<span class="badge text-bg-primary">{% tr "aud.agent_kind" %}</span>{% elif e.kind == "admin" %}<span class="badge text-bg-dark">{% tr "aud.admin_kind" %}</span>{% else %}<span class="badge text-bg-warning">{% tr "aud.report" %}</span>{% endif %}</td>
         <td class="text-nowrap">{% if e.server %}<i class="mdi mdi-server-network"></i> <strong>{{ e.server }}</strong><br>{% endif %}{% if e.user %}<i class="mdi mdi-account-outline"></i> {{ e.user }}{% elif not e.server %}<span class="text-muted">{% tr "aud.system" %}</span>{% endif %}{% if e.client_ip %}<div class="small text-muted">{{ e.client_ip }}</div>{% endif %}</td>
-        <td class="small">{% if e.kind == "agent" and e.result == "manual" %}<span class="badge text-bg-warning"><i class="mdi mdi-hand-back-right-outline"></i> {% tr "aud.badge_manual" %}</span> {% endif %}{% if e.kind == "report" %}<span class="badge {% if e.result == 'ok' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ e.result }}</span> {% endif %}{{ e.cause }}{% if e.output %}<details><summary>output</summary><div class="isc-diff">{{ e.output }}</div></details>{% endif %}{% if e.manifest_hash %}<div class="text-muted">CFG <code>{{ e.cfg_label }}</code></div>{% endif %}</td>
+        <td class="small"><span class="isc-lvl {{ e.severity }}">{% if e.severity == "warn" %}{% tr "aud.lvl_warn" %}{% elif e.severity == "info" %}{% tr "aud.lvl_info" %}{% else %}{% tr "aud.lvl_ok" %}{% endif %}</span>{% if e.kind == "agent" and e.result == "manual" %}<span class="badge text-bg-warning"><i class="mdi mdi-hand-back-right-outline"></i> {% tr "aud.badge_manual" %}</span> {% endif %}{% if e.kind == "report" %}<span class="badge {% if e.result == 'ok' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ e.result }}</span> {% endif %}{{ e.cause }}{% if e.output %}<details><summary>output</summary><div class="isc-diff">{{ e.output }}</div></details>{% endif %}{% if e.manifest_hash %}<div class="text-muted">CFG <code>{{ e.cfg_label }}</code></div>{% endif %}</td>
         <td class="text-end text-nowrap">{% if e.kind == "regen" %}{{ e.duration_ms }} ms{% endif %}</td>
         <td>{% if e.changes %}<details><summary class="small">
             {% if e.n_add %}<span class="isc-act-add">+{{ e.n_add }}</span> {% endif %}{% if e.n_upd %}<span class="isc-act-update">~{{ e.n_upd }}</span> {% endif %}{% if e.n_del %}<span class="isc-act-delete">−{{ e.n_del }}</span> {% endif %}{% if e.n_dl %}<span>↓{{ e.n_dl }}</span>{% endif %}</summary>
