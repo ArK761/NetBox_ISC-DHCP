@@ -15,7 +15,7 @@ AGENT_COMMANDS = (
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check",
 )
 # what the agent does on its own (no command from NetBox) - shown under the list
-AGENT_SELF = ("default_fix", "apparmor", "kill_stray", "keep_up", "pidfile", "dedupe")
+AGENT_SELF = ("default_fix", "apparmor", "kill_stray", "keep_up", "pidfile", "dedupe", "watch", "leases")
 
 
 def command_rows():
@@ -356,6 +356,10 @@ def heartbeat(server, request, data):
             server.dhcpd_by = "admin"  # started / stopped by a button in NetBox
         else:
             server.dhcpd_by = "manual" if event.startswith("manual") else ("agent" if event.startswith("agent") else "")
+    if event == "manual_restart" and isc != "none":  # still running, new PID, not the agent: restarted by hand
+        why = str(data.get("dhcpd_why", ""))[:300]
+        manual_msg = t("aud.ag_manual_restart", old=server.dhcpd_pid or "?", new=pid or "?") + (f" – {why_text(why)}" if why else "")
+        server.dhcpd_since, server.dhcpd_by, server.dhcpd_why = timezone.now(), "manual", why
     done = str(data.get("cmd_done", ""))[:200]  # <id>:<ok|failed>:<text>
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]

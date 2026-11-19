@@ -66,6 +66,7 @@ Local settings on the DHCP server, `/etc/isc-dhcp-agent.conf` (root only, 600), 
 | `DEFAULT_FIX` | `yes` | fixes `/etc/default/isc-dhcp-server` (IPv4 interfaces, IPv6 off) |
 | `APPARMOR_FIX` | `yes` | lets dhcpd read the base path under AppArmor |
 | `KEEP_BACKUPS` | `10` | backups kept |
+| `LEASES_FILE` | `/var/lib/dhcp/dhcpd.leases` | copied into every backup (`_leases/`), never restored or deleted |
 | `START_WAIT` | `5` | seconds after restart before checking dhcpd |
 
 Commands: `--setup`, `--once`, `--show`, `--set-url`, `--set-token`, `--set NAME value`, `--version`, `--help`.

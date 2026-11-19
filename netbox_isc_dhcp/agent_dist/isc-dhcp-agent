@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.16.0"
+AGENT_VERSION="1.17.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -17,6 +17,7 @@ ALLOWED_RESTART_CMDS=("systemctl restart isc-dhcp-server")
 RUNNING_CHECK=""                                # empty = service active AND dhcpd process (real state); pidof only without systemd
 START_WAIT=5                                    # seconds after restart before checking dhcpd
 KEEP_BACKUPS=10
+LEASES_FILE="/var/lib/dhcp/dhcpd.leases"        # lease database: copied into every backup (_leases/), never restored or deleted
 APPARMOR_FIX=yes                                # AppArmor profile of dhcpd found -> allow it to read the base path
 DEFAULT_FIX=yes                                 # /etc/default/isc-dhcp-server: IPv4 interfaces set, IPv6 server off (fixed when wrong)
 CURL_OPTS=()                                    # e.g. (--cacert /etc/ssl/netbox.pem)
@@ -269,9 +270,14 @@ step() {  # step <code> <n> <text>: one line in the log + a STEP line in the rep
 restore() {  # copy the backup back, remove files that did not exist before
   local f n
   for f in "${NEW_FILES[@]}"; do safe_path "$f" && rm -f -- "$f"; done  # only CFG files (base path / dhcpd.conf)
-  n=$( [ -d "$BK" ] && find "$BK" -type f | wc -l || echo 0)
-  backup_ok "$(dirname "$BK")" && [ -d "$BK" ] && [ ! -L "$BK" ] && cp -a "$BK/." / 2>>"$OUT"
-  step restore "$n" "restored $n file(s) from the backup $BK, removed ${#NEW_FILES[@]} new file(s)"
+  n=$( [ -d "$BK" ] && find "$BK" -type f ! -path "$BK/_leases/*" | wc -l || echo 0)
+  if backup_ok "$(dirname "$BK")" && [ -d "$BK" ] && [ ! -L "$BK" ]; then
+    for f in "$BK"/*; do  # CFG files only: the lease copy (_leases) is NEVER put back (old leases = the same IP given twice)
+      [ "${f##*/}" = _leases ] && continue
+      [ -e "$f" ] && [ ! -L "$f" ] && cp -a "$f" / 2>>"$OUT"
+    done
+  fi
+  step restore "$n" "restored $n CFG file(s) from the backup $BK (leases untouched), removed ${#NEW_FILES[@]} new file(s)"
 }
 
 default_fix() {  # Debian init script: empty INTERFACESv4 (or no file) = it starts IPv4 AND IPv6; IPv6 fails -> service failed. Fix it.
@@ -392,8 +398,12 @@ apply() {
   mkdir -p "$BK" || { echo "cannot create backup $BK" >>"$OUT"; report failed "$OUT"; return; }
   local nb=0
   for i in "${DL_PATH[@]}"; do [ -e "$i" ] && cp -a --parents "$i" "$BK/" 2>>"$OUT" && nb=$((nb + 1)); done
+  # DHCP lease database (who has which IP): copied before every restart, NEVER restored or deleted by the agent
+  local lf nl=0
+  mkdir -p "$BK/_leases"
+  for lf in "$LEASES_FILE" "$LEASES_FILE~"; do [ -f "$lf" ] && [ ! -L "$lf" ] && cp -a "$lf" "$BK/_leases/" 2>>"$OUT" && nl=$((nl + 1)); done
   echo "backup: $BK" >>"$OUT"
-  step backup "$nb" "backup: $nb file(s) that will be replaced -> $BK"
+  step backup "$nb" "backup: $nb file(s) that will be replaced + $nl lease file(s) ($LEASES_FILE) -> $BK"
   # 3. install (order from NetBox: included files first, dhcpd.conf last)
   NEW_FILES=()
   for i in "${!DL_PATH[@]}"; do
@@ -578,12 +588,16 @@ wait_down() { local i=0; while [ $i -lt "$1" ] && [ "$(dhcpd_running)" = 1 ]; do
 
 mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
 
-dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop since the last contact NetBox accepted ("" = no change)
-  local now prev who
-  now=$(dhcpd_running); prev=$(state dhcpd_prev)
-  EVENT_NOW="$now"
-  [ -z "$prev" ] || [ "$now" = "$prev" ] && return 0
+dhcpd_event() {  # agent_start | agent_stop | manual_start | manual_stop | manual_restart since the last contact NetBox accepted ("" = no change)
+  local now prev who pp
+  now=$(dhcpd_running); prev=$(state dhcpd_prev); pp=$(state pid_prev)
+  EVENT_NOW="$now"; PID_NOW=$(pid_now)
+  [ -z "$prev" ] && return 0
   who=manual; [ "$(state agent_did)" = 1 ] && who=agent
+  if [ "$now" = "$prev" ]; then  # still running, but another PID and not the agent's doing = restarted by hand
+    [ "$now" = 1 ] && [ "$who" = manual ] && [ -n "$pp" ] && [ -n "$PID_NOW" ] && [ "$pp" != "$PID_NOW" ] && echo manual_restart
+    return 0
+  fi
   [ "$now" = 1 ] && echo "${who}_start" || echo "${who}_stop"
 }
 
@@ -619,12 +633,15 @@ why_changed() {  # $1 = start|stop: what the system logged since the last contac
 }
 
 event_sent() {  # NetBox accepted the contact: remember the state (an event is never lost on 503 / NetBox down)
+  local old_pid; old_pid=$(state pid_prev)
   [ -n "${EVENT_NOW:-}" ] && echo "$EVENT_NOW" >"$STATE_DIR/dhcpd_prev"
+  echo "${PID_NOW:-}" >"$STATE_DIR/pid_prev"
   rm -f "$STATE_DIR/agent_did"
   date +%s >"$STATE_DIR/contact_ts"
   case "$EVENT" in
     manual_stop) log "dhcpd stopped outside the agent: $WHY - reported to NetBox" ;;
     manual_start) log "dhcpd started outside the agent: $WHY - reported to NetBox" ;;
+    manual_restart) log "dhcpd restarted outside the agent (PID $old_pid -> $PID_NOW): $WHY - reported to NetBox" ;;
   esac
 }
 
@@ -728,7 +745,7 @@ contact() {
   local have="$WORK/have" resp="$WORK/resp" code f d
   : >"$have"
   f=$(state conf); [ -n "$f" ] && [ -f "$f" ] && sha256sum "$f" >>"$have"
-  while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' -exec sha256sum {} + >>"$have"; done < <(state dirs)
+  while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -type f ! -name '*.isc-new' ! -name '.*' ! -name '*~' -exec sha256sum {} + >>"$have"; done < <(state dirs)
   # ONE control hash of every CFG file on disk ("path sha" lines, byte order) = the same as NetBox's check hash
   DISK_HASH=$(sed -nE 's/^([0-9a-f]{64}) [ *](.*)$/\2 \1/p' "$have" | LC_ALL=C sort | sha256sum | cut -d' ' -f1)
   local send="$have" nofiles=""
@@ -736,8 +753,8 @@ contact() {
   local url alt
   DUP_FIXED=""; dedupe_dhcpd
   FIX_NOW="${FIXED:-}"; FIXED=""  # server settings the agent fixed (sent once)
-  EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); WHY=""
-  case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start) WHY=$(why_changed start) ;; esac
+  EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); PID_NOW=$(pid_now); WHY=""
+  case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start|manual_restart) WHY=$(why_changed start) ;; esac
   local urls=(); mapfile -t urls < <(netbox_urls)
   [ ${#urls[@]} -gt 0 ] || urls=("$NETBOX_URL")
   local try
@@ -843,6 +860,20 @@ contact() {
   apply
 }
 
+watch_wait() {  # sleep INTERVAL, but every 5 s look at dhcpd (PID, running) and the CFG files: a change outside the agent = contact NetBox now
+  local seen now t=0 cf; seen="$(dhcpd_running)|$(pid_now)"; touch "$STATE_DIR/watch_ts"
+  cf=$(state conf)
+  while [ "$t" -lt "$INTERVAL" ]; do
+    sleep 5; t=$((t + 5))
+    now="$(dhcpd_running)|$(pid_now)"
+    if [ "$now" != "$seen" ]; then log "dhcpd changed outside the agent (running|pid ${seen} -> ${now}) - checking CFG hash and contacting NetBox now"; return 0; fi
+    if [ -n "$({ [ -n "$cf" ] && [ -e "$cf" ] && find "$cf" -newer "$STATE_DIR/watch_ts" ! -name '.*' ! -name '*~' -print -quit
+                while read -r d; do [ -d "$d" ] && find "$d" -maxdepth 1 -newer "$STATE_DIR/watch_ts" ! -name '.*' ! -name '*~' ! -name '*.isc-new' -print -quit; done < <(state dirs); } 2>/dev/null | head -1)" ]; then
+      log "CFG file changed outside the agent - checking CFG hash and contacting NetBox now"; return 0
+    fi
+  done
+}
+
 INTERVAL=60
 [ "$(state agent_ver)" = "$AGENT_VERSION" ] || { dhcpd_running >"$STATE_DIR/dhcpd_prev"; echo "$AGENT_VERSION" >"$STATE_DIR/agent_ver"; }
 case "$NETBOX_URL" in http://*) log "SECURITY WARNING: NetBox address is plain http - the key and the CFG travel unencrypted (use https)" ;; esac
@@ -852,5 +883,5 @@ while true; do
   contact
   case "$WORK" in /tmp/isc-dhcp-agent.????????) rm -rf -- "$WORK" ;; esac  # only its own temp dir
   [ "$ONCE" = 1 ] && break
-  sleep "$INTERVAL"
+  watch_wait
 done

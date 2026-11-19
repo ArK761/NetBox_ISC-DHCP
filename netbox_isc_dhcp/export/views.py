@@ -553,7 +553,8 @@ class PlanView(View):
         if why:  # NetBox pushes the full CFG by itself (switch in CFG pluginu -> DHCP servery)
             AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=audit.client_ip(request),
                                       manifest_hash=mh, cause=why, level="info")
-        if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh:
+        disk_off = bool(have) and info.get("disk") != "current"  # files on the server differ from NetBox (changed by hand?)
+        if mode == "export" and server is not None and server.last_result == "ok" and server.last_hash == mh and not disk_off:
             steps = []  # export = everything, but only when the set changed since this server's last OK (no restart on every poll)
         else:
             api = request.path_info.startswith("/api/")
@@ -563,6 +564,16 @@ class PlanView(View):
                               request.build_absolute_uri(reverse(rname)), mh, mode)
             if sum(1 for x in steps if x["op"] == "download") >= (st.agent_bundle_min if st else 10):  # many files: one tar.gz
                 info["bundle"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_bundle" if api else "plugins:netbox_isc_dhcp:export_bundle"))
+        if steps and disk_off and server is not None and server.last_result == "ok" and server.last_hash == mh:
+            # the server had exactly this CFG and now its files differ: changed outside NetBox -> NetBox (source of truth) puts its files back
+            changed = sorted(p for p, h in want.items() if p in have and have[p] != h)
+            missing = sorted(p for p in want if p not in have)
+            extra = sorted(x["path"] for x in steps if x["op"] == "delete")
+            AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=audit.client_ip(request),
+                                      result="manual", level="warn", manifest_hash=mh,
+                                      cause=t("aud.cfg_manual", c=len(changed), m=len(missing), e=len(extra), cfg=ver.label if ver else ""),
+                                      changes=[{"path": p, "action": "update"} for p in changed] + [{"path": p, "action": "add"} for p in missing]
+                                      + [{"path": p, "action": "delete"} for p in extra])
         if steps:
             AuditEvent.objects.create(time=timezone.now(), kind="plan", server=server.name if server else "", client_ip=audit.client_ip(request),
                                       user=request.user.username if request.user.is_authenticated else "", manifest_hash=mh,
