@@ -290,7 +290,7 @@ def svc_text(raw):
 
 
 _WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto")
-_INFO = ("aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
+_INFO = ("aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
          "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
 
 
@@ -415,10 +415,17 @@ def heartbeat(server, request, data):
         import datetime as _dt
 
         server.leases_last = _dt.datetime.fromtimestamp(int(lt), tz=_dt.timezone.utc)
+    ls = str(data.get("leases_sha", "")).lower()
+    if len(ls) == 64 and all(c in "0123456789abcdef" for c in ls):
+        server.leases_sha = ls
+    lc = str(data.get("leases_copy", ""))[:200].split("|")  # <dir>|<old sha>|<new sha>: a new lease copy (Audit INFO)
+    if len(lc) == 3 and lc[0]:
+        name = "".join(ch for ch in lc[0] if ch.isalnum() or ch in ".-_:")
+        msgs.append(t("aud.leases_copy", name=name, old=(lc[1][:12] or "—"), new=lc[2][:12]))
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

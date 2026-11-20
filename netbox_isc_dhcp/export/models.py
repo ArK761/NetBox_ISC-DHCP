@@ -102,6 +102,7 @@ class DHCPServer(models.Model):
     released_hash = models.CharField(max_length=64, blank=True, default="", help_text="Admin let the next servers go on without this server's OK for this set.")
     mismatch_since = models.DateTimeField(null=True, blank=True, help_text="The server runs another CFG than NetBox since.")
     autosync_last = models.DateTimeField(null=True, blank=True, help_text="Last automatic CFG sync pushed by NetBox.")
+    leases_sha = models.CharField(max_length=64, blank=True, default="", help_text="sha256 of the newest lease copy, as the agent reports it.")
     leases_last = models.DateTimeField(null=True, blank=True, help_text="Last periodic copy of the lease database, as the agent reports it.")
     disk_hash = models.CharField(max_length=64, blank=True, default="", help_text="ONE control hash of all CFG files on the server's disk, as the agent computes it.")
 

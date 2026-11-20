@@ -295,6 +295,7 @@ TR = {
     "srv.err_timefmt": ("Neplatný formát dátumu a času.", "Invalid date and time format."),
     "cmd.time_format.do": ("formát názvu adresárov kópií leases (eu | iso | compact); agent premenuje existujúce", "name format of the lease copy directories (eu | iso | compact); the agent renames existing ones"),
     "cmd.time_format.lim": ("len 3 pevné formáty; premenúva len vlastné adresáre kópií v adresári leases pod /opt", "only 3 fixed formats; renames only its own copy directories in the leases dir below /opt"),
+    "aud.leases_copy": ("agent zálohoval dhcpd.leases → leases/{name}/ – hash sa zmenil z {old} na {new}", "the agent backed up dhcpd.leases → leases/{name}/ – the hash changed from {old} to {new}"),
     "srv.hash_title": ("Kontrolný hash CFG", "CFG control hash"),
     "srv.hash_hint": ("jeden hash zo všetkých CFG súborov (cesta + sha256). Agent ho spočíta zo súborov na disku a pošle ako prvý údaj; zoznam súborov posiela len pri nezhode. Krátko po zmene v NetBoxe je nezhoda normálna, kým agent nestiahne nový CFG.", "one hash of all CFG files (path + sha256). The agent computes it from the files on its disk and sends it first; the file list is sent only on a mismatch. Shortly after a change in NetBox a mismatch is normal until the agent downloads the new CFG."),
     "srv.hash_ok": ("disk = NetBox", "disk = NetBox"),
