@@ -311,12 +311,15 @@ def _ack(server, match, state, text):
     """Mark admin Audit rows (command / setting) as carried out by this server's agent (the frame in the Audit)."""
     from .models import AuditEvent
 
+    n = 0
     for e in AuditEvent.objects.filter(kind="admin", pending__has_key=server.name).order_by("-id")[:50]:
         p = (e.pending or {}).get(server.name) or {}
         if p.get("s") == "wait" and match(p):
             p.update(s=state, t=timezone.now().isoformat(), x=text)
             e.pending[server.name] = p
             e.save(update_fields=["pending"])
+            n += 1
+    return n
 
 
 def heartbeat(server, request, data):
@@ -389,8 +392,9 @@ def heartbeat(server, request, data):
             if server.dhcpd_by != "admin":
                 server.dhcpd_since = timezone.now()
             server.dhcpd_by = "admin"
-        msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_%s" % server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
-        _ack(server, lambda p: p.get("id") == server.agent_cmd.split(":", 1)[1], "ok" if res == "ok" else "failed", (txt[0] if txt else "")[:150])
+        if not _ack(server, lambda p: p.get("id") == server.agent_cmd.split(":", 1)[1], "ok" if res == "ok" else "failed", (txt[0] if txt else "")[:150]):
+            # no admin row waits for it (older plugin row): say it here; otherwise the result is in the admin row's frame only (no duplicate)
+            msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_%s" % server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
         server.agent_cmd = ""
     if running and running != server.running_hash:
         msgs.append(t("aud.ag_runs", cfg=versions.label(running)))
