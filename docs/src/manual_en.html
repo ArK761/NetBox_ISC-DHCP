@@ -25,6 +25,22 @@
 <tr><td><b>Class</b></td><td>made from the group in the <code>_Dynamic</code> file (group name); a pool allows it with <code>allow members of "Office";</code></td><td><code>class "Office"</code></td></tr>
 <tr><td><b>Own variable</b></td><td>a named piece of ISC configuration (lease, DNS, …) put into code with the line <code>USE &lt;name&gt;</code></td><td><code>USE LEASE_8H</code></td></tr></table>
 
+<h3>Why custom fields are required</h3>
+<p>The plugin builds the DHCP server configuration <b>only from data in NetBox</b>. NetBox itself knows nothing about DHCP: a tenant has no field for a MAC address, a prefix does not know whether it is a DHCP pool or which code (ranges, lease, classes) to use. This data must <b>exist as fields</b> in NetBox – that is what custom fields are for. <b>Without them the plugin has nothing to build DHCP from</b>: no host, no subnet.</p>
+<table style="table-layout:fixed"><colgroup><col style="width:19%"><col style="width:35%"><col style="width:20%"><col style="width:26%"></colgroup><tr><th>What the field defines in DHCP</th><th>Why it is required</th><th>Example (field = value)</th><th>What it becomes in the CFG</th></tr>
+<tr><td><b>Device MAC address</b> (on the tenant / device)</td><td><b>Required.</b> DHCP hands out IPs by MAC. A NetBox tenant has no MAC field – without it no host is created.</td><td><code>MAC1</code> (Text) = <code>02:00:00:00:00:01</code></td><td><code>subclass "Office" 1:02:00:00:00:00:01;</code> or <code>hardware ethernet …;</code></td></tr>
+<tr><td><b>Pool type</b> (on the prefix)</td><td><b>Required for subnets.</b> Decides which code (ranges, lease, classes template) the subnet uses. Without it the plugin does not know how to build the subnet. (A standard field such as Role works too.)</td><td><code>POOL_TYPE</code> (Selection) = <code>Office</code></td><td>file <code>10.0.10.0_CFG</code> from the code of pool “Office”</td></tr>
+<tr><td><b>Which prefixes go to DHCP</b> (on the prefix)</td><td>Recommended. Without it prefixes are selected only by other conditions (e.g. Status, Site).</td><td><code>DHCP_POOL</code> (Selection YES/NO) = <code>YES</code></td><td>the prefix is in the subnet list; its file is included in <code>dhcpd.conf</code></td></tr>
+<tr><td><b>Fixed IP of the device</b> (on the tenant)</td><td>Optional. Without it all devices go to the dynamic class (IP from the pool).</td><td><code>IP</code> (Text) = <code>10.0.10.50</code></td><td>host block with <code>fixed-address 10.0.10.50;</code> in <code>_Static</code></td></tr>
+<tr><td><b>More MACs</b> (Wi-Fi, dock)</td><td>Optional.</td><td><code>MAC2</code>, <code>MAC3</code> = <code>02:00:00:00:00:02</code></td><td>more lines / host blocks <code>NAME_2</code>…</td></tr></table>
+<h3>Full example – from NetBox data to the CFG</h3>
+<table><tr><th>In NetBox</th><th>Created on the DHCP server</th></tr>
+<tr><td>Prefix <code>10.0.10.0/24</code>, <code>DHCP_POOL = YES</code>, <code>POOL_TYPE = Office</code></td><td>file <code>/opt/dhcp/SUBNET/10.0.10.0_CFG</code> (subnet with the range from the code of pool “Office”) + <code>include</code> in <code>dhcpd.conf</code></td></tr>
+<tr><td>Tenant group <code>Office</code></td><td>files <code>Office_Dynamic</code> and <code>Office_Static</code>, class <code>"Office"</code></td></tr>
+<tr><td>Tenant <code>PC-001</code>, group Office, <code>MAC1 = 02:00:00:00:00:01</code>, no IP</td><td>in <code>Office_Dynamic</code>: <code>subclass "Office" 1:02:00:00:00:00:01; ## PC-001 ##</code> – gets an IP from the pool</td></tr>
+<tr><td>Tenant <code>PC-002</code>, group Office, <code>MAC1 = 02:00:00:00:00:02</code>, <code>IP = 10.0.10.50</code></td><td>in <code>Office_Static</code>: <code>host PC-002 { hardware ethernet 02:00:00:00:00:02; fixed-address 10.0.10.50; }</code></td></tr>
+<tr><td>Tenant <code>PC-003</code> without a MAC</td><td>nothing – the group summary shows “will not go to DHCP – no MAC”</td></tr></table>
+
 <h3>Custom fields to create</h3>
 <p>In NetBox: <b>Customization › Custom Fields › + Add</b>. Fill in <b>Name</b>, <b>Object types</b> (which object the field belongs to) and <b>Type</b>. The names below are recommendations – every plugin setting offers all fields of the object, so you can use your own names or standard NetBox fields.</p>
 <table><tr><th>Field (example)</th><th>Object</th><th>Type</th><th>Purpose</th><th>Example value</th></tr>

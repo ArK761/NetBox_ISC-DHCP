@@ -25,6 +25,22 @@
 <tr><td><b>Trieda (class)</b></td><td>vzniká zo skupiny v súbore <code>_Dynamic</code> (názov skupiny); pool ju povolí riadkom <code>allow members of "Kancelaria";</code></td><td><code>class "Kancelaria"</code></td></tr>
 <tr><td><b>Vlastná premenná</b></td><td>pomenovaný kúsok konfigurácie ISC (lease, DNS, …), ktorý vložíte do kódu riadkom <code>USE &lt;názov&gt;</code></td><td><code>USE LEASE_8H</code></td></tr></table>
 
+<h3>Prečo sú custom fieldy nutné</h3>
+<p>Plugin skladá konfiguráciu DHCP servera <b>výhradne z údajov v NetBoxe</b>. NetBox však sám o sebe nevie nič o DHCP: tenant nemá pole pre MAC adresu, prefix nevie, či má byť DHCP pool, ani aký kód (rozsahy, lease, triedy) sa preň má použiť. Tieto údaje musia v NetBoxe <b>existovať ako polia</b> – a na to slúžia custom fieldy. <b>Bez nich plugin nemá z čoho DHCP poskladať</b>: žiadny host, žiadny subnet.</p>
+<table style="table-layout:fixed"><colgroup><col style="width:19%"><col style="width:35%"><col style="width:20%"><col style="width:26%"></colgroup><tr><th>Čo pole určuje v DHCP</th><th>Prečo je nutné</th><th>Príklad (pole = hodnota)</th><th>Čo z toho vznikne v CFG</th></tr>
+<tr><td><b>MAC adresa zariadenia</b> (pri tenantovi / zariadení)</td><td><b>Nutné.</b> DHCP prideľuje IP podľa MAC. Tenant v NetBoxe pole pre MAC nemá – bez neho nevznikne žiadny host.</td><td><code>MAC1</code> (Text) = <code>02:00:00:00:00:01</code></td><td><code>subclass "Kancelaria" 1:02:00:00:00:00:01;</code> alebo <code>hardware ethernet …;</code></td></tr>
+<tr><td><b>Typ poolu</b> (pri prefixe)</td><td><b>Nutné pre subnety.</b> Určuje, ktorý kód (šablóna rozsahov, lease, tried) sa pre subnet použije. Bez neho plugin nevie, ako subnet poskladať. (Môže to byť aj štandardné pole, napr. Role.)</td><td><code>POOL_TYPE</code> (Selection) = <code>Kancelaria</code></td><td>súbor <code>10.0.10.0_CFG</code> podľa kódu poolu „Kancelaria“</td></tr>
+<tr><td><b>Ktoré prefixy idú do DHCP</b> (pri prefixe)</td><td>Odporúčané. Bez neho by sa vybrali prefixy len podľa iných podmienok (napr. Status, Site).</td><td><code>DHCP_POOL</code> (Selection YES/NO) = <code>YES</code></td><td>prefix je v zozname subnetov; jeho súbor je v include v <code>dhcpd.conf</code></td></tr>
+<tr><td><b>Pevná IP zariadenia</b> (pri tenantovi)</td><td>Voliteľné. Bez neho idú všetky zariadenia do dynamickej triedy (IP z poolu).</td><td><code>IP</code> (Text) = <code>10.0.10.50</code></td><td>host blok s <code>fixed-address 10.0.10.50;</code> v <code>_Static</code></td></tr>
+<tr><td><b>Ďalšie MAC</b> (Wi-Fi, dok)</td><td>Voliteľné.</td><td><code>MAC2</code>, <code>MAC3</code> = <code>02:00:00:00:00:02</code></td><td>ďalšie riadky / host bloky <code>MENO_2</code>…</td></tr></table>
+<h3>Celý príklad – od údajov v NetBoxe po CFG</h3>
+<table><tr><th>V NetBoxe</th><th>Vznikne na DHCP serveri</th></tr>
+<tr><td>Prefix <code>10.0.10.0/24</code>, <code>DHCP_POOL = YES</code>, <code>POOL_TYPE = Kancelaria</code></td><td>súbor <code>/opt/dhcp/SUBNET/10.0.10.0_CFG</code> (subnet s rozsahom podľa kódu poolu „Kancelaria“) + <code>include</code> v <code>dhcpd.conf</code></td></tr>
+<tr><td>Tenant group <code>Kancelaria</code></td><td>súbory <code>Kancelaria_Dynamic</code> a <code>Kancelaria_Static</code>, trieda <code>"Kancelaria"</code></td></tr>
+<tr><td>Tenant <code>PC-001</code>, skupina Kancelaria, <code>MAC1 = 02:00:00:00:00:01</code>, bez IP</td><td>v <code>Kancelaria_Dynamic</code>: <code>subclass "Kancelaria" 1:02:00:00:00:00:01; ## PC-001 ##</code> – dostane IP z poolu</td></tr>
+<tr><td>Tenant <code>PC-002</code>, skupina Kancelaria, <code>MAC1 = 02:00:00:00:00:02</code>, <code>IP = 10.0.10.50</code></td><td>v <code>Kancelaria_Static</code>: <code>host PC-002 { hardware ethernet 02:00:00:00:00:02; fixed-address 10.0.10.50; }</code></td></tr>
+<tr><td>Tenant <code>PC-003</code> bez MAC</td><td>nič – v súhrne skupiny „nepôjde do DHCP – bez MAC“</td></tr></table>
+
 <h3>Custom fieldy, ktoré si treba vytvoriť</h3>
 <p>V NetBoxe: <b>Customization › Custom Fields › + Add</b>. Vyplníte <b>Name</b>, <b>Object types</b> (ku ktorému objektu pole patrí) a <b>Type</b>. Názvy nižšie sú odporúčané – plugin pri každom nastavení ponúkne všetky polia objektu, takže môžete použiť aj vlastné názvy alebo štandardné polia NetBoxu.</p>
 <table><tr><th>Pole (príklad)</th><th>Objekt</th><th>Typ</th><th>Na čo slúži</th><th>Príklad hodnoty</th></tr>
