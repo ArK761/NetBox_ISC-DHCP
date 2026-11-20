@@ -7,7 +7,9 @@ const fs = require('fs'), path = require('path');
   const b = await chromium.launch();
   for (const [file, pdf] of [['manual_sk.html', 'NAVOD_SK.pdf'], ['manual_en.html', 'MANUAL_EN.pdf']]) {
     const tmp = path.join(src, '.build_' + file);
-    fs.writeFileSync(tmp, fs.readFileSync(path.join(src, file), 'utf8').replace('{{VERSION}}', version));
+    const agentSrc = fs.readFileSync(path.join(__dirname, '..', '..', 'netbox_isc_dhcp', 'agent_dist', 'isc-dhcp-agent'), 'utf8');
+    const agent = (agentSrc.match(/^AGENT_VERSION="([^"]+)"/m) || [, '?'])[1];  // the agent version shipped with this plugin
+    fs.writeFileSync(tmp, fs.readFileSync(path.join(src, file), 'utf8').split('{{VERSION}}').join(version).split('{{AGENT}}').join(agent));
     const p = await b.newPage();
     await p.goto('file://' + tmp, { waitUntil: 'load' });
     await p.evaluate((title) => {  // table of contents from the h2 headings (always current)
