@@ -36,10 +36,12 @@
 <h3>Full example – from NetBox data to the CFG</h3>
 <table><tr><th>In NetBox</th><th>Created on the DHCP server</th></tr>
 <tr><td>Prefix <code>10.0.10.0/24</code>, <code>DHCP_POOL = YES</code>, <code>POOL_TYPE = Office</code></td><td>file <code>/opt/dhcp/SUBNET/10.0.10.0_CFG</code> (subnet with the range from the code of pool “Office”) + <code>include</code> in <code>dhcpd.conf</code></td></tr>
+<tr><td>Pool <b>“Office”</b> – not created by hand</td><td>appears <b>by itself</b> on the Subnets page when the <code>POOL_TYPE</code> field is marked with the key and at least one selected prefix has the value <code>Office</code> (every value = one pool). <b>You write the pool code</b> (Set up): subnet, <code>range</code>, <code>allow members of …</code>, lease. It produces the <code>_CFG</code> of every prefix with this value.</td></tr>
 <tr><td>Tenant group <code>Office</code></td><td>files <code>Office_Dynamic</code> and <code>Office_Static</code>, class <code>"Office"</code></td></tr>
 <tr><td>Tenant <code>PC-001</code>, group Office, <code>MAC1 = 02:00:00:00:00:01</code>, no IP</td><td>in <code>Office_Dynamic</code>: <code>subclass "Office" 1:02:00:00:00:00:01; ## PC-001 ##</code> – gets an IP from the pool</td></tr>
 <tr><td>Tenant <code>PC-002</code>, group Office, <code>MAC1 = 02:00:00:00:00:02</code>, <code>IP = 10.0.10.50</code></td><td>in <code>Office_Static</code>: <code>host PC-002 { hardware ethernet 02:00:00:00:00:02; fixed-address 10.0.10.50; }</code></td></tr>
 <tr><td>Tenant <code>PC-003</code> without a MAC</td><td>nothing – the group summary shows “will not go to DHCP – no MAC”</td></tr></table>
+<p class="note">“Office” appears twice in the example and these are <b>two different things</b>: the <b>pool</b> “Office” = the <code>POOL_TYPE</code> value on the prefix (which code the subnet gets), the <b>class</b> <code>"Office"</code> = the tenant group (which devices). The same name is only for clarity; they are linked only by the line <code>allow members of "Office";</code> in the pool code.</p>
 
 <h3>Custom fields to create</h3>
 <p>In NetBox: <b>Customization › Custom Fields › + Add</b>. Fill in <b>Name</b>, <b>Object types</b> (which object the field belongs to) and <b>Type</b>. The names below are recommendations – every plugin setting offers all fields of the object, so you can use your own names or standard NetBox fields.</p>

@@ -36,10 +36,12 @@
 <h3>Celý príklad – od údajov v NetBoxe po CFG</h3>
 <table><tr><th>V NetBoxe</th><th>Vznikne na DHCP serveri</th></tr>
 <tr><td>Prefix <code>10.0.10.0/24</code>, <code>DHCP_POOL = YES</code>, <code>POOL_TYPE = Kancelaria</code></td><td>súbor <code>/opt/dhcp/SUBNET/10.0.10.0_CFG</code> (subnet s rozsahom podľa kódu poolu „Kancelaria“) + <code>include</code> v <code>dhcpd.conf</code></td></tr>
+<tr><td>Pool <b>„Kancelaria“</b> – nevytvára sa ručne</td><td>vznikne <b>sám</b> na stránke Subnety, keď je pole <code>POOL_TYPE</code> označené kľúčom a aspoň jeden vybraný prefix má hodnotu <code>Kancelaria</code> (každá hodnota = jeden pool). <b>Kód poolu napíšete vy</b> (Nastaviť): subnet, <code>range</code>, <code>allow members of …</code>, lease. Z neho vznikne <code>_CFG</code> každého prefixu s touto hodnotou.</td></tr>
 <tr><td>Tenant group <code>Kancelaria</code></td><td>súbory <code>Kancelaria_Dynamic</code> a <code>Kancelaria_Static</code>, trieda <code>"Kancelaria"</code></td></tr>
 <tr><td>Tenant <code>PC-001</code>, skupina Kancelaria, <code>MAC1 = 02:00:00:00:00:01</code>, bez IP</td><td>v <code>Kancelaria_Dynamic</code>: <code>subclass "Kancelaria" 1:02:00:00:00:00:01; ## PC-001 ##</code> – dostane IP z poolu</td></tr>
 <tr><td>Tenant <code>PC-002</code>, skupina Kancelaria, <code>MAC1 = 02:00:00:00:00:02</code>, <code>IP = 10.0.10.50</code></td><td>v <code>Kancelaria_Static</code>: <code>host PC-002 { hardware ethernet 02:00:00:00:00:02; fixed-address 10.0.10.50; }</code></td></tr>
 <tr><td>Tenant <code>PC-003</code> bez MAC</td><td>nič – v súhrne skupiny „nepôjde do DHCP – bez MAC“</td></tr></table>
+<p class="note">V príklade je „Kancelaria“ dvakrát a sú to <b>dve rôzne veci</b>: <b>pool</b> „Kancelaria“ = hodnota <code>POOL_TYPE</code> pri prefixe (aký kód dostane subnet), <b>trieda</b> <code>"Kancelaria"</code> = skupina tenantov (ktoré zariadenia). Rovnaký názov je len pre prehľadnosť; prepojí ich až riadok <code>allow members of "Kancelaria";</code> v kóde poolu.</p>
 
 <h3>Custom fieldy, ktoré si treba vytvoriť</h3>
 <p>V NetBoxe: <b>Customization › Custom Fields › + Add</b>. Vyplníte <b>Name</b>, <b>Object types</b> (ku ktorému objektu pole patrí) a <b>Type</b>. Názvy nižšie sú odporúčané – plugin pri každom nastavení ponúkne všetky polia objektu, takže môžete použiť aj vlastné názvy alebo štandardné polia NetBoxu.</p>
