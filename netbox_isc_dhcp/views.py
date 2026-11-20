@@ -253,7 +253,7 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "autosync_minutes": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).AUTOSYNC_MINUTES,
           "leases_every": [(v, t("srv.leases_off") if v == 0 else (f"{v} min" if v < 60 else f"{v // 60} h")) for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).LEASES_EVERY],
           "leases_keep": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).LEASES_KEEP,
-          "time_formats": [(k, lbl, __import__("django.utils.timezone", fromlist=["x"]).localtime().strftime(f)) for k, (lbl, f) in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.items()],
+          "time_formats": [(k, t("tf." + k), __import__("django.utils.timezone", fromlist=["x"]).localtime().strftime(f)) for k, (lbl, f) in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.items()],
           "leases_on": bool(instance.agent_leases_every) if instance else False,
           "bundle_choices": (1, 5, 10, 20, 50, 100),
           "agent_api_url": request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_plan")),

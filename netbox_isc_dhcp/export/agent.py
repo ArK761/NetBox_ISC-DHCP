@@ -307,6 +307,18 @@ def _level(msgs, failed=False):
     return "info" if hit(_INFO) else "ok"
 
 
+def _ack(server, match, state, text):
+    """Mark admin Audit rows (command / setting) as carried out by this server's agent (the frame in the Audit)."""
+    from .models import AuditEvent
+
+    for e in AuditEvent.objects.filter(kind="admin", pending__has_key=server.name).order_by("-id")[:50]:
+        p = (e.pending or {}).get(server.name) or {}
+        if p.get("s") == "wait" and match(p):
+            p.update(s=state, t=timezone.now().isoformat(), x=text)
+            e.pending[server.name] = p
+            e.save(update_fields=["pending"])
+
+
 def heartbeat(server, request, data):
     """Store what the agent says about itself; audit what changed, in plain words."""
     from ..i18n import t
@@ -378,6 +390,7 @@ def heartbeat(server, request, data):
                 server.dhcpd_since = timezone.now()
             server.dhcpd_by = "admin"
         msgs.append(t("aud.cmd_done", cmd=t("srv.cmd_%s" % server.agent_cmd.split(":", 1)[0]), res=res, txt=(txt[0] if txt else "")[:150]))
+        _ack(server, lambda p: p.get("id") == server.agent_cmd.split(":", 1)[1], "ok" if res == "ok" else "failed", (txt[0] if txt else "")[:150])
         server.agent_cmd = ""
     if running and running != server.running_hash:
         msgs.append(t("aud.ag_runs", cfg=versions.label(running)))
@@ -410,6 +423,10 @@ def heartbeat(server, request, data):
         msgs.append(t("aud.fail_cleared"))
     server.last_seen = timezone.now()
     server.dhcpd_pid = pid if dhcpd else ""
+    fields = {"leases": "agent_leases", "time_format": "agent_time_format", "interval": "interval"}
+    applied = {fields[x] for x in str(data.get("applied", "")).split(",") if x in fields}  # settings the agent took over (1.19.3+)
+    if applied:
+        _ack(server, lambda p: p.get("f") in applied, "ok", "")
     lt = str(data.get("leases_last", ""))
     if lt.isdigit() and len(lt) <= 12:  # unix time of the last periodic lease copy (agent 1.18.0+)
         import datetime as _dt

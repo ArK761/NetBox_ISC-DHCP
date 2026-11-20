@@ -216,7 +216,16 @@ class AuditView(LoginRequiredMixin, View):
         from . import versions
 
         labels = versions.labels()
+        from ..models import settings_obj as _so0
+        from .agent import TIME_FORMATS as _TF
+
+        _fmt = _TF.get(getattr(_so0(), "agent_time_format", "eu"), _TF["eu"])[1]
+        _fmt_s = _fmt if "%S" in _fmt else _fmt + ":%S"
         for e in events:
+            e.time_txt = timezone.localtime(e.time).strftime(_fmt_s)
+            e.acks = [{"name": n, "s": p.get("s"), "x": p.get("x", ""),
+                       "t": timezone.localtime(__import__("datetime").datetime.fromisoformat(p["t"])).strftime(_fmt_s) if p.get("t") else ""}
+                      for n, p in sorted((e.pending or {}).items())]
             e.cfg_label = labels.get(e.manifest_hash, e.manifest_hash[:12])
             ch = e.changes or []
             e.n_add = sum(1 for c in ch if c.get("action") == "add")
@@ -254,7 +263,7 @@ def _admin_audit(request, log):
     def val(k, v):
         v = str(v)
         if k == "agent_time_format":
-            return TIME_FORMATS.get(v, (v,))[0]
+            return t("tf." + v) if v in TIME_FORMATS else v
         if k == "agent_leases" and v:
             ev, _, kp = v.partition(" ")
             return f"{t('srv.leases_off') if ev == '0' else ev + ' min'}, {kp}"
@@ -264,9 +273,24 @@ def _admin_audit(request, log):
     for k, o, n in log:
         word, _, rest = str(k).partition(" ")
         label = t("audf." + word) if t("audf." + word) != "audf." + word else word
-        parts.append(f"{label}{' ' + rest if rest else ''}: {val(word, o)} → {val(word, n)}")
+        if word.startswith("cmd_"):
+            parts.append(f"{label} → {rest}")  # a command for one server (its id is internal)
+        else:
+            parts.append(f"{label}{' ' + rest if rest else ''}: {val(word, o)} → {val(word, n)}")
+    # what the agent has to carry out: commands (one server) and the settings the agent takes over (every server with an agent)
+    from .models import DHCPServer
+
+    pending = {}
+    for k, o, n in log:
+        word, _, rest = str(k).partition(" ")
+        if word.startswith("cmd_") and rest:
+            pending[rest] = {"s": "wait", "f": word, "id": str(n).split(":", 1)[-1]}
+        elif word in ("agent_leases", "agent_time_format", "interval"):
+            for srv in DHCPServer.objects.filter(enabled=True, last_seen__isnull=False):
+                if _ver_ge(srv.agent_version, (1, 19, 3)):
+                    pending.setdefault(srv.name, {"s": "wait", "f": word})
     AuditEvent.objects.create(time=timezone.now(), kind="admin", user=request.user.username, client_ip=audit.client_ip(request),
-                              cause=(t("aud.admin_servers") + " – " + "; ".join(parts))[:1000],
+                              cause=(t("aud.admin_servers") + " – " + "; ".join(parts))[:1000], pending=pending,
                               changes=[{"path": k, "action": "update", "old": str(o), "new": str(n)} for k, o, n in log])
 
 
@@ -316,19 +340,19 @@ class ServersInlineView(LoginRequiredMixin, View):
             st.agent_test_cmd = request.POST.get("test_cmd", "").strip()[:255] or st.agent_test_cmd
             st.agent_restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or st.agent_restart_cmd
             st.agent_backup_dir = bdir
-            st.save()
+            st.save(update_fields=["agent_test_cmd", "agent_restart_cmd", "agent_backup_dir"])
             log = [("test", before[0], st.agent_test_cmd), ("restart", before[1], st.agent_restart_cmd), ("backup", before[2], st.agent_backup_dir)]
             log = [x for x in log if x[1] != x[2]]
         elif action == "mode":
             st = _st()
             log = [("mode", st.agent_mode, "export" if request.POST.get("value") == "export" else "plan")]
             st.agent_mode = log[0][2]
-            st.save()
+            st.save(update_fields=["agent_mode"])
         elif action == "staged":
             st = _st()
             log = [("staged_rollout", str(st.staged_rollout), str(request.POST.get("value") == "1"))]
             st.staged_rollout = request.POST.get("value") == "1"
-            st.save()
+            st.save(update_fields=["staged_rollout"])
         elif action == "keep_failed":
             st = _st()
             log = [("agent_keep_failed", str(st.agent_keep_failed), str(request.POST.get("value") == "1"))]
@@ -389,7 +413,7 @@ class ServersInlineView(LoginRequiredMixin, View):
             if v in INTERVALS:
                 log = [("interval", str(st.agent_interval), str(v))]
                 st.agent_interval = v
-                st.save()
+                st.save(update_fields=["agent_interval"])
         elif action == "first" and srv:  # only one server can be first; others keep their relative order
             from .agent import first_server, isc_mismatch
 

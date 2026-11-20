@@ -43,6 +43,7 @@ class AuditEvent(models.Model):
     manifest_hash = models.CharField(max_length=64, blank=True, default="")
     changes = models.JSONField(default=list, blank=True, help_text="[{path, action add|update|delete, old, new, diff}] or downloaded paths.")
     level = models.CharField(max_length=8, blank=True, default="", help_text="Severity: ok (green), info (yellow), warn (red); empty = derived from kind/result.")
+    pending = models.JSONField(default=dict, blank=True, help_text="Admin command / setting -> per server {s: wait|ok|failed, f: field, id: command id, t: done time, x: text}.")
 
     class Meta:
         app_label = "netbox_isc_dhcp"

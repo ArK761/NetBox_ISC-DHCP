@@ -153,7 +153,10 @@ def _connect():
         return _cause(sender, instance, kw)
 
     on([HostConfig, HostCodeTemplate], lambda sender, instance, **kw: raw_ok(kw) and mark(tables=True, cause=c(sender, instance, kw)), "tables")
-    on([PluginSettings, DHCPPath], lambda sender, instance, **kw: raw_ok(kw) and mark(tables=True, all_subnets=True, cause=c(sender, instance, kw)), "paths")
+    def cfg_relevant(kw):  # agent / server settings (agent_*, staged rollout) never change a CFG file: no regeneration (it was slow)
+        uf = kw.get("update_fields")
+        return not (uf and all(f.startswith("agent_") or f in ("staged_rollout",) for f in uf))
+    on([PluginSettings, DHCPPath], lambda sender, instance, **kw: raw_ok(kw) and cfg_relevant(kw) and mark(tables=True, all_subnets=True, cause=c(sender, instance, kw)), "paths")
     on([HostGroup], lambda sender, instance, **kw: raw_ok(kw) and mark(groups=[instance.pk], cause=c(sender, instance, kw)), "group")
     on([HostSource, HostGroupCode], lambda sender, instance, **kw: raw_ok(kw) and mark(groups=[instance.group_id], cause=c(sender, instance, kw)), "groupparts")
 
