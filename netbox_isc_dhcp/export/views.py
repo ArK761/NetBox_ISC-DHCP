@@ -249,8 +249,25 @@ def _admin_audit(request, log):
     """Audit of changes to DHCP servers / agent settings: who, from where, old -> new."""
     from .models import AuditEvent
 
+    from .agent import TIME_FORMATS
+
+    def val(k, v):
+        v = str(v)
+        if k == "agent_time_format":
+            return TIME_FORMATS.get(v, (v,))[0]
+        if k == "agent_leases" and v:
+            ev, _, kp = v.partition(" ")
+            return f"{t('srv.leases_off') if ev == '0' else ev + ' min'}, {kp}"
+        return v[:60] or "—"
+
+    parts = []
+    for k, o, n in log:
+        word, _, rest = str(k).partition(" ")
+        label = t("audf." + word) if t("audf." + word) != "audf." + word else word
+        parts.append(f"{label}{' ' + rest if rest else ''}: {val(word, o)} → {val(word, n)}")
     AuditEvent.objects.create(time=timezone.now(), kind="admin", user=request.user.username, client_ip=audit.client_ip(request),
-                              cause=t("aud.admin_servers"), changes=[{"path": k, "action": "update", "old": str(o), "new": str(n)} for k, o, n in log])
+                              cause=(t("aud.admin_servers") + " – " + "; ".join(parts))[:1000],
+                              changes=[{"path": k, "action": "update", "old": str(o), "new": str(n)} for k, o, n in log])
 
 
 class ServersInlineView(LoginRequiredMixin, View):
@@ -417,7 +434,7 @@ class ServersInlineView(LoginRequiredMixin, View):
         elif action in ("start", "stop", "restart", "update") and srv:  # command for the agent, done once at its next contact
             srv.agent_cmd = f"{action}:{timezone.now().strftime('%Y%m%d%H%M%S')}"
             srv.save(update_fields=["agent_cmd"])
-            log = [(f"{action} {srv.name}", "", srv.agent_cmd)]
+            log = [(f"cmd_{action} {srv.name}", "", srv.agent_cmd)]
             messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name))
         elif action == "gh_check":  # look for a new agent on GitHub now (otherwise every 5 minutes in the background)
             from .agent import _checking, _fetch_github, agent_source
