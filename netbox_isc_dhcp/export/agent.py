@@ -92,6 +92,8 @@ def gate(server, manifest_hash):
         return "", []
     if server.isc_version == "none":
         return "isc_missing", []
+    if server.takeover == "foreign":
+        return "takeover", []  # original DHCP found: no CFG until the admin confirms the backup + overwrite
     first = first_server()
     if isc_mismatch() and (first is None or server.pk != first.pk):
         return "isc_mismatch", [first.name] if first else []

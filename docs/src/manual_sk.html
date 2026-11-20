@@ -93,6 +93,12 @@ host PC-002 {
 <li>Ovládanie: Štart / Stop / Reštart dhcpd, Stiahnuť znova, Aktualizovať agenta. Všetko je v <b>Audite</b>.</li>
 <li>Zlý CFG nikdy nezostane bežať: agent ho otestuje, pri chybe vráti zálohu a platí pôvodný CFG.</li></ul>
 
+<h3>Nasadenie agenta na už bežiaci DHCP server</h3>
+<div class="note"><b>Zálohu pôvodného DHCP si urob sám pred inštaláciou agenta</b> – je to na používateľovi. Napríklad: <code>sudo tar czf /root/dhcp-povodny.tgz /etc/dhcp /var/lib/dhcp /etc/default/isc-dhcp-server</code> plus súbory, ktoré pôvodný <code>dhcpd.conf</code> načítava cez <code>include</code>, ak sú mimo <code>/etc/dhcp</code>.</div>
+<ul><li><b>Ochrana:</b> keď agent ešte nikdy nenasadil CFG z NetBoxu a na serveri nájde iný <code>dhcpd.conf</code>, NetBox CFG <b>nepošle</b>. Pri serveri je rámček „Agent zistil pôvodný DHCP server“ (či dhcpd beží, zoznam <code>include</code> súborov), hore je pruh a v Audite červený riadok. CFG sa pošle, až keď zaškrtneš „Mám zálohu pôvodného CFG a súhlasím s prepísaním DHCP“ a stlačíš <b>Povoliť prepísanie</b>. Súhlas je v Audite s rámčekom „čaká / agent príkaz vykonal“.</li>
+<li>Po prepísaní: <code>dhcpd.conf</code> je z NetBoxu, pôvodný je aj v <code>/opt/BCK/start_&lt;čas&gt;/</code>. Súbory z <code>include</code> pôvodného CFG ostanú na disku, len sa už nenačítajú. Leases ostanú.</li>
+<li><b>Kolízia:</b> ak server spravuje aj iný nástroj (Ansible, vlastný skript, cron…), pred nasadením agenta ho vypni. Agent je zdroj pravdy z NetBoxu a cudzie zmeny do 5 s vráti, takže by sa nástroje „prebíjali“. Keď sa CFG na serveri za hodinu zmení mimo NetBoxu 3× a viac, NetBox to hlási červeným pruhom („pravdepodobne ho spravuje aj iný nástroj“).</li>
+<li>Bezpečný postup: priprav CFG v NetBoxe tak, aby zodpovedal pôvodnému → urob zálohu → pridaj server (môže byť aj vypnutý, vtedy agent nedostane nič) → nainštaluj agenta → skontroluj rámček pri serveri → v tichom čase povoľ prepísanie.</li></ul>
 <h3>Časté problémy pri začiatku</h3>
 <table><tr><th>Čo vidíte</th><th>Príčina a riešenie</th></tr>
 <tr><td>Subnety: „Vybrané: 0 objektov“</td><td>podmienka nič nevyberá – skontrolujte hodnotu <code>DHCP_POOL</code> pri prefixoch a zaškrtnuté hodnoty</td></tr>

@@ -47,6 +47,11 @@ curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/v1.0.0/agent
 Later agent updates come from NetBox (button **Aktualizovať agenta / Update agent**), no reinstall needed.
 Uninstall: `sudo bash install.sh --uninstall` (keeps the config and the backups).
 
+**Server that already runs DHCP:** back up the original configuration yourself first (`/etc/dhcp`, include files, `/var/lib/dhcp`).
+If the agent finds a dhcpd.conf that does not come from NetBox, NetBox sends nothing until you confirm the backup and the overwrite
+at the server (CFG pluginu → DHCP servery → *Allow overwrite*). Switch off any other tool that manages the DHCP CFG (Ansible, scripts…),
+otherwise it collides with the agent.
+
 ## 3. Agent settings
 Set in NetBox (CFG pluginu → DHCP servery): interval (10 s – 30 min), test and restart command, backup directory
 (**only below `/opt/`**, default `/opt/BCK`), staged rollout, bundle size, keep failed CFG.

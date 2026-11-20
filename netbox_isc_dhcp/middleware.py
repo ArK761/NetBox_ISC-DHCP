@@ -174,6 +174,20 @@ class DNSWarningMiddleware:
         svcbad = [f"{s.name} ({s.svc_state})" for s in srvs if s.last_seen and s.svc_state not in ("", "active", "none")]
         if svcbad:
             out.append(("warning", "mdi-cog-off-outline", t("warn.svc_bad", names=", ".join(svcbad)), url, label))
+        foreign = [s.name for s in srvs if s.takeover == "foreign"]
+        if foreign:
+            out.append(("warning", "mdi-server-security", t("warn.takeover", names=", ".join(foreign)), url, label))
+        from datetime import timedelta as _td
+
+        from django.utils import timezone as _tz
+
+        from .export.models import AuditEvent as _AE
+
+        hour = _tz.now() - _td(hours=1)
+        clash = [s.name for s in srvs if _AE.objects.filter(kind="agent", server=s.name, result="manual", time__gte=hour,
+                                                              cause__startswith=t("aud.cfg_manual", c="", m="", e="", cfg="")[:20]).count() >= 3]
+        if clash:
+            out.append(("danger", "mdi-sword-cross", t("warn.clash", names=", ".join(clash)), url, label))
         broken = [s.name for s in srvs if s.disk_broken]
         if broken:
             out.append(("danger", "mdi-alert-octagon-outline", t("warn.disk_broken", names=", ".join(broken)), url, label))

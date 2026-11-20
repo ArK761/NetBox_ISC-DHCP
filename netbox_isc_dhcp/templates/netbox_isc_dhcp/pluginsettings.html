@@ -177,7 +177,7 @@
     <script>
       (function () {  // live servers table: refresh every 5 s while the page is visible; buttons/switches work without a page reload
         var box = document.getElementById("isc-srv-live");
-        function busy() { return box.querySelector("details[open]") || box.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type !== "checkbox"; }
+        function busy() { return box.querySelector("details[open]") || box.querySelector(".isc-takeover input:checked") || box.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && document.activeElement.type !== "checkbox"; }
         function load(force) {
           if (!force && (document.hidden || busy())) return Promise.resolve();
           return fetch(box.dataset.url, {credentials: "same-origin"}).then(function (r) { return r.ok ? r.text() : null; })

@@ -285,6 +285,8 @@ def _admin_audit(request, log):
         word, _, rest = str(k).partition(" ")
         if word.startswith("cmd_") and rest:
             pending[rest] = {"s": "wait", "f": word, "id": str(n).split(":", 1)[-1]}
+        elif word == "takeover" and rest:
+            pending[rest] = {"s": "wait", "f": "takeover"}  # done when the agent deployed the NetBox CFG (report ok)
         elif word in ("agent_leases", "agent_time_format", "interval"):
             for srv in DHCPServer.objects.filter(enabled=True, last_seen__isnull=False):
                 if _ver_ge(srv.agent_version, (1, 19, 3)):
@@ -398,6 +400,13 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_time_format", st.agent_time_format, v)]
             st.agent_time_format = v
             st.save(update_fields=["agent_time_format"])
+        elif action == "takeover" and srv:  # admin: I have a backup of the original DHCP, overwrite it with the NetBox CFG
+            if request.POST.get("confirm") != "1":
+                messages.error(request, t("srv.err_takeover"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            srv.takeover = "approved"
+            srv.save(update_fields=["takeover"])
+            log = [(f"takeover {srv.name}", "", "approved")]
         elif action == "bundle_min":
             st = _st()
             v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
@@ -602,6 +611,19 @@ class PlanView(View):
         if have:  # files on the server are exactly the current set -> the agent may (re)start dhcpd itself when it is down
             if want and all(have.get(p) == h for p, h in want.items()):
                 info["disk"] = "current"
+        if server is not None and request.method == "POST" and str((data or {}).get("fresh", "")) == "1" and server.takeover != "approved":
+            conf = next((p for p, a in ExportFile.objects.filter(area="conf").values_list("path", "area")), "")
+            if have and conf and conf in have and have[conf] != want.get(conf) and server.takeover != "foreign":
+                # the agent never deployed a NetBox CFG and the server has ANOTHER dhcpd.conf = a running / original DHCP: wait for consent
+                inc = [x for x in str(data.get("includes", "")).split(",") if x][:30]
+                run = str(data.get("dhcpd", "")) == "1"
+                server.takeover = "foreign"
+                server.takeover_info = (t("srv.to_running") if run else t("srv.to_stopped")) + (
+                    f" · include ({len(inc)}{'+' if len(inc) >= 30 else ''}): " + ", ".join(inc[:8]) + (" …" if len(inc) > 8 else "") if inc else "")
+                server.takeover_info = server.takeover_info[:1000]
+                server.save(update_fields=["takeover", "takeover_info"])
+                AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=audit.client_ip(request),
+                                          level="warn", cause=t("aud.takeover_found", name=server.name, info=server.takeover_info)[:1000])
         if skipped and disk_hash != check:
             hash_only = True  # hash only and different: no plan from an unknown disk, the agent asks again with its file list
         if server is not None and server.restart_req:
@@ -725,4 +747,8 @@ class ReportView(View):
                 server.dhcpd_pid = pid
                 fields.append("dhcpd_pid")
             server.save(update_fields=fields)
+            if server.takeover == "approved":  # the admin's consent to overwrite the original DHCP: carried out (or not) by the agent
+                from .agent import _ack
+
+                _ack(server, lambda p: p.get("f") == "takeover", "ok" if body["result"] == "ok" else "failed", flow[:150])
         return HttpResponse('{"ok": true}', content_type="application/json")

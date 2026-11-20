@@ -93,6 +93,12 @@ host PC-002 {
 <li>Control: Start / Stop / Restart dhcpd, Download again, Update agent. Everything is in the <b>Audit</b>.</li>
 <li>A bad CFG never stays running: the agent tests it, on an error restores the backup and the original CFG stays.</li></ul>
 
+<h3>Installing the agent on a DHCP server that already runs</h3>
+<div class="note"><b>Back up the original DHCP yourself before installing the agent</b> – this is the user's job. For example: <code>sudo tar czf /root/dhcp-original.tgz /etc/dhcp /var/lib/dhcp /etc/default/isc-dhcp-server</code> plus the files the original <code>dhcpd.conf</code> loads via <code>include</code> if they are outside <code>/etc/dhcp</code>.</div>
+<ul><li><b>Protection:</b> when the agent has never deployed a NetBox CFG and finds another <code>dhcpd.conf</code> on the server, NetBox does <b>not</b> send the CFG. The server shows a frame “The agent found an original DHCP server” (whether dhcpd runs, the <code>include</code> files), a bar on top and a red Audit row. The CFG is sent only after you tick “I have a backup of the original CFG and agree to overwrite the DHCP” and press <b>Allow overwrite</b>. The consent is in the Audit with a “waiting / the agent carried out the command” frame.</li>
+<li>After the overwrite: <code>dhcpd.conf</code> comes from NetBox, the original is also in <code>/opt/BCK/start_&lt;time&gt;/</code>. The <code>include</code> files of the original CFG stay on disk but are no longer loaded. Leases stay.</li>
+<li><b>Collision:</b> if another tool manages the server (Ansible, own script, cron…), switch it off before installing the agent. The agent keeps NetBox as the source of truth and reverts foreign changes within 5 s, so the tools would fight. When the server's CFG changes outside NetBox 3 times or more in an hour, NetBox shows a red bar (“another tool probably manages it too”).</li>
+<li>Safe order: prepare the CFG in NetBox to match the original → back up → add the server (it may be switched off, then the agent gets nothing) → install the agent → check the frame at the server → allow the overwrite at a quiet time.</li></ul>
 <h3>Common problems at the start</h3>
 <table><tr><th>What you see</th><th>Cause and fix</th></tr>
 <tr><td>Subnets: “Selected: 0 objects”</td><td>the condition selects nothing – check the <code>DHCP_POOL</code> value at the prefixes and the ticked values</td></tr>
