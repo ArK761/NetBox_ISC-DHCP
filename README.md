@@ -66,7 +66,7 @@ Local settings on the DHCP server, `/etc/isc-dhcp-agent.conf` (root only, 600), 
 | `DEFAULT_FIX` | `yes` | fixes `/etc/default/isc-dhcp-server` (IPv4 interfaces, IPv6 off) |
 | `APPARMOR_FIX` | `yes` | lets dhcpd read the base path under AppArmor |
 | `KEEP_BACKUPS` | `10` | backups kept |
-| `LEASES_FILE` | `/var/lib/dhcp/dhcpd.leases` | copied into every CFG backup (`_leases/`) and periodically (interval + copies set in NetBox, default 1 h / 72) to `<backup dir>/leases/`; never restored |
+| `LEASES_FILE` | `/var/lib/dhcp/dhcpd.leases` | copied into every CFG backup (`_leases/`) and periodically (interval + copies set in NetBox, default 1 h / 72) to `<backup dir>/leases/<date-time>/` (date format set in NetBox, the agent renames old dirs); never restored |
 | `START_WAIT` | `5` | seconds after restart before checking dhcpd |
 
 Commands: `--setup`, `--once`, `--show`, `--set-url`, `--set-token`, `--set NAME value`, `--version`, `--help`.

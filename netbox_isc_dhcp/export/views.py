@@ -346,6 +346,17 @@ class ServersInlineView(LoginRequiredMixin, View):
             st.agent_leases_every, st.agent_leases_keep = ev, kp
             st.save(update_fields=["agent_leases_every", "agent_leases_keep"])
             log = [("agent_leases", before, f"{ev} {kp}")]
+        elif action == "time_format":  # name format of the lease copy directories on every server (the agent renames existing ones)
+            from .agent import TIME_FORMATS
+
+            st = _st()
+            v = request.POST.get("value", "")
+            if v not in TIME_FORMATS:
+                messages.error(request, t("srv.err_timefmt"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            log = [("agent_time_format", st.agent_time_format, v)]
+            st.agent_time_format = v
+            st.save(update_fields=["agent_time_format"])
         elif action == "bundle_min":
             st = _st()
             v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
@@ -540,6 +551,8 @@ class PlanView(View):
             bdir = st.agent_backup_dir if st and is_backup_path(st.agent_backup_dir) else BACKUP_DIR
             every = st.agent_leases_every if st else 60
             info["leases"] = f"{every}\t{st.agent_leases_keep if st else 72}\t{bdir.rstrip('/')}/leases"
+        if server is not None and _ver_ge(server.agent_version, (1, 19, 0)):
+            info["time_format"] = (st.agent_time_format if st else "eu") or "eu"  # name format of the lease copy dirs; the agent renames old ones
         if disk_hash:
             info["check"] = check  # only to agents that send their disk hash (1.16.0+); older ones would log it as an unknown command
         skipped = request.method == "POST" and str((data or {}).get("nofiles", "")) == "1"  # agent sent only its disk hash

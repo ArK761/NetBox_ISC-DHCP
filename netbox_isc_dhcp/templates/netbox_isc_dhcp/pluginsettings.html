@@ -168,6 +168,10 @@
         <select name="keep" class="form-select form-select-sm no-ts" style="width:auto">{% for v in leases_keep %}<option value="{{ v }}"{% if object.agent_leases_keep == v %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>
         <button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button>
         <span class="text-muted w-100">{% tr "srv.leases_hint" %}</span></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2 d-flex flex-wrap align-items-center gap-2 small" id="isc-timefmt">{% csrf_token %}<input type="hidden" name="field" value="time_format">
+        <strong><i class="mdi mdi-calendar-clock"></i> {% tr "srv.timefmt" %}</strong>
+        <select name="value" class="form-select form-select-sm no-ts" style="width:auto" onchange="this.form.submit()">{% for k, lbl, ex in time_formats %}<option value="{{ k }}"{% if object.agent_time_format == k %} selected{% endif %}>{{ lbl }} ({{ ex }})</option>{% endfor %}</select>
+        <span class="text-muted w-100">{% tr "srv.timefmt_hint" %}</span></form>
       <div class="mt-3 pt-3 border-top" id="isc-hash-box">{% include "netbox_isc_dhcp/_cfg_hash.html" %}</div>
     </div>
     <script>

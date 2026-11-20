@@ -12,8 +12,9 @@ AGENT_COMMANDS = (
     "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
     "cmd start", "cmd stop", "cmd restart", "cmd update", "agent_url", "agent_sha",
     "key", "interval", "report", "base", "dir", "conf_dir",
-    "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases",
+    "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format",
 )
+TIME_FORMATS = {"eu": ("DD.MM.RRRR-HH:MM", "%d.%m.%Y-%H:%M"), "iso": ("RRRR-MM-DD_HH:MM", "%Y-%m-%d_%H:%M"), "compact": ("RRRRMMDD-HHMMSS", "%Y%m%d-%H%M%S")}
 LEASES_EVERY = (0, 15, 30, 60, 180, 360, 720, 1440)  # minutes, 0 = off
 LEASES_KEEP = (6, 12, 24, 48, 72, 96, 168)
 # what the agent does on its own (no command from NetBox) - shown under the list

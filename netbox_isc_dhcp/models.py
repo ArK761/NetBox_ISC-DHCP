@@ -268,6 +268,7 @@ class PluginSettings(NetBoxModel):
     agent_autosync_at = models.CharField(max_length=5, default="03:00", help_text="Daily time (HH:MM) of the auto CFG sync.")
     agent_leases_every = models.PositiveIntegerField(default=60, help_text="Minutes between copies of the DHCP lease database on every server (0 = off).")
     agent_leases_keep = models.PositiveSmallIntegerField(default=72, help_text="Lease copies kept on every server.")
+    agent_time_format = models.CharField(max_length=10, default="eu", help_text="Date/time format of the lease copy directories on the servers: eu | iso | compact.")
     agent_interval = models.PositiveIntegerField(default=60, help_text="Seconds between two agent contacts (10 s - 30 min).")
     agent_dirs = models.JSONField(default=list, blank=True, help_text="Every directory the plugin ever managed (old files there are deleted).")
     agent_test_cmd = models.CharField(max_length=255, default="dhcpd -t -cf {conf}", help_text="Config test for all DHCP servers; {conf} = path of dhcpd.conf.")
