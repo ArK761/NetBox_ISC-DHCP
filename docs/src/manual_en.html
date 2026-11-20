@@ -55,6 +55,33 @@
 <li><b>MAC</b>: 12 hexadecimal characters with or without separators (e.g. <code>02:00:00:00:00:01</code>). A host without a MAC creates no DHCP entry. It is not hidden: the group page lists it in the summary “N hosts will not go to DHCP” with the reason <i>no MAC</i> (chapter 10).</li>
 <li><b>POOL_TYPE of type Object</b> (a link to another NetBox object): the plugin shows object names and the pool is named after the object.</li></ul>
 
+<h3>Creating the custom fields in NetBox – step by step</h3>
+<p>Example for <code>POOL_TYPE</code> (pool type on the prefix). The other fields are created the same way, their settings are in the table below. Creating custom fields needs admin permissions in NetBox.</p>
+<ol>
+<li><b>Choice set</b> (the values to choose from): <b>Customization › Custom Field Choices › + Add</b>
+<ul><li><b>Name</b>: <code>POOL_TYPE</code></li>
+<li><b>Extra choices</b>: one value per line, e.g.<pre>Office
+Printers
+Guests</pre>(the form <code>value:label</code> is optional; the plugin works with the <b>value</b>)</li>
+<li><b>Create</b>.</li></ul></li>
+<li><b>Custom field</b>: <b>Customization › Custom Fields › + Add</b>
+<ul><li><b>Object types</b>: <code>IPAM › Prefix</code></li>
+<li><b>Name</b>: <code>POOL_TYPE</code> (letters, digits, underscore only – the plugin shows it under this name, in code it is <code>{{ cf.POOL_TYPE }}</code>)</li>
+<li><b>Label</b>: e.g. <code>Pool type</code> (form label only)</li>
+<li><b>Type</b>: <code>Selection</code></li>
+<li><b>Choice set</b>: <code>POOL_TYPE</code> (from step 1)</li>
+<li><b>Required</b>: unticked (prefixes without DHCP need no value)</li>
+<li><b>Create</b>.</li></ul></li>
+<li><b>Value on the prefix</b>: <b>IPAM › Prefixes</b> › open the prefix (e.g. <code>10.0.10.0/24</code>) › <b>Edit</b> › section <b>Custom Fields</b> › <b>Pool type</b> = <code>Office</code> › <b>Save</b>.<br>
+In bulk: tick the prefixes in the list › <b>Edit Selected</b> › <b>Pool type</b> = <code>Office</code> › <b>Apply</b>.</li>
+<li><b>In the plugin</b>: DHCP-CFG › <b>Subnets</b> › <b>Add field</b> › choose <code>POOL_TYPE</code> › click the <b>key icon</b>. One pool appears per value the selected prefixes have (e.g. <code>Office</code>); write its code on the pool page (<b>Set up</b>).</li></ol>
+<table><tr><th>Field</th><th>Object types</th><th>Type</th><th>More settings</th><th>Where the value is filled in</th></tr>
+<tr><td><code>POOL_TYPE</code></td><td>IPAM › Prefix</td><td>Selection</td><td>Choice set with the pool type values (above)</td><td>on the prefix</td></tr>
+<tr><td><code>DHCP_POOL</code></td><td>IPAM › Prefix</td><td>Selection (choice set <code>YES</code>, <code>NO</code>) or Boolean</td><td>–</td><td>on the prefix: <code>YES</code></td></tr>
+<tr><td><code>MAC1</code> (<code>MAC2</code>, <code>MAC3</code>)</td><td>Tenancy › Tenant</td><td>Text</td><td>optional <b>Validation regex</b> <code>^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$</code> (NetBox then refuses a bad MAC)</td><td>on the tenant, e.g. <code>02:00:00:00:00:01</code></td></tr>
+<tr><td><code>IP</code></td><td>Tenancy › Tenant</td><td>Text</td><td>–</td><td>on the tenant, e.g. <code>10.0.10.50</code> (empty = dynamic IP)</td></tr></table>
+<p>The tenant's group (<b>Group</b>) is not a custom field – it is a standard tenant field (<b>Organization › Tenant Groups</b>, then on the tenant <b>Edit › Group</b>).</p>
+
 <h3>NetBox custom fields</h3>
 <ul><li>Custom fields are created <b>in NetBox</b> (Customization › Custom Fields), not in the plugin. The admin chooses the <b>name, type</b> and <b>object</b> the field belongs to. The plugin only uses them.</li>
 <li>The fields above (<code>DHCP_POOL</code>, <code>POOL_TYPE</code>, <code>MAC1</code>–<code>MAC3</code>, <code>IP</code>) are <b>examples, not a fixed list</b>. The plugin offers every field of the object (standard and custom) when selecting subnets (conditions, pool type field), in host sources (conditions, host name, MAC, IP) and in pool code as <code>{{ cf.FIELD }}</code>.</li>

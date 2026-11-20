@@ -55,6 +55,33 @@
 <li><b>MAC</b> zapíšte ako 12 hexadecimálnych znakov s oddeľovačmi alebo bez nich (napr. <code>02:00:00:00:00:01</code>). Host bez MAC nevytvorí žiadny DHCP záznam. Nie je to skryté: na stránke skupiny je v súhrne „N hostov nepôjde do DHCP“ s dôvodom <i>bez MAC</i> (kapitola 10).</li>
 <li><b>POOL_TYPE typu Object</b> (odkaz na iný objekt NetBoxu): plugin ukazuje mená objektov a pool sa volá podľa mena objektu.</li></ul>
 
+<h3>Vytvorenie custom fieldov v NetBoxe – krok za krokom</h3>
+<p>Príklad pre <code>POOL_TYPE</code> (typ poolu pri prefixe). Ostatné polia sa vytvárajú rovnako, nastavenia sú v tabuľke nižšie. Na vytváranie custom fieldov treba v NetBoxe oprávnenie správcu.</p>
+<ol>
+<li><b>Sada voľieb</b> (hodnoty, z ktorých sa vyberá): <b>Customization › Custom Field Choices › + Add</b>
+<ul><li><b>Name</b>: <code>POOL_TYPE</code></li>
+<li><b>Extra choices</b>: jedna hodnota na riadok, napr.<pre>Kancelaria
+Tlaciarne
+Hostia</pre>(tvar <code>hodnota:popis</code> je voliteľný; plugin pracuje s <b>hodnotou</b>)</li>
+<li><b>Create</b>.</li></ul></li>
+<li><b>Custom field</b>: <b>Customization › Custom Fields › + Add</b>
+<ul><li><b>Object types</b>: <code>IPAM › Prefix</code></li>
+<li><b>Name</b>: <code>POOL_TYPE</code> (len písmená, číslice, podčiarkovník – pod týmto názvom ho uvidíte v plugine a v kóde ako <code>{{ cf.POOL_TYPE }}</code>)</li>
+<li><b>Label</b>: napr. <code>Typ poolu</code> (len popis vo formulári)</li>
+<li><b>Type</b>: <code>Selection</code></li>
+<li><b>Choice set</b>: <code>POOL_TYPE</code> (z kroku 1)</li>
+<li><b>Required</b>: nezaškrtnuté (prefixy bez DHCP ho mať nemusia)</li>
+<li><b>Create</b>.</li></ul></li>
+<li><b>Hodnota pri prefixe</b>: <b>IPAM › Prefixes</b> › otvorte prefix (napr. <code>10.0.10.0/24</code>) › <b>Edit</b> › časť <b>Custom Fields</b> › <b>Typ poolu</b> = <code>Kancelaria</code> › <b>Save</b>.<br>
+Hromadne: v zozname prefixov zaškrtnite prefixy › <b>Edit Selected</b> › <b>Typ poolu</b> = <code>Kancelaria</code> › <b>Apply</b>.</li>
+<li><b>V plugine</b>: DHCP-CFG › <b>Subnety</b> › <b>Pridať pole</b> › vyberte <code>POOL_TYPE</code> › kliknite na <b>ikonu kľúča</b>. Pre každú hodnotu, ktorú majú vybrané prefixy (napr. <code>Kancelaria</code>), vznikne pool; jeho kód napíšete na stránke poolu (<b>Nastaviť</b>).</li></ol>
+<table><tr><th>Pole</th><th>Object types</th><th>Type</th><th>Ďalšie nastavenie</th><th>Kde sa vypĺňa hodnota</th></tr>
+<tr><td><code>POOL_TYPE</code></td><td>IPAM › Prefix</td><td>Selection</td><td>Choice set s hodnotami typov poolov (vyššie)</td><td>pri prefixe</td></tr>
+<tr><td><code>DHCP_POOL</code></td><td>IPAM › Prefix</td><td>Selection (Choice set <code>YES</code>, <code>NO</code>) alebo Boolean</td><td>–</td><td>pri prefixe: <code>YES</code></td></tr>
+<tr><td><code>MAC1</code> (<code>MAC2</code>, <code>MAC3</code>)</td><td>Tenancy › Tenant</td><td>Text</td><td>voliteľne <b>Validation regex</b> <code>^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$</code> (NetBox potom zlú MAC neuloží)</td><td>pri tenantovi, napr. <code>02:00:00:00:00:01</code></td></tr>
+<tr><td><code>IP</code></td><td>Tenancy › Tenant</td><td>Text</td><td>–</td><td>pri tenantovi, napr. <code>10.0.10.50</code> (prázdne = dynamická IP)</td></tr></table>
+<p>Skupinu tenanta (<b>Group</b>) netreba vytvárať ako custom field – je to štandardné pole tenanta (<b>Organization › Tenant Groups</b>, potom pri tenantovi <b>Edit › Group</b>).</p>
+
 <h3>Vlastné polia NetBoxu (Custom Fields)</h3>
 <ul><li>Custom fields sa vytvárajú <b>v NetBoxe</b> (Customization › Custom Fields), nie v plugine. Správca si sám volí <b>názov, typ</b> a <b>objekt</b>, ku ktorému pole patrí. Plugin ich potom len používa.</li>
 <li>Polia vyššie (<code>DHCP_POOL</code>, <code>POOL_TYPE</code>, <code>MAC1</code>–<code>MAC3</code>, <code>IP</code>) sú <b>len príklady, nie pevný zoznam</b>. Plugin ponúka všetky polia objektu (štandardné aj custom) pri výbere subnetov (podmienky, pole typu poolu), pri zdrojoch hostov (podmienky, názov hosta, MAC, IP) a v kóde poolov ako <code>{{ cf.POLE }}</code>.</li>
