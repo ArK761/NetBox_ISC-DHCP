@@ -457,11 +457,7 @@ class ServersInlineView(LoginRequiredMixin, View):
                 messages.error(request, t("srv.err_not_test"))
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             srv.agent_cmd = f"simfirst:{timezone.now().strftime('%Y%m%d%H%M%S')}"
-            # NetBox side of a first installation: original DHCP found -> consent needed, then the full CFG as on a new server
-            srv.takeover, srv.takeover_info = "foreign", t("srv.sim_info")
-            srv.first_leases = srv.leases_kept = ""
-            srv.last_result = ""
-            srv.save(update_fields=["agent_cmd", "takeover", "takeover_info", "first_leases", "leases_kept", "last_result"])
+            srv.save(update_fields=["agent_cmd"])  # the server switches to the first-run simulation only when the agent reports it done
             log = [(f"cmd_simfirst {srv.name}", "", srv.agent_cmd)]
             messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_simfirst"), name=srv.name))
         elif action == "release" and srv:  # admin lets the next servers go on without this server's OK for the current set

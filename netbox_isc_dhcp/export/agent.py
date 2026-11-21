@@ -390,6 +390,10 @@ def heartbeat(server, request, data):
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]
         cmd_failed = res != "ok"
+        if res == "ok" and server.agent_cmd.startswith("simfirst:"):  # agent cleared its state: NetBox side of a first installation
+            server.takeover, server.takeover_info = "foreign", t("srv.sim_info")
+            server.first_leases = server.leases_kept = ""
+            server.last_result = ""
         if res == "ok" and server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart"):
             if server.dhcpd_by != "admin":
                 server.dhcpd_since = timezone.now()
@@ -453,7 +457,7 @@ def heartbeat(server, request, data):
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
