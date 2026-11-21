@@ -51,6 +51,9 @@ Uninstall: `sudo bash install.sh --uninstall` (keeps the config and the backups)
 If the agent finds a dhcpd.conf that does not come from NetBox, NetBox sends nothing until you confirm the backup and the overwrite
 at the server (CFG pluginu → DHCP servery → *Allow overwrite*). Switch off any other tool that manages the DHCP CFG (Ansible, scripts…),
 otherwise it collides with the agent.
+On the first run the agent copies the original leases (`<backup dir>/leases/original_<time>/`); on the takeover it stops dhcpd,
+copies the current leases, deploys and tests the CFG and starts dhcpd with the same leases (shown at the server: leases kept N → N IP).
+**Recommended: a test DHCP server** set as *First* with staged rollout – every new CFG and every takeover is tried there first.
 
 ## 3. Agent settings
 Set in NetBox (CFG pluginu → DHCP servery): interval (10 s – 30 min), test and restart command, backup directory

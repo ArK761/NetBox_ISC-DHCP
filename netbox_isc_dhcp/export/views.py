@@ -747,6 +747,13 @@ class ReportView(View):
                 server.dhcpd_pid = pid
                 fields.append("dhcpd_pid")
             server.save(update_fields=fields)
+            lk = str(body.get("leases_kept", ""))[:400].split("|")
+            if len(lk) == 3 and lk[0].isdigit() and lk[1].isdigit():  # first NetBox CFG: leases before / after the start
+                server.leases_kept = "|".join(lk)
+                server.save(update_fields=["leases_kept"])
+                ok = int(lk[1]) >= int(lk[0])
+                AuditEvent.objects.create(time=now, kind="agent", server=server.name, client_ip=audit.client_ip(request), level="ok" if ok else "warn",
+                                          cause=t("aud.leases_kept" if ok else "aud.leases_lost", b=lk[0], a=lk[1], path=lk[2]))
             if server.takeover == "approved":  # the admin's consent to overwrite the original DHCP: carried out (or not) by the agent
                 from .agent import _ack
 

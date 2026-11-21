@@ -66,6 +66,7 @@
     <h5 class="card-header"><i class="mdi mdi-server-network me-1"></i>{% tr "srv.title" %}</h5>
     <div class="card-body pb-2"><div class="small text-success"><i class="mdi mdi-information-outline"></i> {% tr "srv.hint" %}</div>
       <div class="small text-muted mt-1"><i class="mdi mdi-robot-outline"></i> {{ agent_hint }}</div>
+      <div class="small mt-2 p-2" style="border:1px solid var(--tblr-border-color,#555);border-left:4px solid #4299e1;border-radius:.35rem"><i class="mdi mdi-flask-outline"></i> <strong>{% tr "srv.test_title" %}</strong> – {% tr "srv.test_hint" %}</div>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center mt-2" id="isc-agent-mode">{% csrf_token %}<input type="hidden" name="field" value="mode">
         <strong class="small">{% tr "srv.mode" %}:</strong>
         <select name="value" class="form-select form-select-sm" style="max-width:20rem" onchange="this.form.submit()">

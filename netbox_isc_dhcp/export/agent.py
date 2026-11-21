@@ -292,7 +292,7 @@ def svc_text(raw):
 
 
 _WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto")
-_INFO = ("aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
+_INFO = ("aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
          "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
 
 
@@ -433,6 +433,11 @@ def heartbeat(server, request, data):
     applied = {fields[x] for x in str(data.get("applied", "")).split(",") if x in fields}  # settings the agent took over (1.19.3+)
     if applied:
         _ack(server, lambda p: p.get("f") in applied, "ok", "")
+    fl = str(data.get("first_leases", ""))[:400]
+    if fl and fl != server.first_leases and len(fl.split("|")) == 4 and fl.split("|")[0].isdigit():
+        server.first_leases = fl
+        _t, n, sha, where = fl.split("|")
+        msgs.append(t("aud.first_leases", n=n, sha=sha[:12], path=where))
     lt = str(data.get("leases_last", ""))
     if lt.isdigit() and len(lt) <= 12:  # unix time of the last periodic lease copy (agent 1.18.0+)
         import datetime as _dt
@@ -448,7 +453,7 @@ def heartbeat(server, request, data):
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
