@@ -534,7 +534,9 @@ class ServersInlineView(LoginRequiredMixin, View):
                 srv.test_until = None
             srv.stop_why = t("why.button", user=request.user.username) if action == "stop" else srv.stop_why
             srv.save(update_fields=["agent_cmd", "test_until", "stop_why"])
-            log = [(f"cmd_{action} {srv.name}", "", srv.agent_cmd + (f" ({mins} min)" if action == "start" and srv.is_test else ""))]
+            log = [(f"cmd_{action} {srv.name}", "", srv.agent_cmd)]  # the id must stay exact: the agent's answer is matched by it
+            if action == "start" and srv.is_test:
+                log.append((f"test_time {srv.name}", "", timezone.localtime(srv.test_until).strftime("%H:%M") + f" ({mins} min)"))
             messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name)
                              + (" " + t("srv.test_run_set", m=mins) if action == "start" and srv.is_test else ""))
         elif action == "gh_check":  # look for a new agent on GitHub now (otherwise every 5 minutes in the background)
