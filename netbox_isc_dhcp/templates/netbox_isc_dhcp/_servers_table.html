@@ -21,6 +21,11 @@
             {% if x.run_ok %}<span class="text-success"><i class="mdi mdi-check-circle"></i> {% tr "srv.cfg_current" %}</span>
             {% else %}<span class="text-warning"><i class="mdi mdi-alert"></i> {% tr "srv.cfg_old" %} <code>{{ x.cur_label }}</code></span>{% if x.sync_hint %} <span class="small text-muted"><i class="mdi mdi-sync"></i> {{ x.sync_hint }}</span>{% endif %}{% endif %}
           {% else %}<span class="text-muted">{% tr "srv.cfg_none" %}</span>{% endif %}</dd>
+        {% if x.test_state %}<dt>{% tr "srv.k_test" %}</dt>
+        <dd>{% if x.test_state == "ok" %}<span class="text-success"><i class="mdi mdi-check-decagram"></i> {% tr "srv.test_ok" %}</span>
+            {% elif x.test_state == "failed" %}<span class="text-danger fw-bold"><i class="mdi mdi-close-octagon"></i> {% tr "srv.test_failed" %}</span>
+            {% elif x.test_state == "running" %}<span class="text-warning"><i class="mdi mdi-timer-sand"></i> {% tr "srv.test_running" %}</span>
+            {% else %}<span class="text-warning"><i class="mdi mdi-timer-sand"></i> {% tr "srv.test_pending" %}</span>{% endif %}</dd>{% endif %}
         <dt>{% tr "srv.k_last" %}</dt>
         <dd>{% if x.s.last_report %}
             {% if x.s.last_result == "ok" %}<span class="text-success"><i class="mdi mdi-check-circle"></i> {% tr "srv.res_ok" %}</span>

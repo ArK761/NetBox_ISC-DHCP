@@ -211,11 +211,33 @@ def _server_rows():
                     "leases_kept": (lambda k: {"b": k[0], "a": k[1], "path": k[2], "ok": int(k[1]) >= int(k[0])} if len(k) == 3 and k[0].isdigit() and k[1].isdigit() else None)(srv.leases_kept.split("|")),
                     "leases_last": fmt_time(srv.leases_last),
                     "disk_rows": disk_rows(srv.disk_usage) if srv.enabled else [],
+                    "test_state": ("ok" if srv.test_ok_hash == mh else ("failed" if srv.last_hash == mh and srv.last_result and srv.last_result != "ok"
+                                   else ("running" if srv.last_hash == mh and srv.last_result == "ok" else "pending"))) if srv.is_test and srv.enabled else "",
                     "leases_old": bool(srv.leases_last and st and st.agent_leases_every and (timezone.now() - srv.leases_last).total_seconds() > st.agent_leases_every * 60 * 2 + 600)})
     waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}
     for r in out:
         r["blocks"] = r["s"].name in waited  # others wait for this server: admin may let them go on
     return out
+
+
+class AgentPageView(LoginRequiredMixin, View):
+    """Agent (menu): read-only list of the commands the agent knows (nothing can be changed here)."""
+
+    def get(self, request):
+        from django.shortcuts import render
+
+        from .export import agent as ag
+
+        if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
+            raise PermissionDenied
+        loc = ag._local_agent().decode("utf-8", "replace")
+        import re
+
+        m = re.search(r'^DHCP_SERVICE="([^"]*)"', loc, re.M)
+        return render(request, "netbox_isc_dhcp/agent.html", {
+            "agent_commands": ag.command_rows(), "agent_self": ag.self_rows(), "agent_version": ag._ver(ag._local_agent()),
+            "test_cmd": ag.TEST_CMD.replace("{conf}", "/etc/dhcp/dhcpd.conf"), "restart_cmd": ag.RESTART_CMD,
+            "service": m.group(1) if m else "isc-dhcp-server"})
 
 
 class NoticesView(LoginRequiredMixin, View):
@@ -280,8 +302,6 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "isc_lock": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).isc_mismatch(),
           "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0],
           "agent_src": _agent_src(),
-          "agent_commands": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).command_rows(),
-          "agent_self": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).self_rows(),
           "autosync_minutes": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).AUTOSYNC_MINUTES,
           "leases_every": [(v, t("srv.leases_off") if v == 0 else (f"{v} min" if v < 60 else f"{v // 60} h")) for v in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).LEASES_EVERY],
           "leases_keep": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).LEASES_KEEP,

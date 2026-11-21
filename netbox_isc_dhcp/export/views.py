@@ -358,12 +358,10 @@ class ServersInlineView(LoginRequiredMixin, View):
                 messages.error(request, t("srv.err_backup"))
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             st = _st()
-            before = (st.agent_test_cmd, st.agent_restart_cmd, st.agent_backup_dir)
-            st.agent_test_cmd = request.POST.get("test_cmd", "").strip()[:255] or st.agent_test_cmd
-            st.agent_restart_cmd = request.POST.get("restart_cmd", "").strip()[:255] or st.agent_restart_cmd
+            before = st.agent_backup_dir
             st.agent_backup_dir = bdir
-            st.save(update_fields=["agent_test_cmd", "agent_restart_cmd", "agent_backup_dir"])
-            log = [("test", before[0], st.agent_test_cmd), ("restart", before[1], st.agent_restart_cmd), ("backup", before[2], st.agent_backup_dir)]
+            st.save(update_fields=["agent_backup_dir"])
+            log = [("backup", before, st.agent_backup_dir)]
             log = [x for x in log if x[1] != x[2]]
         elif action == "mode":
             st = _st()
@@ -451,6 +449,10 @@ class ServersInlineView(LoginRequiredMixin, View):
             _make_first(srv)
             log = [("first", cur.name if cur else "", srv.name)]
         elif action == "is_test" and srv:  # test DHCP server: first in the rollout + the Test button
+            other = DHCPServer.objects.filter(is_test=True).exclude(pk=srv.pk).first()
+            if request.POST.get("value") == "1" and other is not None:
+                messages.error(request, t("srv.test_one", name=other.name))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             srv.is_test = request.POST.get("value") == "1"
             srv.save(update_fields=["is_test"])
             log = [(f"is_test {srv.name}", str(not srv.is_test), str(srv.is_test))]
@@ -615,7 +617,7 @@ class PlanView(View):
         mode = st.agent_mode if st else "plan"
         info = {"mode": mode, "hash": mh, "cfg": ver.label if ver else "", "server": server.name if server else "",
                 "interval": st.agent_interval if st else 60, "conf_dir": CONF_DIR, "base": base_path(),
-                "dir": managed_dirs(), "on_test_fail": "keep" if st and st.agent_keep_failed else "restore"}  # the agent sends sha256 of every file in these dirs (+ dhcpd.conf) next time
+                "dir": managed_dirs(), "on_test_fail": "keep" if st and st.agent_keep_failed and server is not None and server.is_test else "restore"}  # debugging: test server only  # the agent sends sha256 of every file in these dirs (+ dhcpd.conf) next time
         text = _wants_text(request)
 
         def reply(steps, extra=None, status=200):
@@ -680,6 +682,11 @@ class PlanView(View):
         _key_progress(request, server, info)
         if hash_only:
             return reply([])
+        from .agent import test_verify
+
+        if test_verify(server, mh, check, audit.client_ip(request)):  # test server verified the CFG: NetBox stops its dhcpd now
+            cmd, cid = server.agent_cmd.split(":", 1)
+            info["cmd"] = f"{cmd}\t{cid}"
         reason, names = gate(server, mh)
         if reason:
             return reply([], {"wait": reason, "wait_for": ",".join(names)})
@@ -701,6 +708,14 @@ class PlanView(View):
                               request.build_absolute_uri(reverse(rname)), mh, mode)
             if sum(1 for x in steps if x["op"] == "download") >= (st.agent_bundle_min if st else 10):  # many files: one tar.gz
                 info["bundle"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_bundle" if api else "plugins:netbox_isc_dhcp:export_bundle"))
+        if (steps and server is not None and server.is_test and server.dhcpd_by == "admin"  # stopped from NetBox (the agent keeps it down)
+                and not server.agent_cmd and any(x["op"] == "restart" for x in steps)):
+            server.agent_cmd = f"start:{timezone.now().strftime('%Y%m%d%H%M%S')}"  # new CFG on the test server: dhcpd up again for the test
+            server.save(update_fields=["agent_cmd"])
+            cmd, cid = server.agent_cmd.split(":", 1)
+            info["cmd"] = f"{cmd}\t{cid}"
+            AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=audit.client_ip(request), level="info",
+                                      manifest_hash=mh, cause=t("aud.test_start", cfg=ver.label if ver else ""))
         if steps and disk_off and server is not None and server.last_result == "ok" and server.last_hash == mh:
             # the server had exactly this CFG and now its files differ: changed outside NetBox -> NetBox (source of truth) puts its files back
             changed = sorted(p for p, h in want.items() if p in have and have[p] != h)

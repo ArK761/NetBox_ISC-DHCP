@@ -76,24 +76,29 @@
         <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
           <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form>
+      <details class="mt-1 ms-5 small" id="isc-staged-how"><summary><strong><i class="mdi mdi-file-tree"></i> {% tr "st.how" %}</strong></summary>
+        <div class="isc-how mt-1">
+          <div class="fw-bold"><i class="mdi mdi-flask-outline"></i> {% tr "st.t_title" %}</div>
+          <ul><li>{% tr "st.t1" %}<ul>
+              <li class="text-success">{% tr "st.t_ok" %}<ul><li>{% tr "st.t_ok2" %}</li></ul></li>
+              <li class="text-danger">{% tr "st.t_bad" %}</li></ul></li></ul>
+          <div class="fw-bold mt-2"><i class="mdi mdi-format-list-numbered"></i> {% tr "st.n_title" %}</div>
+          <ul><li>{% tr "st.n1" %}<ul>
+              <li class="text-success">{% tr "st.n_ok" %}</li>
+              <li class="text-danger">{% tr "st.n_bad" %}</li></ul></li>
+            <li>{% tr "st.off" %}</li></ul>
+          <div class="text-muted">{% tr "st.always" %}</div>
+        </div></details>
+      <style>.isc-how ul{list-style:none;padding-left:1.1rem;margin:.15rem 0;border-left:1px solid var(--tblr-border-color,#555)}.isc-how li{margin:.15rem 0}.isc-how li::before{content:"└ ";opacity:.5}</style>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-keep-failed">{% csrf_token %}<input type="hidden" name="field" value="keep_failed">
         <input type="hidden" name="value" value="{% if object.agent_keep_failed %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.agent_keep_failed %} checked{% endif %} onchange="this.form.submit()">
           <span class="form-check-label small"><strong>{% tr "srv.keep_failed" %}</strong> – {% tr "srv.keep_failed_hint" %}</span></label></form>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-3" id="isc-agent-cmds" style="display:grid;grid-template-columns:auto minmax(14rem,24rem) 1fr;gap:.5rem .75rem;align-items:center">{% csrf_token %}<input type="hidden" name="field" value="cmds">
-        <div style="grid-column:1/-1" class="small"><strong><i class="mdi mdi-console"></i> {% tr "srv.cmds" %}</strong> – {% tr "srv.cmds_hint" %}</div>
-        <label class="small">{% tr "srv.test_cmd" %}</label><input name="test_cmd" value="{{ object.agent_test_cmd }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.test_cmd_do" %}</span>
-        <label class="small">{% tr "srv.restart_cmd" %}</label><input name="restart_cmd" value="{{ object.agent_restart_cmd }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.restart_cmd_do" %}</span>
+        <div style="grid-column:1/-1" class="small"><strong><i class="mdi mdi-folder-lock-outline"></i> {% tr "srv.backup_title" %}</strong> – {% tr "srv.cmds_link" %} <a href="{% url 'plugins:netbox_isc_dhcp:agent_page' %}">{% tr "menu.agent" %} &rarr;</a></div>
         <label class="small">{% tr "srv.backup_dir" %}</label><input name="backup_dir" value="{{ object.agent_backup_dir }}" class="form-control form-control-sm font-monospace"><span class="small text-muted">{% tr "srv.backup_dir_do" %}</span>
         <div></div><div><button class="btn btn-sm btn-primary">{% tr "lbl.save" %}</button></div></form>
-      <details class="mt-3" id="isc-agent-commands"><summary class="small"><strong><i class="mdi mdi-lock-outline"></i> {% tr "cmd.title" %}</strong> ({{ agent_commands|length }}) – {% tr "cmd.hint" %}</summary>
-        <table class="table table-sm small mt-2 mb-2"><thead><tr><th>{% tr "cmd.col_cmd" %}</th><th>{% tr "cmd.col_do" %}</th><th>{% tr "cmd.col_lim" %}</th></tr></thead><tbody>
-        {% for c, d, l in agent_commands %}<tr><td class="font-monospace text-nowrap">{{ c }}</td><td>{{ d }}</td><td class="text-muted">{{ l }}</td></tr>{% endfor %}
-        </tbody></table>
-        <div class="small"><strong>{% tr "cmd.self_title" %}</strong></div>
-        <ul class="small mb-1">{% for s in agent_self %}<li>{{ s }}</li>{% endfor %}</ul>
-        <div class="small text-muted">{% tr "cmd.back" %}</div>
-      </details></div>
+</div>
     {% url 'plugins:netbox_isc_dhcp:servers_inline' as srv_url %}
     <style>
       .isc-srvt td{vertical-align:middle;padding-top:.7rem;padding-bottom:.7rem}

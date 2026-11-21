@@ -15,6 +15,7 @@ urlpatterns = [
     path("dhcp/variables/inline/", views.VariablesInlineView.as_view(), name="variables_inline"),
     path("dhcp/variables/json/", views.VariablesJSONView.as_view(), name="variables_json"),
     path("settings/servers/", __import__("netbox_isc_dhcp.export.views", fromlist=["ServersInlineView"]).ServersInlineView.as_view(), name="servers_inline"),
+    path("agent/", views.AgentPageView.as_view(), name="agent_page"),
     path("notices/", views.NoticesView.as_view(), name="notices"),
     path("settings/servers/table/", views.ServersTableView.as_view(), name="servers_table"),
     path("settings/<int:pk>/inline/", views.PluginSettingsInlineView.as_view(), name="pluginsettings_inline"),

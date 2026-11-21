@@ -1,0 +1,22 @@
+{% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
+{% block title %}{% tr "menu.agent" %}{% endblock %}
+{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
+<div class="row"><div class="col-12">
+<div class="card mb-3" id="isc-agent-commands">
+  <h5 class="card-header"><i class="mdi mdi-lock-outline me-1"></i>{% tr "cmd.title" %} <span class="badge text-bg-secondary ms-2">{{ agent_commands|length }}</span> <span class="small text-muted ms-2">isc-dhcp-agent {{ agent_version }}</span></h5>
+  <div class="card-body">
+    <div class="small text-muted mb-2">{% tr "cmd.hint" %}</div>
+    <table class="table table-sm small mb-3"><thead><tr><th>{% tr "agp.col_what" %}</th><th>{% tr "agp.col_cmd" %}</th></tr></thead><tbody>
+      <tr><td>{% tr "agp.test" %}</td><td class="font-monospace">{{ test_cmd }}</td></tr>
+      <tr><td>{% tr "agp.restart" %}</td><td class="font-monospace">{{ restart_cmd }}</td></tr>
+      <tr><td>{% tr "agp.svc" %}</td><td class="font-monospace">systemctl start|stop|restart {{ service }}</td></tr>
+    </tbody></table>
+    <table class="table table-sm small mb-3"><thead><tr><th>{% tr "cmd.col_cmd" %}</th><th>{% tr "cmd.col_do" %}</th><th>{% tr "cmd.col_lim" %}</th></tr></thead><tbody>
+    {% for c, d, l in agent_commands %}<tr><td class="font-monospace text-nowrap">{{ c }}</td><td>{{ d }}</td><td class="text-muted">{{ l }}</td></tr>{% endfor %}
+    </tbody></table>
+    <div class="small"><strong>{% tr "cmd.self_title" %}</strong></div>
+    <ul class="small mb-1">{% for s in agent_self %}<li>{{ s }}</li>{% endfor %}</ul>
+    <div class="small text-muted">{% tr "cmd.back" %}</div>
+  </div></div>
+</div></div>
+{% endblock %}

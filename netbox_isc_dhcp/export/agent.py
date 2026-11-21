@@ -15,6 +15,9 @@ AGENT_COMMANDS = (
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format", "test_server",
 )
 TIME_FORMATS = {"eu": ("DD.MM.RRRR-HH:MM", "%d.%m.%Y-%H:%M"), "iso": ("RRRR-MM-DD_HH:MM", "%Y-%m-%d_%H:%M"), "compact": ("RRRRMMDD-HHMMSS", "%Y%m%d-%H%M%S")}
+# commands the agent runs: fixed, shown read-only on the Agent page (the agent runs only what its own ALLOWED_* lists allow)
+TEST_CMD = "dhcpd -t -cf {conf}"
+RESTART_CMD = "systemctl restart isc-dhcp-server"
 
 
 def time_fmt(seconds=False):
@@ -105,6 +108,44 @@ def running_mismatch() -> bool:
     return len(run) > 1
 
 
+TEST_VERIFY_S = 60  # the test server must run the new CFG this long (dhcpd up, hash = NetBox) before production gets it
+
+
+def test_server():
+    """The enabled test DHCP server with an agent (only one may exist), or None."""
+    from .models import DHCPServer
+
+    return DHCPServer.objects.filter(is_test=True, enabled=True, last_seen__isnull=False).order_by("pk").first()
+
+
+def test_verify(server, manifest_hash, check, client_ip=""):
+    """Test server: CFG deployed OK, hash = NetBox and dhcpd running >= TEST_VERIFY_S -> verified (production may get it),
+    dhcpd on the test server is stopped (NetBox command, visible in the Audit). Returns True when it was verified now."""
+    from ..i18n import t
+    from . import versions
+    from .models import AuditEvent
+
+    if server is None or not server.is_test or not server.enabled or server.test_ok_hash == manifest_hash:
+        return False
+    from datetime import timedelta
+
+    old = timezone.now() - timedelta(seconds=TEST_VERIFY_S)
+    ok = (server.last_result == "ok" and server.last_hash == manifest_hash and server.running_hash == manifest_hash
+          and server.dhcpd_running and server.disk_hash == check and server.last_report and server.last_report <= old
+          and (server.dhcpd_since is None or server.dhcpd_since <= old))
+    if not ok:
+        return False
+    server.test_ok_hash = manifest_hash
+    fields = ["test_ok_hash"]
+    if not server.agent_cmd:
+        server.agent_cmd = f"stop:{timezone.now().strftime('%Y%m%d%H%M%S')}"
+        fields.append("agent_cmd")
+    server.save(update_fields=fields)
+    AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=client_ip, level="info",
+                              manifest_hash=manifest_hash, cause=t("aud.test_ok", cfg=versions.label(manifest_hash), s=TEST_VERIFY_S))
+    return True
+
+
 def gate(server, manifest_hash):
     """(reason, [server names]) why this server must wait now, or ("", [])."""
     from ..models import settings_obj
@@ -120,6 +161,12 @@ def gate(server, manifest_hash):
         return "isc_mismatch", [first.name] if first else []
     if server.last_result in FAILED and server.last_hash == manifest_hash:
         return "failed_same", []  # never send the set that already failed here again (no endless restore loop)
+    test = test_server()
+    if test is not None and server.pk != test.pk:  # test server: production gets the CFG only after the test server verified it (no release button)
+        if test.test_ok_hash == manifest_hash:
+            return "", []  # verified on the test server: all production servers at once
+        failed = test.last_hash == manifest_hash and test.last_result and test.last_result != "ok"
+        return ("test_failed" if failed else "test_wait"), [test.name]
     st = settings_obj()
     if (st and st.staged_rollout) or running_mismatch():
         before = [s for s in enabled_servers() if s.order < server.order and s.last_seen]  # no agent yet = blocks nobody
@@ -223,9 +270,8 @@ def make_plan(have: dict, server, file_url, report_url, manifest_hash, mode="pla
     # included files first, dhcpd.conf last: dhcpd.conf never points to a file that is not there yet
     for r in sorted(download, key=lambda r: r["area"] == "conf"):
         steps.append({"op": "download", "path": r["path"], "sha256": r["sha256"], "size": r["size"], "url": file_url(r["path"])})
-    test = (st.agent_test_cmd if st else "dhcpd -t -cf {conf}").replace("{conf}", conf)
-    steps.append({"op": "test", "cmd": test, "on_fail": "restore"})
-    steps.append({"op": "restart", "cmd": st.agent_restart_cmd if st else "systemctl restart isc-dhcp-server", "on_fail": "restore"})
+    steps.append({"op": "test", "cmd": TEST_CMD.replace("{conf}", conf), "on_fail": "restore"})
+    steps.append({"op": "restart", "cmd": RESTART_CMD, "on_fail": "restore"})
     for p in delete:
         steps.append({"op": "delete", "path": p})
     steps.append({"op": "report", "url": report_url, "hash": manifest_hash})
