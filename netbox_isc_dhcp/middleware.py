@@ -28,27 +28,9 @@ _NOTICE = ('<div class="alert text-bg-{level} border-0 d-flex align-items-center
            '<span>{text}</span>{link}</div>')
 
 
-def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
-    """Insert the version badge before </body> of an HTML response (no JavaScript involved)."""
-    if response.status_code != 200 or getattr(response, "streaming", False):
-        return response
-    if "text/html" not in response.get("Content-Type", ""):
-        return response
-    charset = getattr(response, "charset", None) or "utf-8"
-    body = response.content.decode(charset)
-    if 'id="isc-dhcp-version"' in body:
-        return response
-    from django.urls import reverse
-
-    from .i18n import t
-
-    try:
-        manual = reverse("plugins:netbox_isc_dhcp:manual")
-    except Exception:
-        manual = "/plugins/isc-dhcp/manual/"
-    badge = _BADGE % (manual, escape(t("lbl.manual")), escape(label()))
-    if notices:
-        badge += _TREE_CSS
+def notices_html(notices, toggle=("Show tree", "Hide tree")):
+    """HTML of the plugin warning bars (also served live by the notices view)."""
+    badge = ""
     for level, icon, text, url, link_text, *rest in notices:  # plugin warnings at the top of the page (never cover buttons)
         tree = rest[0] if rest else None
         link = "" if tree else f' <a class="ms-auto fw-bold text-reset" href="{escape(url)}">{escape(link_text)} &rarr;</a>' if url else ""
@@ -70,6 +52,49 @@ def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
                   f'<span class="isc-tog ms-auto text-nowrap"><i class="mdi mdi-file-tree"></i> '
                   f'<span class="isc-show">{escape(toggle[0])} &#9662;</span><span class="isc-hide">{escape(toggle[1])} &#9652;</span></span></summary>'
                   f'<div class="isc-tree fw-normal"><ul class="border-0 ps-0">{nodes}</ul></div></details>')
+    return badge
+
+
+_LIVE_JS = (
+    "<script>(function(){var b=document.getElementById('isc-notices');if(!b||!window.fetch)return;"
+    "function go(){if(document.hidden)return;fetch(b.dataset.url,{credentials:'same-origin'}).then(function(r){return r.status==200?r.text():null}).then(function(h){"
+    "if(h===null||h===b.innerHTML)return;var o=[].map.call(b.querySelectorAll('details[open] summary'),function(x){return x.textContent});"
+    "b.innerHTML=h;[].forEach.call(b.querySelectorAll('details summary'),function(x){if(o.indexOf(x.textContent)>-1)x.parentNode.open=true})}).catch(function(){})}"
+    "setInterval(go,10000);document.addEventListener('visibilitychange',go)})();</script>"
+)
+
+
+def _live_box(notices, toggle):
+    """Warning bars in a box that refreshes itself every 10 s (state of servers changes without a page reload)."""
+    from django.urls import reverse
+
+    try:
+        url = reverse("plugins:netbox_isc_dhcp:notices")
+    except Exception:
+        return notices_html(notices, toggle)
+    return f'<div id="isc-notices" data-url="{escape(url)}">{notices_html(notices, toggle)}</div>' + _LIVE_JS
+
+
+def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
+    """Insert the version badge before </body> of an HTML response (no JavaScript involved)."""
+    if response.status_code != 200 or getattr(response, "streaming", False):
+        return response
+    if "text/html" not in response.get("Content-Type", ""):
+        return response
+    charset = getattr(response, "charset", None) or "utf-8"
+    body = response.content.decode(charset)
+    if 'id="isc-dhcp-version"' in body:
+        return response
+    from django.urls import reverse
+
+    from .i18n import t
+
+    try:
+        manual = reverse("plugins:netbox_isc_dhcp:manual")
+    except Exception:
+        manual = "/plugins/isc-dhcp/manual/"
+    badge = _BADGE % (manual, escape(t("lbl.manual")), escape(label()))
+    badge += _TREE_CSS + _live_box(notices, toggle)
     i = body.find(_MARKER)
     if i != -1:
         i += len(_MARKER)
@@ -209,7 +234,7 @@ class DNSWarningMiddleware:
         return out
 
     def __call__(self, request):
-        on_plugin = request.method == "GET" and PLUGIN_PATH in request.path
+        on_plugin = request.method == "GET" and PLUGIN_PATH in request.path and not request.path.endswith("/notices/")
         notices = []
         if on_plugin and request.user.is_authenticated:
             try:

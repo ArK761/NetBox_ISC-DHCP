@@ -1,4 +1,4 @@
-"""CFG numbers: every CFG set (manifest hash) gets <dd.mm.yy>_<NNN> (NNN = order of the day, from 000)."""
+"""CFG numbers: every CFG set (manifest hash) gets <dd.mm.yy>_<NNN> (NNN = order of the day, from 001)."""
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -14,7 +14,9 @@ def ensure(manifest_hash):
         return v
     now = timezone.localtime()
     day = now.strftime("%d.%m.%y")
-    n = CfgVersion.objects.filter(label__startswith=day + "_").count()
+    nums = [int(x.rsplit("_", 1)[1]) for x in CfgVersion.objects.filter(label__startswith=day + "_").values_list("label", flat=True)
+            if x.rsplit("_", 1)[1].isdigit()]
+    n = max(nums, default=0) + 1  # first set of the day = 001 (old labels stay as they are)
     try:
         with transaction.atomic():
             return CfgVersion.objects.create(hash=manifest_hash, label=f"{day}_{n:03d}", created=now)

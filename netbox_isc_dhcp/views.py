@@ -218,6 +218,23 @@ def _server_rows():
     return out
 
 
+class NoticesView(LoginRequiredMixin, View):
+    """Warning bars at the top of plugin pages, refreshed live (no page reload needed)."""
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        from .middleware import DNSWarningMiddleware, notices_html
+
+        try:
+            html = notices_html(DNSWarningMiddleware(None)._notices(request), (t("lbl.tree_show"), t("lbl.tree_hide")))
+        except Exception:
+            return HttpResponse(status=204)
+        r = HttpResponse(html, content_type="text/html; charset=utf-8")
+        r["Cache-Control"] = "no-store"
+        return r
+
+
 class ServersTableView(LoginRequiredMixin, View):
     """Live part of CFG pluginu -> DHCP servery (refreshed every 5 s on the page)."""
 
