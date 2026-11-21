@@ -42,7 +42,7 @@ def fmt_time(when, seconds=False):
 LEASES_EVERY = (0, 15, 30, 60, 180, 360, 720, 1440)  # minutes, 0 = off
 LEASES_KEEP = (6, 12, 24, 48, 72, 96, 168)
 # what the agent does on its own (no command from NetBox) - shown under the list
-AGENT_SELF = ("default_fix", "apparmor", "kill_stray", "keep_up", "pidfile", "dedupe", "watch", "leases")
+AGENT_SELF = ("default_fix", "apparmor", "kill_stray", "keep_up", "pidfile", "dedupe", "watch", "leases", "reboot")
 
 
 def command_rows():
@@ -385,8 +385,8 @@ def svc_text(raw):
     return raw
 
 
-_WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto", "aud.disk_warn")
-_INFO = ("aud.svc_admin_off", "aud.disk_info", "aud.disk_ok", "aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
+_WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto", "aud.disk_warn", "aud.reboot_down")
+_INFO = ("aud.reboot_up", "aud.reboot_stopped", "aud.svc_admin_off", "aud.disk_info", "aud.disk_ok", "aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
          "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
 
 
@@ -483,7 +483,18 @@ def heartbeat(server, request, data):
         else:
             msgs.append(t("aud.ag_isc_changed", old=server.isc_version, new=isc))
     event = str(data.get("dhcpd_event", ""))[:20]  # agent_start | agent_stop | manual_start | manual_stop
-    if isc != "none" and dhcpd is not None and (dhcpd != server.dhcpd_running or first or server.isc_version in ("", "none")):
+    if event.startswith("reboot_") and isc != "none" and dhcpd is not None:  # the server booted: dhcpd started by the system = normal
+        if event == "reboot_stopped":  # test server stopped from NetBox before the reboot: the agent stopped it again
+            msgs.append(t("aud.reboot_stopped"))
+            server.dhcpd_by = "admin"
+        elif event == "reboot_up":
+            msgs.append(t("aud.reboot_up", pid=pid or "?"))
+            server.dhcpd_by = "boot"
+        else:
+            msgs.append(t("aud.reboot_down"))
+            server.dhcpd_by = "admin" if server.dhcpd_by == "admin" else "boot"
+        server.dhcpd_since, server.dhcpd_why, server.test_until = timezone.now(), "", None
+    elif isc != "none" and dhcpd is not None and (dhcpd != server.dhcpd_running or first or server.isc_version in ("", "none")):
         why = str(data.get("dhcpd_why", ""))[:300]
         by_netbox = server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart") or bool(server.restart_req)
         if event.startswith("manual"):  # NOT through NetBox: own highlighted Audit row

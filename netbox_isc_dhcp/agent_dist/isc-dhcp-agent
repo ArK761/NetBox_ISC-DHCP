@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.25.0"
+AGENT_VERSION="1.26.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -659,11 +659,33 @@ applied_add() { grep -qxF "$1" "$STATE_DIR/applied" 2>/dev/null || echo "$1" >>"
 
 mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
 
+reboot_check() {  # REBOOT=1 when the server booted since the last contact NetBox accepted (boot id of the kernel)
+  BOOT_NOW=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+  local prev; prev=$(state boot_id); REBOOT=""; REBOOT_STOP=""
+  [ -n "$BOOT_NOW" ] && [ -n "$prev" ] && [ "$prev" != "$BOOT_NOW" ] && REBOOT=1
+  # test server stopped from NetBox before the reboot, but systemd started dhcpd at boot: stop it again (production servers: never)
+  if [ -n "$REBOOT" ] && [ "$(state is_test)" = 1 ] && [ "$(state admin_stopped)" = 1 ] && [ "$(dhcpd_running)" = 1 ] && [ "$(state reboot_done)" != "$BOOT_NOW" ]; then
+    local p0; p0=$(pid_now); mark_agent; svc stop >/dev/null 2>&1; wait_down 10; pid_step stop "$p0"
+    if [ "$(dhcpd_running)" = 1 ]; then
+      log "server rebooted: test server was stopped from NetBox before the reboot - stopping dhcpd FAILED, it keeps running"
+    else
+      REBOOT_STOP=1; echo "$BOOT_NOW" >"$STATE_DIR/reboot_done"
+      log "server rebooted: test server, dhcpd was stopped from NetBox before the reboot - stopped it again"
+    fi
+  fi
+  [ -n "$REBOOT" ] && [ "$(state is_test)" = 1 ] && [ "$(state reboot_done)" = "$BOOT_NOW" ] && REBOOT_STOP=1  # NetBox not reached yet: still report it
+  return 0
+}
+
 dhcpd_event() {  # agent_start | agent_stop | agent_restart | manual_start | manual_stop | manual_restart since the last contact NetBox accepted ("" = no change)
   local now prev who pp
   now=$(dhcpd_running); prev=$(state dhcpd_prev); pp=$(state pid_prev)
   EVENT_NOW="$now"; PID_NOW=$(pid_now)
   [ -z "$prev" ] && return 0
+  if [ -n "${REBOOT:-}" ]; then  # the server booted since the last contact: dhcpd started by systemd at boot = normal, not "by hand"
+    if [ -n "${REBOOT_STOP:-}" ]; then echo reboot_stopped; elif [ "$now" = 1 ]; then echo reboot_up; else echo reboot_down; fi
+    return 0
+  fi
   who=manual; [ "$(state agent_did)" = 1 ] && who=agent
   if [ "$now" = "$prev" ]; then  # still running, but another PID and not the agent's doing = restarted by hand
     [ "$now" = 1 ] && [ -n "$pp" ] && [ -n "$PID_NOW" ] && [ "$pp" != "$PID_NOW" ] && echo "${who}_restart"  # agent_restart = the agent did it (new PID is the agent's)
@@ -706,6 +728,7 @@ why_changed() {  # $1 = start|stop|restart: what the system logged since the las
 event_sent() {  # NetBox accepted the contact: remember the state (an event is never lost on 503 / NetBox down)
   local old_pid; old_pid=$(state pid_prev)
   [ -n "${EVENT_NOW:-}" ] && echo "$EVENT_NOW" >"$STATE_DIR/dhcpd_prev"
+  [ -n "${BOOT_NOW:-}" ] && echo "$BOOT_NOW" >"$STATE_DIR/boot_id" && rm -f "$STATE_DIR/reboot_done"  # the reboot is reported
   echo "${PID_NOW:-}" >"$STATE_DIR/pid_prev"
   rm -f "$STATE_DIR/agent_did"
   [ -n "${LEASES_EV:-}" ] && [ "$(state leases_event)" = "$LEASES_EV" ] && rm -f "$STATE_DIR/leases_event"
@@ -715,6 +738,9 @@ event_sent() {  # NetBox accepted the contact: remember the state (an event is n
     manual_stop) log "dhcpd stopped outside the agent: $LOG_WHY - reported to NetBox" ;;
     manual_start) log "dhcpd started outside the agent: $LOG_WHY - reported to NetBox" ;;
     manual_restart) log "dhcpd restarted outside the agent (PID $old_pid -> $PID_NOW): $LOG_WHY - reported to NetBox" ;;
+    reboot_up) log "server rebooted - dhcpd started by the system (PID $PID_NOW), normal - reported to NetBox" ;;
+    reboot_down) log "server rebooted - dhcpd is NOT running - reported to NetBox" ;;
+    reboot_stopped) log "server rebooted - test server, dhcpd was stopped from NetBox before the reboot: stopped again - reported to NetBox" ;;
   esac
 }
 
@@ -865,6 +891,7 @@ contact() {
   local url alt
   DUP_FIXED=""; dedupe_dhcpd
   FIX_NOW="${FIXED:-}"; FIXED=""  # server settings the agent fixed (sent once)
+  reboot_check
   EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); PID_NOW=$(pid_now); WHY=""; LOG_EVENT=""
   case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start) WHY=$(why_changed start) ;; manual_restart) WHY=$(why_changed restart) ;; esac
   FRESH=""; INCLUDES=""
@@ -928,6 +955,9 @@ contact() {
       test) TEST_CMD="$a" ;; restart) RESTART_CMD="$a" ;; delete) DELETES+=("$a") ;;
     esac
   done < <([ "$code" = 200 ] && cat "$resp")  # only a real NetBox answer is a plan (a proxy error page is not)
+  if [ "$code" = 200 ]; then  # NetBox's switch "Test server", kept for the next boot
+    if [ -n "$NB_TEST" ]; then [ "$(state is_test)" = 1 ] || echo 1 >"$STATE_DIR/is_test"; else rm -f "$STATE_DIR/is_test"; fi
+  fi
   [ "$code" = 200 ] && event_sent
   if [ "$code" != 200 ]; then
     case "$code" in
