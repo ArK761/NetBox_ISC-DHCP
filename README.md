@@ -54,6 +54,8 @@ otherwise it collides with the agent.
 On the first run the agent copies the original leases (`<backup dir>/leases/original_<time>/`); on the takeover it stops dhcpd,
 copies the current leases, deploys and tests the CFG and starts dhcpd with the same leases (shown at the server: leases kept N → N IP).
 **Recommended: a test DHCP server** set as *First* with staged rollout – every new CFG and every takeover is tried there first.
+Mark it as **Test server** in NetBox (it becomes First) and set `TEST_SERVER=yes` in `/etc/isc-dhcp-agent.conf` on it: the **Test** button then
+simulates the first run of the agent (original leases copy, consent, dhcpd stop → leases copy → CFG → start → leases check). Production servers refuse it.
 
 ## 3. Agent settings
 Set in NetBox (CFG pluginu → DHCP servery): interval (10 s – 30 min), test and restart command, backup directory
@@ -74,6 +76,7 @@ Local settings on the DHCP server, `/etc/isc-dhcp-agent.conf` (root only, 600), 
 | `DEFAULT_FIX` | `yes` | fixes `/etc/default/isc-dhcp-server` (IPv4 interfaces, IPv6 off) |
 | `APPARMOR_FIX` | `yes` | lets dhcpd read the base path under AppArmor |
 | `KEEP_BACKUPS` | `10` | backups kept |
+| `TEST_SERVER` | `no` | `yes` = test server: NetBox may simulate the first run of the agent here |
 | `LEASES_FILE` | `/var/lib/dhcp/dhcpd.leases` | copied into every CFG backup (`_leases/`) and periodically (interval + copies set in NetBox, default 1 h / 72) to `<backup dir>/leases/<date-time>/` (date format set in NetBox, the agent renames old dirs); never restored |
 | `START_WAIT` | `5` | seconds after restart before checking dhcpd |
 

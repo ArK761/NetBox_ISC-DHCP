@@ -10,7 +10,7 @@ FAILED = ("test_failed", "rolled_back", "failed")
 # Shown read-only in CFG pluginu -> DHCP servery. as_text() never writes a line that is not here; the agent ignores it anyway.
 AGENT_COMMANDS = (
     "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
-    "cmd start", "cmd stop", "cmd restart", "cmd update", "agent_url", "agent_sha",
+    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "agent_url", "agent_sha",
     "key", "interval", "report", "base", "dir", "conf_dir",
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format",
 )

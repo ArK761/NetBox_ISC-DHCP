@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.21.0"
+AGENT_VERSION="1.22.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -17,6 +17,7 @@ ALLOWED_RESTART_CMDS=("systemctl restart isc-dhcp-server")
 RUNNING_CHECK=""                                # empty = service active AND dhcpd process (real state); pidof only without systemd
 START_WAIT=5                                    # seconds after restart before checking dhcpd
 KEEP_BACKUPS=10
+TEST_SERVER=no                                  # yes = this is a TEST DHCP server: NetBox may simulate the first run of the agent here
 LEASES_FILE="/var/lib/dhcp/dhcpd.leases"        # lease database: copied into every backup (_leases/), never restored or deleted
 APPARMOR_FIX=yes                                # AppArmor profile of dhcpd found -> allow it to read the base path
 DEFAULT_FIX=yes                                 # /etc/default/isc-dhcp-server: IPv4 interfaces set, IPv6 server off (fixed when wrong)
@@ -34,7 +35,7 @@ umask 022  # files and dirs must be readable by dhcpd (it may run as its own use
 # THE ONLY commands NetBox can send to this agent - 1:1 with the plugin (export/agent.py AGENT_COMMANDS, shown read-only
 # in CFG pluginu -> DHCP servery). Set after the config file: it cannot be extended. A line from NetBox that is not here is
 # ignored and logged as SECURITY. Test / restart run only what ALLOWED_TEST_CMDS / ALLOWED_RESTART_CMDS allow.
-AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases time_format)
+AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" "cmd simfirst" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases time_format)
 BACKUP_DEFAULT="/opt/BCK"  # backups ONLY below /opt; rm -rf only there and only on the agent's own backup dirs <CFG>_<YYYYmmdd-HHMMSS>
 
 is_command() { printf '%s\n' "${AGENT_COMMANDS[@]}" | grep -qxF -- "$1"; }
@@ -715,6 +716,13 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
         install -m 755 "$new" "$self" && log "agent $txt - restarting the agent"
         [ "$ONCE" = 1 ] || { command -v systemctl >/dev/null 2>&1 && systemctl --no-block restart isc-dhcp-agent; }
         return 0
+      fi ;;
+    simfirst)  # TEST server only: forget the agent state (never the files) -> the next contact is a first installation
+      if [ "$TEST_SERVER" != yes ]; then
+        res=failed; txt="refused: not a test server (TEST_SERVER=yes is not set in $CONF_FILE)"; log "SECURITY: first run simulation refused - TEST_SERVER is not yes"
+      else
+        local k; for k in running label first_leases check leases_event applied leases_sum; do rm -f "$STATE_DIR/$k"; done
+        txt="agent state cleared (files kept) - the next contact runs as a first installation"
       fi ;;
     *) res=failed; txt="unknown command $CMD" ;;
   esac

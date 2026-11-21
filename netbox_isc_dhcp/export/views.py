@@ -442,6 +442,28 @@ class ServersInlineView(LoginRequiredMixin, View):
                     x.order = i
                     x.save(update_fields=["order"])
             log = [("first", cur.name if cur else "", srv.name)]
+        elif action == "is_test" and srv:  # test DHCP server: first in the rollout + the Test button
+            srv.is_test = request.POST.get("value") == "1"
+            srv.save(update_fields=["is_test"])
+            log = [(f"is_test {srv.name}", str(not srv.is_test), str(srv.is_test))]
+            if srv.is_test:  # a test server goes first: new CFG is tried there before the production servers
+                rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]
+                for i, x in enumerate([srv] + rest, 1):
+                    if x.order != i:
+                        x.order = i
+                        x.save(update_fields=["order"])
+        elif action == "simfirst" and srv:  # TEST button: simulate the first run of the agent (only a test server)
+            if not srv.is_test:
+                messages.error(request, t("srv.err_not_test"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            srv.agent_cmd = f"simfirst:{timezone.now().strftime('%Y%m%d%H%M%S')}"
+            # NetBox side of a first installation: original DHCP found -> consent needed, then the full CFG as on a new server
+            srv.takeover, srv.takeover_info = "foreign", t("srv.sim_info")
+            srv.first_leases = srv.leases_kept = ""
+            srv.last_result = ""
+            srv.save(update_fields=["agent_cmd", "takeover", "takeover_info", "first_leases", "leases_kept", "last_result"])
+            log = [(f"cmd_simfirst {srv.name}", "", srv.agent_cmd)]
+            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_simfirst"), name=srv.name))
         elif action == "release" and srv:  # admin lets the next servers go on without this server's OK for the current set
             from . import build
 
