@@ -621,6 +621,8 @@ class PlanView(View):
             info["leases"] = f"{every}\t{st.agent_leases_keep if st else 72}\t{bdir.rstrip('/')}/leases"
         if server is not None and _ver_ge(server.agent_version, (1, 19, 0)):
             info["time_format"] = (st.agent_time_format if st else "eu") or "eu"  # name format of the lease copy dirs; the agent renames old ones
+        if server is not None and server.is_test and _ver_ge(server.agent_version, (1, 23, 0)):
+            info["test_server"] = "1"  # the NetBox switch "Test server": the agent allows the first run simulation
         if disk_hash:
             info["check"] = check  # only to agents that send their disk hash (1.16.0+); older ones would log it as an unknown command
         skipped = request.method == "POST" and str((data or {}).get("nofiles", "")) == "1"  # agent sent only its disk hash
