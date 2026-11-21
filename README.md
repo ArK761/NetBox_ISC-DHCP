@@ -23,13 +23,18 @@ a small bash daemon that keeps every DHCP server in sync with NetBox (download �
 
 ## 1. Install the plugin (NetBox server)
 ```bash
-sudo bash -c 'source /opt/netbox/venv/bin/activate && pip install "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@v1.0.0" && cd /opt/netbox/netbox && python manage.py migrate netbox_isc_dhcp && systemctl restart netbox netbox-rq'
+sudo bash -c 'source /opt/netbox/venv/bin/activate && pip install "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@1.0.0" && cd /opt/netbox/netbox && python manage.py migrate netbox_isc_dhcp && systemctl restart netbox netbox-rq'
 ```
 `/opt/netbox/netbox/netbox/configuration.py`:
 ```python
 PLUGINS = ["netbox_isc_dhcp"]
 ```
 Then in NetBox: **CFG pluginu** (language, base path, subdirectories) → **DHCP-CFG** (dhcpd.conf, DNS, Subnets, Hosts).
+
+To keep the plugin installed after a NetBox upgrade (`upgrade.sh`), add it to `/opt/netbox/local_requirements.txt`:
+```
+netbox-isc-dhcp @ git+https://github.com/ArK761/NetBox_ISC-DHCP.git@1.0.0
+```
 
 Upgrade: the same command with `--upgrade --force-reinstall --no-deps` and the new tag. Migrations are part of the package
 (never run `makemigrations` on the server). Updating the plugin never changes your stored data.
@@ -107,9 +112,11 @@ služba na DHCP serveri, ktorá ho drží v súlade s NetBoxom (stiahnutie → z
 
 ## Inštalácia pluginu
 ```bash
-sudo bash -c 'source /opt/netbox/venv/bin/activate && pip install "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@v1.0.0" && cd /opt/netbox/netbox && python manage.py migrate netbox_isc_dhcp && systemctl restart netbox netbox-rq'
+sudo bash -c 'source /opt/netbox/venv/bin/activate && pip install "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@1.0.0" && cd /opt/netbox/netbox && python manage.py migrate netbox_isc_dhcp && systemctl restart netbox netbox-rq'
 ```
-Do `configuration.py` pridaj `PLUGINS = ["netbox_isc_dhcp"]`. Potom v NetBoxe **CFG pluginu** (jazyk, základná cesta,
+Do `configuration.py` pridaj `PLUGINS = ["netbox_isc_dhcp"]`. Aby plugin ostal aj po aktualizácii NetBoxu (`upgrade.sh`),
+pridaj do `/opt/netbox/local_requirements.txt` riadok
+`netbox-isc-dhcp @ git+https://github.com/ArK761/NetBox_ISC-DHCP.git@1.0.0`. Potom v NetBoxe **CFG pluginu** (jazyk, základná cesta,
 podadresáre) → **DHCP-CFG** (dhcpd.conf, DNS, Subnety, Hosty). Aktualizácia = ten istý príkaz s
 `--upgrade --force-reinstall --no-deps` a novou verziou; migrácie sú v balíku (nikdy `makemigrations` na serveri).
 
