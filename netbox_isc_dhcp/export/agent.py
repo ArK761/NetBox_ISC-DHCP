@@ -10,7 +10,7 @@ FAILED = ("test_failed", "rolled_back", "failed")
 # Shown read-only in CFG pluginu -> DHCP servery. as_text() never writes a line that is not here; the agent ignores it anyway.
 AGENT_COMMANDS = (
     "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
-    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "agent_url", "agent_sha",
+    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "cmd restoreleases", "agent_url", "agent_sha",
     "key", "interval", "report", "base", "dir", "conf_dir",
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format", "test_server",
 )
@@ -390,9 +390,11 @@ def heartbeat(server, request, data):
     if done and server.agent_cmd and done.split(":", 1)[0] == server.agent_cmd.split(":", 1)[1]:
         _, res, *txt = done.split(":", 2) + [""]
         cmd_failed = res != "ok"
+        if res == "ok" and server.agent_cmd.startswith("restoreleases:"):
+            server.leases_restored = f"{int(timezone.now().timestamp())}|{(txt[0] if txt else '')[:300]}"
         if res == "ok" and server.agent_cmd.startswith("simfirst:"):  # agent cleared its state: NetBox side of a first installation
             server.takeover, server.takeover_info = "foreign", t("srv.sim_info")
-            server.first_leases = server.leases_kept = ""
+            server.first_leases = server.leases_kept = server.leases_restored = ""
             server.last_result = ""
         if res == "ok" and server.agent_cmd.split(":", 1)[0] in ("start", "stop", "restart"):
             if server.dhcpd_by != "admin":
@@ -457,7 +459,7 @@ def heartbeat(server, request, data):
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
@@ -611,3 +613,16 @@ def agent_outdated(server) -> bool:
 
 
 CMDS = ("start", "stop", "restart", "update")
+
+
+def restore_block(server, manifest_hash):
+    """Why the 'put the original leases back' button is disabled ('' = allowed): the NetBox CFG must be deployed and tested OK."""
+    if not server.first_leases:
+        return "srv.rl_no_copy"
+    if server.leases_restored:
+        return "srv.rl_done"
+    if server.takeover == "foreign":
+        return "srv.rl_takeover"
+    if server.disk_broken or server.last_result not in ("ok", "start_failed") or server.last_hash != manifest_hash:
+        return "srv.rl_cfg"
+    return ""

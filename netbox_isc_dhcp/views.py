@@ -212,6 +212,8 @@ def _server_rows():
                     "sync_hint": _sync_hint(srv, st, mh),
                     "disk": ("ok" if srv.disk_hash == ck else "bad") if srv.disk_hash and srv.enabled else "",
                     "first_leases": _first_leases(srv, st),
+                    "rl_block": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).restore_block(srv, mh),
+                    "rl_done": (lambda p: {"when": timezone.localtime(__import__("datetime").datetime.fromtimestamp(int(p[0]), tz=__import__("datetime").timezone.utc)).strftime(__import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.get(getattr(st, "agent_time_format", "eu"), ("", "%d.%m.%Y-%H:%M"))[1]), "txt": p[1] if len(p) > 1 else ""} if p and p[0].isdigit() else None)(srv.leases_restored.split("|", 1)),
                     "leases_kept": (lambda k: {"b": k[0], "a": k[1], "path": k[2], "ok": int(k[1]) >= int(k[0])} if len(k) == 3 and k[0].isdigit() and k[1].isdigit() else None)(srv.leases_kept.split("|")),
                     "leases_last": timezone.localtime(srv.leases_last).strftime(__import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.get(getattr(st, "agent_time_format", "eu"), ("", "%d.%m.%Y-%H:%M"))[1]) if srv.leases_last else "",
                     "leases_old": bool(srv.leases_last and st and st.agent_leases_every and (timezone.now() - srv.leases_last).total_seconds() > st.agent_leases_every * 60 * 2 + 600)})

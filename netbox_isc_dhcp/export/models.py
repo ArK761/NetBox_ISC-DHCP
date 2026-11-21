@@ -103,6 +103,7 @@ class DHCPServer(models.Model):
     released_hash = models.CharField(max_length=64, blank=True, default="", help_text="Admin let the next servers go on without this server's OK for this set.")
     mismatch_since = models.DateTimeField(null=True, blank=True, help_text="The server runs another CFG than NetBox since.")
     autosync_last = models.DateTimeField(null=True, blank=True, help_text="Last automatic CFG sync pushed by NetBox.")
+    leases_restored = models.CharField(max_length=400, blank=True, default="", help_text="Original leases put back by the agent (unix time|text).")
     is_test = models.BooleanField(default=False, help_text="Test DHCP server: first in the rollout, the Test button simulates the first run of the agent.")
     first_leases = models.CharField(max_length=400, blank=True, default="", help_text="First run of the agent: copy of the original leases (unix time|IPs|sha256|path).")
     leases_kept = models.CharField(max_length=400, blank=True, default="", help_text="First NetBox CFG: IPs in the leases before|after the start|copy path.")

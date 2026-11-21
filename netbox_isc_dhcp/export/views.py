@@ -452,6 +452,18 @@ class ServersInlineView(LoginRequiredMixin, View):
                     if x.order != i:
                         x.order = i
                         x.save(update_fields=["order"])
+        elif action == "restoreleases" and srv:  # put the original leases back (only when the NetBox CFG is deployed and tested OK)
+            from . import build
+            from .agent import restore_block
+
+            why = restore_block(srv, build.manifest_hash())
+            if why:
+                messages.error(request, t(why))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            srv.agent_cmd = f"restoreleases:{timezone.now().strftime('%Y%m%d%H%M%S')}"
+            srv.save(update_fields=["agent_cmd"])
+            log = [(f"cmd_restoreleases {srv.name}", "", srv.agent_cmd)]
+            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_restoreleases"), name=srv.name))
         elif action == "simfirst" and srv:  # TEST button: simulate the first run of the agent (only a test server)
             if not srv.is_test:
                 messages.error(request, t("srv.err_not_test"))

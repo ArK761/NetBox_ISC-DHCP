@@ -56,6 +56,9 @@ copies the current leases, deploys and tests the CFG and starts dhcpd with the s
 **Recommended: a test DHCP server** set as *First* with staged rollout – every new CFG and every takeover is tried there first.
 Mark it as **Test server** in NetBox (it becomes First; nothing to set on the server): the **Test** button then
 simulates the first run of the agent (original leases copy, consent, dhcpd stop → leases copy → CFG → start → leases check). `TEST_SERVER=no` in `/etc/isc-dhcp-agent.conf` forbids it for good on a production server.
+While dhcpd is stopped from NetBox (**Stop dhcpd**) the agent deploys and tests every CFG but keeps dhcpd down until **Start**.
+After the first deployment the button **Put the original leases back** (disabled until the NetBox CFG is deployed and tested OK)
+does: CFG test → stop → current leases to a backup → original leases back → start; logged in the Audit.
 
 ## 3. Agent settings
 Set in NetBox (CFG pluginu → DHCP servery): interval (10 s – 30 min), test and restart command, backup directory

@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.23.0"
+AGENT_VERSION="1.24.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -35,7 +35,7 @@ umask 022  # files and dirs must be readable by dhcpd (it may run as its own use
 # THE ONLY commands NetBox can send to this agent - 1:1 with the plugin (export/agent.py AGENT_COMMANDS, shown read-only
 # in CFG pluginu -> DHCP servery). Set after the config file: it cannot be extended. A line from NetBox that is not here is
 # ignored and logged as SECURITY. Test / restart run only what ALLOWED_TEST_CMDS / ALLOWED_RESTART_CMDS allow.
-AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" "cmd simfirst" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases time_format test_server)
+AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" "cmd simfirst" "cmd restoreleases" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases time_format test_server)
 BACKUP_DEFAULT="/opt/BCK"  # backups ONLY below /opt; rm -rf only there and only on the agent's own backup dirs <CFG>_<YYYYmmdd-HHMMSS>
 
 is_command() { printf '%s\n' "${AGENT_COMMANDS[@]}" | grep -qxF -- "$1"; }
@@ -431,6 +431,14 @@ apply() {
     restore; report test_failed "$OUT"; return
   fi
   step test ok "test OK (dhcpd -t)"
+  if [ "$(state admin_stopped)" = 1 ]; then  # stopped from NetBox: deploy + test only, dhcpd stays down until Start
+    step kept_stopped 0 "CFG deployed and tested - dhcpd stays stopped (Stop from NetBox), start it with Start"
+    local nd0=0
+    for i in "${DELETES[@]}"; do [ -n "$BASE" ] && case "$i" in "$BASE"/*) true ;; *) false ;; esac && safe_path "$i" && rm -f -- "$i" && nd0=$((nd0 + 1)); done
+    echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"; APPLIED=1
+    log "CFG $CFG applied (${#DL_PATH[@]} files, $nd0 deleted) - dhcpd stays stopped"
+    report ok "$OUT"; prune_backups; return
+  fi
   # 5. restart + check that dhcpd runs
   cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
   echo "\$ $cmd" >>"$OUT"
@@ -716,6 +724,21 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
         install -m 755 "$new" "$self" && log "agent $txt - restarting the agent"
         [ "$ONCE" = 1 ] || { command -v systemctl >/dev/null 2>&1 && systemctl --no-block restart isc-dhcp-agent; }
         return 0
+      fi ;;
+    restoreleases)  # put the ORIGINAL leases (copy from the first run) back: test CFG -> stop -> keep current -> copy back -> start
+      local orig bk tc; orig=$(state first_leases | cut -d'|' -f4)
+      tc="${TEST_CMD:-${ALLOWED_TEST_CMDS[0]}}"; tc=$(allowed "$tc" "${ALLOWED_TEST_CMDS[@]}")
+      if [ -z "$orig" ] || [ ! -f "$orig/dhcpd.leases" ] || ! backup_ok "$(dirname "$orig")"; then
+        res=failed; txt="no copy of the original leases on this server"
+      elif ! bash -c "$tc" >"$out" 2>&1; then
+        res=failed; txt="CFG test failed - leases not restored: $(grep -i -m1 -E 'line [0-9]+|error' "$out")"
+      else
+        mark_agent; svc stop >>"$out" 2>&1; wait_down 10
+        bk="$(dirname "$orig")/before_restore_$(date +%Y%m%d-%H%M%S)"; mkdir -p "$bk" && cp -a "$LEASES_FILE" "$bk/" 2>>"$out"
+        cp -a "$orig/dhcpd.leases" "$LEASES_FILE" 2>>"$out"
+        rm -f "$STATE_DIR/admin_stopped"; svc start >>"$out" 2>&1; sleep "$START_WAIT"
+        if [ "$(dhcpd_running)" = 1 ]; then txt="original leases restored ($(lease_ips "$LEASES_FILE") IP), dhcpd running (pid $(pid_now)); leases before the restore in $bk"
+        else res=failed; txt="dhcpd did not start after the restore - leases before the restore in $bk"; fi
       fi ;;
     simfirst)  # TEST server only: forget the agent state (never the files) -> the next contact is a first installation
       if [ "$TEST_SERVER" = no ] || { [ "$TEST_SERVER" != yes ] && [ -z "$NB_TEST" ]; }; then
