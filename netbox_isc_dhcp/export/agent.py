@@ -137,13 +137,40 @@ def test_verify(server, manifest_hash, check, client_ip=""):
         return False
     server.test_ok_hash = manifest_hash
     fields = ["test_ok_hash"]
-    if not server.agent_cmd:
+    if not server.agent_cmd and not (server.test_until and server.test_until > timezone.now()):  # admin's run time wins
         server.agent_cmd = f"stop:{timezone.now().strftime('%Y%m%d%H%M%S')}"
-        fields.append("agent_cmd")
+        server.stop_why = t("why.test_ok", cfg=versions.label(manifest_hash))
+        fields += ["agent_cmd", "stop_why"]
     server.save(update_fields=fields)
     AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=client_ip, level="info",
                               manifest_hash=manifest_hash, cause=t("aud.test_ok", cfg=versions.label(manifest_hash), s=TEST_VERIFY_S))
     return True
+
+
+TEST_RUN_MIN = (5, 10, 20, 40, 60, 120)  # Start on the test server: how long dhcpd may run (max 2 h)
+
+
+def test_timer(server, client_ip=""):
+    """Test server started from NetBox for N minutes: time is up -> NetBox stops dhcpd (Audit). True when the stop was queued."""
+    from ..i18n import t
+    from .models import AuditEvent
+
+    if server is None or not server.test_until or server.test_until > timezone.now():
+        return False
+    until = server.test_until
+    server.test_until = None
+    fields = ["test_until"]
+    queued = False
+    if server.dhcpd_running and not server.agent_cmd:
+        server.agent_cmd = f"stop:{timezone.now().strftime('%Y%m%d%H%M%S')}"
+        server.stop_why = t("why.timer", at=timezone.localtime(until).strftime("%H:%M"))
+        fields += ["agent_cmd", "stop_why"]
+        queued = True
+    server.save(update_fields=fields)
+    if queued:
+        AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=client_ip, level="info",
+                                  cause=t("aud.test_timer_stop", name=server.name))
+    return queued
 
 
 def gate(server, manifest_hash):
@@ -359,7 +386,7 @@ def svc_text(raw):
 
 
 _WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto", "aud.disk_warn")
-_INFO = ("aud.disk_info", "aud.disk_ok", "aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
+_INFO = ("aud.svc_admin_off", "aud.disk_info", "aud.disk_ok", "aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
          "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
 
 
@@ -462,7 +489,10 @@ def heartbeat(server, request, data):
         if event.startswith("manual"):  # NOT through NetBox: own highlighted Audit row
             manual_msg = t("aud.ag_" + event) + (f" – {why_text(why)}" if why else "")
         elif event in ("agent_start", "agent_stop"):
-            msgs.append(t("aud.ag_" + event + ("_nb" if by_netbox else "_auto")))
+            msgs.append(t("aud.ag_" + event + ("_nb" if by_netbox else "_auto"))
+                        + (f" – {t('why.label')}: {server.stop_why}" if event == "agent_stop" and by_netbox and server.stop_why else ""))
+            if event == "agent_stop":
+                server.stop_why = ""
         else:
             msgs.append(t("aud.ag_dhcpd_up") if dhcpd else t("aud.ag_dhcpd_down"))
         recent_admin = server.dhcpd_by == "admin" and server.dhcpd_since and (timezone.now() - server.dhcpd_since).total_seconds() < 600
@@ -520,6 +550,8 @@ def heartbeat(server, request, data):
         if svc in ("active", "none"):
             if server.svc_state not in ("", "active", "none"):
                 msgs.append(t("aud.svc_ok", svc=svc))
+        elif server.dhcpd_by == "admin" and dhcpd is False:  # stopped from NetBox (button / test server): planned, not a fault
+            msgs.append(t("aud.svc_admin_off", svc=svc))
         else:
             msgs.append(t("aud.svc_bad", svc=svc, why=svc_text(svc_why)) if svc_why else t("aud.svc_state", svc=svc))
     if svc:
@@ -530,6 +562,8 @@ def heartbeat(server, request, data):
         msgs.append(t("aud.fail_cleared"))
     server.last_seen = timezone.now()
     server.dhcpd_pid = pid if dhcpd else ""
+    if dhcpd is False and server.test_until and not server.agent_cmd.startswith("start:"):  # (Start still waiting = not down yet)  # dhcpd went down (Stop, by hand, crash): the run timer of the test server ends with it
+        server.test_until = None
     fields = {"leases": "agent_leases", "time_format": "agent_time_format", "interval": "interval"}
     applied = {fields[x] for x in str(data.get("applied", "")).split(",") if x in fields}  # settings the agent took over (1.19.3+)
     if applied:
@@ -562,7 +596,7 @@ def heartbeat(server, request, data):
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["stop_why", "test_until", "disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

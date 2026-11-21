@@ -211,6 +211,9 @@ def _server_rows():
                     "leases_kept": (lambda k: {"b": k[0], "a": k[1], "path": k[2], "ok": int(k[1]) >= int(k[0])} if len(k) == 3 and k[0].isdigit() and k[1].isdigit() else None)(srv.leases_kept.split("|")),
                     "leases_last": fmt_time(srv.leases_last),
                     "disk_rows": disk_rows(srv.disk_usage) if srv.enabled else [],
+                    "test_until": timezone.localtime(srv.test_until) if srv.is_test and srv.test_until and srv.test_until > timezone.now() and srv.dhcpd_running is not False else None,
+                    "admin_off": srv.dhcpd_by == "admin" and srv.dhcpd_running is False,
+                    "run_min": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TEST_RUN_MIN if srv.is_test else (),
                     "test_state": ("ok" if srv.test_ok_hash == mh else ("failed" if srv.last_hash == mh and srv.last_result and srv.last_result != "ok"
                                    else ("running" if srv.last_hash == mh and srv.last_result == "ok" else "pending"))) if srv.is_test and srv.enabled else "",
                     "leases_old": bool(srv.leases_last and st and st.agent_leases_every and (timezone.now() - srv.leases_last).total_seconds() > st.agent_leases_every * 60 * 2 + 600)})

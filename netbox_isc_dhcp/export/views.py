@@ -504,11 +504,39 @@ class ServersInlineView(LoginRequiredMixin, View):
             log = [("agent_key_old", "***", "")] if st.agent_key_old else []
             st.agent_key_old = ""
             st.save(update_fields=["agent_key_old"])
+        elif action == "test_time" and srv and srv.is_test:  # change the run time of dhcpd on the test server (counted from now)
+            from datetime import timedelta
+
+            from .agent import TEST_RUN_MIN
+
+            mins = int(request.POST["minutes"]) if request.POST.get("minutes", "").isdigit() else 0
+            if mins not in TEST_RUN_MIN:
+                messages.error(request, t("srv.test_run_pick"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            old = timezone.localtime(srv.test_until).strftime("%H:%M") if srv.test_until else ""
+            srv.test_until = timezone.now() + timedelta(minutes=mins)
+            srv.save(update_fields=["test_until"])
+            log = [(f"test_time {srv.name}", old, timezone.localtime(srv.test_until).strftime("%H:%M") + f" ({mins} min)")]
+            messages.success(request, t("srv.test_run_set", m=mins))
         elif action in ("start", "stop", "restart", "update") and srv:  # command for the agent, done once at its next contact
+            from datetime import timedelta
+
+            from .agent import TEST_RUN_MIN
+
+            mins = int(request.POST["minutes"]) if request.POST.get("minutes", "").isdigit() else 0
+            if action == "start" and srv.is_test and mins not in TEST_RUN_MIN:
+                messages.error(request, t("srv.test_run_pick"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             srv.agent_cmd = f"{action}:{timezone.now().strftime('%Y%m%d%H%M%S')}"
-            srv.save(update_fields=["agent_cmd"])
-            log = [(f"cmd_{action} {srv.name}", "", srv.agent_cmd)]
-            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name))
+            if action == "start" and srv.is_test:
+                srv.test_until = timezone.now() + timedelta(minutes=mins)  # NetBox stops it when the time is up
+            elif action == "stop":
+                srv.test_until = None
+            srv.stop_why = t("why.button", user=request.user.username) if action == "stop" else srv.stop_why
+            srv.save(update_fields=["agent_cmd", "test_until", "stop_why"])
+            log = [(f"cmd_{action} {srv.name}", "", srv.agent_cmd + (f" ({mins} min)" if action == "start" and srv.is_test else ""))]
+            messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name)
+                             + (" " + t("srv.test_run_set", m=mins) if action == "start" and srv.is_test else ""))
         elif action == "gh_check":  # look for a new agent on GitHub now (otherwise every 5 minutes in the background)
             from .agent import _checking, _fetch_github, agent_source
 
@@ -684,7 +712,9 @@ class PlanView(View):
             return reply([])
         from .agent import test_verify
 
-        if test_verify(server, mh, check, audit.client_ip(request)):  # test server verified the CFG: NetBox stops its dhcpd now
+        from .agent import test_timer
+
+        if test_timer(server, audit.client_ip(request)) or test_verify(server, mh, check, audit.client_ip(request)):  # stop now (time up / CFG verified)
             cmd, cid = server.agent_cmd.split(":", 1)
             info["cmd"] = f"{cmd}\t{cid}"
         reason, names = gate(server, mh)

@@ -198,12 +198,21 @@
         box.addEventListener("submit", function (e) {
           if (e.defaultPrevented) return;
           e.preventDefault();
-          var f = e.target;
-          fetch(f.action, {method: "POST", body: new FormData(f), credentials: "same-origin", headers: {"X-Requested-With": "fetch"}})
+          var f = e.target, fd = new FormData(f);
+          if (e.submitter && e.submitter.name) fd.append(e.submitter.name, e.submitter.value);  // e.g. minutes of the test run
+          fetch(f.action, {method: "POST", body: fd, credentials: "same-origin", headers: {"X-Requested-With": "fetch"}})
             .then(function (r) { return r.json(); }).then(function (d) { load(true).then(function () { show(d.messages || []); }); })
             .catch(function () { f.submit(); });
         });
         setInterval(function () { load(false); }, 5000);
+        setInterval(function () {  // countdown to the stop of dhcpd on the test server
+          [].forEach.call(document.querySelectorAll(".isc-cd[data-until]"), function (e) {
+            var s = Math.round((new Date(e.dataset.until) - new Date()) / 1000);
+            if (s <= 0) { e.textContent = e.dataset.done || "0:00"; return; }
+            var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+            e.textContent = (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
+          });
+        }, 1000);
         document.addEventListener("visibilitychange", function () { if (!document.hidden) load(false); });
       })();
     </script>

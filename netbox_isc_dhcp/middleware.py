@@ -196,9 +196,15 @@ class DNSWarningMiddleware:
         plain = [s.name for s in srvs if s.last_seen and s.agent_insecure]
         if plain:
             out.append(("warning", "mdi-lock-open-alert-outline", t("warn.insecure", names=", ".join(plain)), url, label))
-        svcbad = [f"{s.name} ({s.svc_state})" for s in srvs if s.last_seen and s.svc_state not in ("", "active", "none")]
+        def _admin_off(s):  # stopped from NetBox (button or test server after its check): not a fault
+            return s.dhcpd_by == "admin" and s.dhcpd_running is False
+
+        svcbad = [f"{s.name} ({s.svc_state})" for s in srvs if s.last_seen and s.svc_state not in ("", "active", "none") and not _admin_off(s)]
         if svcbad:
             out.append(("warning", "mdi-cog-off-outline", t("warn.svc_bad", names=", ".join(svcbad)), url, label))
+        svcoff = [f"{s.name} ({s.svc_state})" for s in srvs if s.last_seen and s.svc_state not in ("", "active", "none") and _admin_off(s)]
+        if svcoff:
+            out.append(("info", "mdi-information-outline", t("warn.svc_admin_off", names=", ".join(svcoff)), url, label))
         foreign = [s.name for s in srvs if s.takeover == "foreign"]
         if foreign:
             out.append(("warning", "mdi-server-security", t("warn.takeover", names=", ".join(foreign)), url, label))
