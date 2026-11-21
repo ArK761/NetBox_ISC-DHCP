@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.26.1"
+AGENT_VERSION="1.26.2"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -659,17 +659,36 @@ applied_add() { grep -qxF "$1" "$STATE_DIR/applied" 2>/dev/null || echo "$1" >>"
 
 mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
 
+test_stop() {  # stop dhcpd like Stop from NetBox: wait for a running start to finish, stop the service, end a dhcpd left outside it
+  local p0 i=0; p0=$(pid_now)
+  while [ $i -lt 30 ] && case "$(svc_state)" in activating|reloading|deactivating) true ;; *) false ;; esac; do sleep 2; i=$((i+1)); done  # a stop during "activating" leaves dhcpd running
+  mark_agent; svc stop >/dev/null 2>&1; wait_down 5
+  [ -n "$(dhcpd4_pids)" ] && kill_stray
+  pid_step stop "$p0"
+}
+
+test_keep_off() {  # TEST server stopped from NetBox must never run (started by hand, by the system, ...): stop it again. Production servers: never.
+  [ "$(state is_test)" = 1 ] && [ "$(state admin_stopped)" = 1 ] && [ "$(dhcpd_running)" = 1 ] || return 0
+  test_stop
+  if [ "$(dhcpd_running)" = 1 ]; then
+    log "test server: dhcpd must stay stopped (stopped from NetBox) but it runs - stopping it FAILED"
+    FIXED="${FIXED:+$FIXED; }test server: dhcpd must stay stopped (stopped from NetBox), it was running - stopping it FAILED"
+  elif [ -n "${REBOOT:-}" ]; then  # after a reboot: reported as "rebooted - test server stopped again"
+    REBOOT_STOP=1; echo "$BOOT_NOW" >"$STATE_DIR/reboot_done"
+    log "server rebooted: test server, dhcpd was stopped from NetBox before the reboot - stopped it again"
+  else
+    log "test server: dhcpd must stay stopped (stopped from NetBox) but it was running - stopped it"
+    FIXED="${FIXED:+$FIXED; }test server: dhcpd must stay stopped (stopped from NetBox), it was running - the agent stopped it"
+  fi
+}
+
 reboot_check() {  # REBOOT=1 when the server booted since the last contact NetBox accepted (boot id of the kernel)
   BOOT_NOW=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
   local prev; prev=$(state boot_id); REBOOT=""; REBOOT_STOP=""
   [ -n "$BOOT_NOW" ] && [ -n "$prev" ] && [ "$prev" != "$BOOT_NOW" ] && REBOOT=1
   # test server stopped from NetBox before the reboot, but systemd started dhcpd at boot: stop it again (production servers: never)
   if [ -n "$REBOOT" ] && [ "$(state is_test)" = 1 ] && [ "$(state admin_stopped)" = 1 ] && [ "$(dhcpd_running)" = 1 ] && [ "$(state reboot_done)" != "$BOOT_NOW" ]; then
-    local p0 i=0; p0=$(pid_now)
-    while [ $i -lt 30 ] && case "$(svc_state)" in activating|reloading|deactivating) true ;; *) false ;; esac; do sleep 2; i=$((i+1)); done  # let the boot start finish first (a stop during "activating" leaves dhcpd running)
-    mark_agent; svc stop >/dev/null 2>&1; wait_down 5
-    [ -n "$(dhcpd4_pids)" ] && kill_stray  # same as Stop from NetBox: a dhcpd left outside the service is ended
-    pid_step stop "$p0"
+    test_stop
     if [ "$(dhcpd_running)" = 1 ]; then
       log "server rebooted: test server was stopped from NetBox before the reboot - stopping dhcpd FAILED, it keeps running"
     else
@@ -894,8 +913,8 @@ contact() {
   if [ -n "$(state check)" ] && [ "$(state check)" = "$DISK_HASH" ]; then send="$WORK/none"; : >"$send"; nofiles=1; fi  # equal: hash only, no file list
   local url alt
   DUP_FIXED=""; dedupe_dhcpd
+  reboot_check; [ -z "$REBOOT_STOP" ] && test_keep_off  # test server stopped from NetBox: never left running
   FIX_NOW="${FIXED:-}"; FIXED=""  # server settings the agent fixed (sent once)
-  reboot_check
   EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); PID_NOW=$(pid_now); WHY=""; LOG_EVENT=""
   case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start) WHY=$(why_changed start) ;; manual_restart) WHY=$(why_changed restart) ;; esac
   FRESH=""; INCLUDES=""
