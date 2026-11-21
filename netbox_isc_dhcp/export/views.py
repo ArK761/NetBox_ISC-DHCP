@@ -18,6 +18,28 @@ from . import audit, build
 from .models import ExportFile
 
 
+def _first_check(srv):
+    """(current First server, '' or why srv cannot become First) - shared by the First button and the test switch."""
+    from .agent import first_block, first_server, isc_mismatch
+
+    cur = first_server()
+    if isc_mismatch() and cur is not None and cur.pk != srv.pk:
+        return cur, t("srv.err_first_isc")
+    why = first_block(srv)
+    return cur, (t("srv.first_no", why=t(why)) if why else "")
+
+
+def _make_first(srv):
+    """srv gets order 1, the others keep their list order (pk) behind it."""
+    from .models import DHCPServer
+
+    rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]
+    for i, x in enumerate([srv] + rest, 1):
+        if x.order != i:
+            x.order = i
+            x.save(update_fields=["order"])
+
+
 def key_hash(key):
     import hashlib
 
@@ -216,11 +238,9 @@ class AuditView(LoginRequiredMixin, View):
         from . import versions
 
         labels = versions.labels()
-        from ..models import settings_obj as _so0
-        from .agent import TIME_FORMATS as _TF
+        from .agent import time_fmt
 
-        _fmt = _TF.get(getattr(_so0(), "agent_time_format", "eu"), _TF["eu"])[1]
-        _fmt_s = _fmt if "%S" in _fmt else _fmt + ":%S"
+        _fmt_s = time_fmt(seconds=True)
         for e in events:
             e.time_txt = timezone.localtime(e.time).strftime(_fmt_s)
             e.acks = [{"name": n, "s": p.get("s"), "x": p.get("x", ""),
@@ -424,34 +444,22 @@ class ServersInlineView(LoginRequiredMixin, View):
                 st.agent_interval = v
                 st.save(update_fields=["agent_interval"])
         elif action == "first" and srv:  # only one server can be first; others keep their relative order
-            from .agent import first_server, isc_mismatch
-
-            from .agent import first_block
-
-            cur = first_server()
-            if isc_mismatch() and cur is not None and cur.pk != srv.pk:
-                messages.error(request, t("srv.err_first_isc"))
-                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
-            why = first_block(srv)
+            cur, why = _first_check(srv)
             if why:
-                messages.error(request, t("srv.first_no", why=t(why)))
+                messages.error(request, why)
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
-            rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]  # list order (pk) never changes
-            for i, x in enumerate([srv] + rest, 1):
-                if x.order != i:
-                    x.order = i
-                    x.save(update_fields=["order"])
+            _make_first(srv)
             log = [("first", cur.name if cur else "", srv.name)]
         elif action == "is_test" and srv:  # test DHCP server: first in the rollout + the Test button
             srv.is_test = request.POST.get("value") == "1"
             srv.save(update_fields=["is_test"])
             log = [(f"is_test {srv.name}", str(not srv.is_test), str(srv.is_test))]
             if srv.is_test:  # a test server goes first: new CFG is tried there before the production servers
-                rest = [x for x in DHCPServer.objects.order_by("pk") if x.pk != srv.pk]
-                for i, x in enumerate([srv] + rest, 1):
-                    if x.order != i:
-                        x.order = i
-                        x.save(update_fields=["order"])
+                cur, why = _first_check(srv)
+                if why:  # same rules as the First button (ISC versions differ / server cannot be first): order kept
+                    messages.warning(request, t("srv.test_not_first", why=why))
+                else:
+                    _make_first(srv)
         elif action == "restoreleases" and srv:  # put the original leases back (only when the NetBox CFG is deployed and tested OK)
             from . import build
             from .agent import restore_block

@@ -59,6 +59,11 @@ simulates the first run of the agent (original leases copy, consent, dhcpd stop 
 While dhcpd is stopped from NetBox (**Stop dhcpd**) the agent deploys and tests every CFG but keeps dhcpd down until **Start**.
 After the first deployment the button **Put the original leases back** (disabled until the NetBox CFG is deployed and tested OK)
 does: CFG test → stop → current leases to a backup → original leases back → start; logged in the Audit.
+If the copy of the current leases fails (e.g. full disk) nothing is overwritten and dhcpd is started again.
+
+**Disk state** (agent 1.25.0+): the server row shows the usage of the disks the agent writes to –
+green up to 60 %, yellow 60–85 % (clean up), red from 85 % (critical); yellow/red also as a bar on the plugin pages and in the Audit.
+A CFG update whose backup fails (e.g. full disk) is not applied at all.
 
 ## 3. Agent settings
 Set in NetBox (CFG pluginu → DHCP servery): interval (10 s – 30 min), test and restart command, backup directory

@@ -15,6 +15,27 @@ AGENT_COMMANDS = (
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format", "test_server",
 )
 TIME_FORMATS = {"eu": ("DD.MM.RRRR-HH:MM", "%d.%m.%Y-%H:%M"), "iso": ("RRRR-MM-DD_HH:MM", "%Y-%m-%d_%H:%M"), "compact": ("RRRRMMDD-HHMMSS", "%Y%m%d-%H%M%S")}
+
+
+def time_fmt(seconds=False):
+    """strftime format of the admin's time format (CFG pluginu); seconds=True adds :SS when the format has none."""
+    from ..models import settings_obj
+
+    f = TIME_FORMATS.get(getattr(settings_obj(), "agent_time_format", "eu"), TIME_FORMATS["eu"])[1]
+    return f + ":%S" if seconds and "%S" not in f else f
+
+
+def fmt_time(when, seconds=False):
+    """datetime or unix time (int / digit string) -> local time in the admin's format; '' when unknown."""
+    import datetime
+
+    from django.utils import timezone
+
+    if isinstance(when, (int, str)):
+        if not str(when).isdigit():
+            return ""
+        when = datetime.datetime.fromtimestamp(int(when), tz=datetime.timezone.utc)
+    return timezone.localtime(when).strftime(time_fmt(seconds)) if when else ""
 LEASES_EVERY = (0, 15, 30, 60, 180, 360, 720, 1440)  # minutes, 0 = off
 LEASES_KEEP = (6, 12, 24, 48, 72, 96, 168)
 # what the agent does on its own (no command from NetBox) - shown under the list
@@ -291,8 +312,8 @@ def svc_text(raw):
     return raw
 
 
-_WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto")
-_INFO = ("aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
+_WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto", "aud.disk_warn")
+_INFO = ("aud.disk_info", "aud.disk_ok", "aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
          "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
 
 
@@ -322,6 +343,34 @@ def _ack(server, match, state, text):
             e.save(update_fields=["pending"])
             n += 1
     return n
+
+
+DISK_WARN, DISK_CRIT = 60, 85  # disk usage: green < 60 %, yellow 60-85 % (clean up), red >= 85 % (critical)
+
+
+def parse_disk(raw):
+    """'mount:pct,...' from the agent -> [(mount, pct)]; None when the agent sent nothing usable."""
+    out = []
+    for part in raw.split(","):
+        m, _, p = part.rpartition(":")
+        m = "".join(c for c in m if c.isalnum() or c in "/._-")[:100]
+        if m.startswith("/") and p.isdigit() and int(p) <= 100:
+            out.append((m, int(p)))
+    return out or None
+
+
+def disk_level(stored):
+    """ok | info (yellow) | warn (red) for the fullest file system; '' = unknown."""
+    du = parse_disk(stored or "")
+    if not du:
+        return ""
+    top = max(p for _, p in du)
+    return "warn" if top >= DISK_CRIT else ("info" if top >= DISK_WARN else "ok")
+
+
+def disk_rows(stored):
+    """[(mount, pct, level)] for the server row."""
+    return [(m, p, "warn" if p >= DISK_CRIT else ("info" if p >= DISK_WARN else "ok")) for m, p in (parse_disk(stored or "") or [])]
 
 
 def heartbeat(server, request, data):
@@ -456,10 +505,18 @@ def heartbeat(server, request, data):
     if len(lc) == 3 and lc[0]:
         name = "".join(ch for ch in lc[0] if ch.isalnum() or ch in ".-_:")
         msgs.append(t("aud.leases_copy", name=name, old=(lc[1][:12] or "—"), new=lc[2][:12]))
+    du = parse_disk(str(data.get("disk_usage", ""))[:400])  # agent 1.25.0+: use% of its file systems
+    if du is not None:
+        du_txt = ",".join(f"{m}:{p}" for m, p in du)
+        old_lv, new_lv = disk_level(server.disk_usage), disk_level(du_txt)
+        if new_lv != old_lv and (new_lv != "ok" or old_lv):
+            top = max(du, key=lambda x: x[1]) if du else ("/", 0)
+            msgs.append(t("aud.disk_" + new_lv, mount=top[0], pct=top[1]))
+        server.disk_usage = du_txt
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 

@@ -184,10 +184,22 @@ class DNSWarningMiddleware:
         from .export.models import AuditEvent as _AE
 
         hour = _tz.now() - _td(hours=1)
-        clash = [s.name for s in srvs if _AE.objects.filter(kind="agent", server=s.name, result="manual", time__gte=hour,
-                                                              cause__startswith=t("aud.cfg_manual", c="", m="", e="", cfg="")[:20]).count() >= 3]
+        from django.db.models import Q as _Q
+
+        from .i18n import TR as _TR
+
+        _pre = _Q()
+        for _txt in _TR["aud.cfg_manual"]:  # rows written in SK or EN (the language may have changed since)
+            _pre |= _Q(cause__startswith=_txt.split("{")[0][:20])
+        clash = [s.name for s in srvs if _AE.objects.filter(_pre, kind="agent", server=s.name, result="manual", time__gte=hour).count() >= 3]
         if clash:
             out.append(("danger", "mdi-sword-cross", t("warn.clash", names=", ".join(clash)), url, label))
+        from .export.agent import disk_level as _dl, disk_rows as _dr
+
+        for _lv, _cls, _key in (("warn", "danger", "warn.disk_crit"), ("info", "warning", "warn.disk_full")):
+            _hit = [f"{s.name} ({', '.join(f'{m} {p} %' for m, p, l in _dr(s.disk_usage) if l == _lv)})" for s in srvs if _dl(s.disk_usage) == _lv]
+            if _hit:
+                out.append((_cls, "mdi-harddisk", t(_key, names="; ".join(_hit)), url, label))
         broken = [s.name for s in srvs if s.disk_broken]
         if broken:
             out.append(("danger", "mdi-alert-octagon-outline", t("warn.disk_broken", names=", ".join(broken)), url, label))

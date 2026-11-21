@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.24.0"
+AGENT_VERSION="1.25.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -397,9 +397,20 @@ apply() {
   backup_ok "$BACKUP_TO" || { echo "no safe backup dir (only below /opt): $BACKUP_TO" >>"$OUT"; report failed "$OUT"; return; }
   BK="$BACKUP_TO/${prev}_$now"
   mkdir -p "$BK" || { echo "cannot create backup $BK" >>"$OUT"; report failed "$OUT"; return; }
-  local nb=0
-  for i in "${DL_PATH[@]}"; do [ -e "$i" ] && cp -a --parents "$i" "$BK/" 2>>"$OUT" && nb=$((nb + 1)); done
-  for i in "${DELETES[@]}"; do [ -f "$i" ] && [ ! -L "$i" ] && safe_path "$i" && cp -a --parents "$i" "$BK/" 2>>"$OUT" && nb=$((nb + 1)); done  # files to be deleted too
+  local nb=0 bf=0
+  for i in "${DL_PATH[@]}"; do
+    [ -e "$i" ] || continue
+    if cp -a --parents "$i" "$BK/" 2>>"$OUT"; then nb=$((nb + 1)); else bf=$((bf + 1)); fi
+  done
+  for i in "${DELETES[@]}"; do  # files to be deleted too
+    [ -f "$i" ] && [ ! -L "$i" ] && safe_path "$i" || continue
+    if cp -a --parents "$i" "$BK/" 2>>"$OUT"; then nb=$((nb + 1)); else bf=$((bf + 1)); fi
+  done
+  if [ "$bf" -gt 0 ]; then  # no full backup = no safe way back: change nothing (disk full?)
+    echo "BACKUP FAILED for $bf file(s) - nothing was changed (disk full?)" >>"$OUT"
+    log "backup FAILED for $bf file(s) in $BK - CFG NOT applied, nothing changed"
+    report failed "$OUT"; return
+  fi
   # DHCP lease database (who has which IP): copied before every restart, NEVER restored or deleted by the agent
   local lf nl=0
   mkdir -p "$BK/_leases"
@@ -608,6 +619,27 @@ kill_stray() {  # dhcpd processes while the service is not active (started by ha
 
 wait_down() { local i=0; while [ $i -lt "$1" ] && [ "$(dhcpd_running)" = 1 ]; do sleep 1; i=$((i+1)); done; }
 
+prune_own() {  # keep the newest 10 own dirs <prefix>YYYYmmdd-HHMMSS in a backup dir below /opt (test servers make many)
+  local d="$1" pre="$2" n
+  backup_ok "$d" || return 0
+  ls -1 "$d" 2>/dev/null | grep -E "^${pre}[0-9]{8}-[0-9]{6}$" | sort -r | tail -n +11 | while read -r n; do
+    [ -d "$d/$n" ] && [ ! -L "$d/$n" ] && rm -rf -- "${d:?}/$n"
+  done
+}
+
+disk_usage() {  # use% of the file systems the agent writes to: "mount:pct,..." (backup dir, base path, leases, /)
+  local p q seen=" " out="" line
+  for p in "$(state leases_cfg | cut -d'|' -f3)" "$BACKUP_DEFAULT" "${ALLOWED_BASE:-}" "$(dirname "$LEASES_FILE")" /; do
+    [ -n "$p" ] || continue
+    q="$p"; while [ ! -e "$q" ] && [ "$q" != / ]; do q=$(dirname "$q"); done
+    line=$(df -P "$q" 2>/dev/null | awk 'NR==2{gsub("%","",$5); print $6":"$5}')
+    [ -n "$line" ] || continue
+    case "$seen" in *" ${line%%:*} "*) continue ;; esac
+    seen="$seen${line%%:*} "; out="${out:+$out,}$line"
+  done
+  echo "$out"
+}
+
 lease_ips() { [ -f "$1" ] && grep -oE '^lease [0-9.]+' "$1" | sort -u | wc -l || echo 0; }  # different IPs in a leases file
 
 first_leases() {  # first run of the agent on this server: copy the ORIGINAL leases once, whatever the lease copy setting is
@@ -619,6 +651,7 @@ first_leases() {  # first run of the agent on this server: copy the ORIGINAL lea
   mkdir -p "$name" && cp -a "$LEASES_FILE" "$name/" || { log "first run: copy of the original leases FAILED -> $name"; return 0; }
   [ -f "$LEASES_FILE~" ] && cp -a "$LEASES_FILE~" "$name/"
   echo "$now|$(lease_ips "$LEASES_FILE")|$(sha256sum "$LEASES_FILE" | cut -d' ' -f1)|$name" >"$STATE_DIR/first_leases"
+  prune_own "$dir" original_
   log "first run of the agent: original leases copied -> $name ($(lease_ips "$LEASES_FILE") IP)"
 }
 
@@ -734,17 +767,24 @@ run_cmd() {  # command from NetBox (start | stop | restart | update), once per i
         res=failed; txt="CFG test failed - leases not restored: $(grep -i -m1 -E 'line [0-9]+|error' "$out")"
       else
         mark_agent; svc stop >>"$out" 2>&1; wait_down 10
-        bk="$(dirname "$orig")/before_restore_$(date +%Y%m%d-%H%M%S)"; mkdir -p "$bk" && cp -a "$LEASES_FILE" "$bk/" 2>>"$out"
-        cp -a "$orig/dhcpd.leases" "$LEASES_FILE" 2>>"$out"
+        bk="$(dirname "$orig")/before_restore_$(date +%Y%m%d-%H%M%S)"
+        if ! { mkdir -p "$bk" && cp -a "$LEASES_FILE" "$bk/"; } 2>>"$out"; then  # never overwrite leases without a copy of them
+          res=failed; txt="copy of the current leases FAILED (disk full?) - nothing restored"
+        elif ! cp -a "$orig/dhcpd.leases" "$LEASES_FILE" 2>>"$out"; then  # half-written file: put the current leases back
+          cp -a "$bk/$(basename "$LEASES_FILE")" "$LEASES_FILE" 2>>"$out"
+          res=failed; txt="writing the original leases FAILED - current leases kept"
+        fi
         rm -f "$STATE_DIR/admin_stopped"; svc start >>"$out" 2>&1; sleep "$START_WAIT"
-        if [ "$(dhcpd_running)" = 1 ]; then txt="original leases restored ($(lease_ips "$LEASES_FILE") IP), dhcpd running (pid $(pid_now)); leases before the restore in $bk"
-        else res=failed; txt="dhcpd did not start after the restore - leases before the restore in $bk"; fi
+        if [ "$res" = ok ] && [ "$(dhcpd_running)" = 1 ]; then txt="original leases restored ($(lease_ips "$LEASES_FILE") IP), dhcpd running (pid $(pid_now)); leases before the restore in $bk"
+        elif [ "$res" = ok ]; then res=failed; txt="dhcpd did not start after the restore - leases before the restore in $bk"
+        else txt="$txt; dhcpd $([ "$(dhcpd_running)" = 1 ] && echo running || echo NOT running)"; fi
+        prune_own "$(dirname "$orig")" before_restore_
       fi ;;
     simfirst)  # TEST server only: forget the agent state (never the files) -> the next contact is a first installation
       if [ "$TEST_SERVER" = no ] || { [ "$TEST_SERVER" != yes ] && [ -z "$NB_TEST" ]; }; then
         res=failed; txt="refused: not a test server (TEST_SERVER=$TEST_SERVER in $CONF_FILE, NetBox test server: ${NB_TEST:-no})"; log "SECURITY: first run simulation refused - not a test server"
       else
-        local k; for k in running label first_leases check leases_event applied leases_sum; do rm -f "$STATE_DIR/$k"; done
+        local k; for k in running label first_leases check leases_event applied; do rm -f "$STATE_DIR/$k"; done
         txt="agent state cleared (files kept) - the next contact runs as a first installation"
       fi ;;
     *) res=failed; txt="unknown command $CMD" ;;
@@ -841,7 +881,7 @@ contact() {
     code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --connect-timeout 10 --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$send" --data-urlencode "nofiles=$nofiles" --data-urlencode "disk_hash=$DISK_HASH" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "leases_last=$(state leases_ts)" --data-urlencode "leases_sha=$(state leases_sum)" --data-urlencode "leases_copy=$LEASES_EV" --data-urlencode "applied=$APPLIED_EV" --data-urlencode "fresh=$FRESH" --data-urlencode "first_leases=$(state first_leases)" --data-urlencode "includes=$INCLUDES" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" --data-urlencode "insecure=$(case "$url" in http://*) echo 1 ;; esac)" 2>"$WORK/curlerr") && break
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "leases_last=$(state leases_ts)" --data-urlencode "leases_sha=$(state leases_sum)" --data-urlencode "leases_copy=$LEASES_EV" --data-urlencode "applied=$APPLIED_EV" --data-urlencode "fresh=$FRESH" --data-urlencode "disk_usage=$(disk_usage)" --data-urlencode "first_leases=$(state first_leases)" --data-urlencode "includes=$INCLUDES" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" --data-urlencode "insecure=$(case "$url" in http://*) echo 1 ;; esac)" 2>"$WORK/curlerr") && break
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
@@ -864,7 +904,7 @@ contact() {
     if [ "$key" = cmd ]; then is_command "cmd $a"; else is_command "$key"; fi || {
       log "SECURITY: command from NetBox is not in AGENT_COMMANDS - ignored: $(printf '%s %s' "$key" "$a" | tr -cd 'A-Za-z0-9_ -' | cut -c1-60)"; continue; }
     case "$key" in
-      interval) [[ "$a" =~ ^[0-9]+$ ]] && { [ "$a" != "$(state interval)" ] && { echo "$a" >"$STATE_DIR/interval"; applied_add interval; log "setting from NetBox: contact interval $a s"; }; INTERVAL="$a"; } ;;
+      interval) [[ "$a" =~ ^[0-9]+$ ]] && [ "$a" -ge 10 ] && [ "$a" -le 1800 ] && { [ "$a" != "$(state interval)" ] && { echo "$a" >"$STATE_DIR/interval"; applied_add interval; log "setting from NetBox: contact interval $a s"; }; INTERVAL="$a"; } ;;
       key) NEWKEY="$a" ;;
       report) REPORT_URL=$(rebase "$a") ;;
       on_test_fail) case "$a" in restore|keep) ON_FAIL="$a" ;; esac ;;

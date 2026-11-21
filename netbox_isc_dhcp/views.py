@@ -159,20 +159,14 @@ def _sync_hint(srv, st, mh):
     return t("srv.autosync_eta", at=st.agent_autosync_at)
 
 
-def _first_leases(srv, st):
+def _first_leases(srv):
     """First run of the agent: when / how many IPs / sha / where the original leases were copied."""
-    import datetime
-
-    from django.utils import timezone
-
-    from .export.agent import TIME_FORMATS
+    from .export.agent import fmt_time
 
     p = (srv.first_leases or "").split("|")
     if len(p) != 4 or not p[0].isdigit():
         return None
-    fmt = TIME_FORMATS.get(getattr(st, "agent_time_format", "eu"), TIME_FORMATS["eu"])[1]
-    when = timezone.localtime(datetime.datetime.fromtimestamp(int(p[0]), tz=datetime.timezone.utc)).strftime(fmt)
-    return {"when": when, "n": p[1], "sha": p[2][:12], "path": p[3]}
+    return {"when": fmt_time(p[0]), "n": p[1], "sha": p[2][:12], "path": p[3]}
 
 
 def _server_rows():
@@ -181,7 +175,7 @@ def _server_rows():
     from .export.servers import resolve
 
     from .export import build, versions
-    from .export.agent import first_block, gate, stale
+    from .export.agent import disk_rows, first_block, fmt_time, gate, stale
     from .export.views import key_hash
     from .models import settings_obj
 
@@ -211,11 +205,12 @@ def _server_rows():
                     "run_ok": srv.running_hash == mh, "cur_label": lab.get(mh, mh[:12]), "svc_why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).svc_text(srv.svc_why) if srv.svc_why else "", "why": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).why_text(srv.dhcpd_why) if srv.dhcpd_why else "", "last_label": lab.get(srv.last_hash, srv.last_hash[:12]) if srv.last_hash else "",
                     "sync_hint": _sync_hint(srv, st, mh),
                     "disk": ("ok" if srv.disk_hash == ck else "bad") if srv.disk_hash and srv.enabled else "",
-                    "first_leases": _first_leases(srv, st),
+                    "first_leases": _first_leases(srv),
                     "rl_block": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).restore_block(srv, mh),
-                    "rl_done": (lambda p: {"when": timezone.localtime(__import__("datetime").datetime.fromtimestamp(int(p[0]), tz=__import__("datetime").timezone.utc)).strftime(__import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.get(getattr(st, "agent_time_format", "eu"), ("", "%d.%m.%Y-%H:%M"))[1]), "txt": p[1] if len(p) > 1 else ""} if p and p[0].isdigit() else None)(srv.leases_restored.split("|", 1)),
+                    "rl_done": (lambda p: {"when": fmt_time(p[0]), "txt": p[1] if len(p) > 1 else ""} if p and p[0].isdigit() else None)(srv.leases_restored.split("|", 1)),
                     "leases_kept": (lambda k: {"b": k[0], "a": k[1], "path": k[2], "ok": int(k[1]) >= int(k[0])} if len(k) == 3 and k[0].isdigit() and k[1].isdigit() else None)(srv.leases_kept.split("|")),
-                    "leases_last": timezone.localtime(srv.leases_last).strftime(__import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.get(getattr(st, "agent_time_format", "eu"), ("", "%d.%m.%Y-%H:%M"))[1]) if srv.leases_last else "",
+                    "leases_last": fmt_time(srv.leases_last),
+                    "disk_rows": disk_rows(srv.disk_usage) if srv.enabled else [],
                     "leases_old": bool(srv.leases_last and st and st.agent_leases_every and (timezone.now() - srv.leases_last).total_seconds() > st.agent_leases_every * 60 * 2 + 600)})
     waited = {n for r in out if r["reason"] == "staged" for n in r["names"]}
     for r in out:
