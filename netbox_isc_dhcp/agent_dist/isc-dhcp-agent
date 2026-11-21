@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.26.0"
+AGENT_VERSION="1.26.1"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -665,7 +665,11 @@ reboot_check() {  # REBOOT=1 when the server booted since the last contact NetBo
   [ -n "$BOOT_NOW" ] && [ -n "$prev" ] && [ "$prev" != "$BOOT_NOW" ] && REBOOT=1
   # test server stopped from NetBox before the reboot, but systemd started dhcpd at boot: stop it again (production servers: never)
   if [ -n "$REBOOT" ] && [ "$(state is_test)" = 1 ] && [ "$(state admin_stopped)" = 1 ] && [ "$(dhcpd_running)" = 1 ] && [ "$(state reboot_done)" != "$BOOT_NOW" ]; then
-    local p0; p0=$(pid_now); mark_agent; svc stop >/dev/null 2>&1; wait_down 10; pid_step stop "$p0"
+    local p0 i=0; p0=$(pid_now)
+    while [ $i -lt 30 ] && case "$(svc_state)" in activating|reloading|deactivating) true ;; *) false ;; esac; do sleep 2; i=$((i+1)); done  # let the boot start finish first (a stop during "activating" leaves dhcpd running)
+    mark_agent; svc stop >/dev/null 2>&1; wait_down 5
+    [ -n "$(dhcpd4_pids)" ] && kill_stray  # same as Stop from NetBox: a dhcpd left outside the service is ended
+    pid_step stop "$p0"
     if [ "$(dhcpd_running)" = 1 ]; then
       log "server rebooted: test server was stopped from NetBox before the reboot - stopping dhcpd FAILED, it keeps running"
     else
