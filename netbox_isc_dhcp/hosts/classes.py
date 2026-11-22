@@ -169,15 +169,21 @@ def sync_name(hg, name: str) -> list:
 
 # ---- NetBox group object: rename = class rename everywhere, delete refused while the class is used ----
 def _hg_for(sender, instance):
+    from django.db import DatabaseError
+
     from .models import HostConfig, HostGroup
 
-    if sender._meta.app_label == "netbox_isc_dhcp" or not instance.pk:
+    if sender._meta.app_label in ("netbox_isc_dhcp", "migrations") or not instance.pk:
         return None, None
-    cfg = HostConfig.objects.first()
     label = f"{sender._meta.app_label}.{sender._meta.model_name}"
-    if cfg is None or cfg.group_model != label:
+    try:
+        with transaction.atomic():  # savepoint: a missing table (first install, migrations running) never breaks the caller's transaction
+            cfg = HostConfig.objects.first()
+            if cfg is None or cfg.group_model != label:
+                return None, None
+            return cfg, HostGroup.objects.filter(group_model=label, group_pk=instance.pk).first()
+    except DatabaseError:
         return None, None
-    return cfg, HostGroup.objects.filter(group_model=label, group_pk=instance.pk).first()
 
 
 def group_saved(sender, instance, raw=False, **kwargs):

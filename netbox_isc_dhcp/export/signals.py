@@ -75,9 +75,15 @@ def mark(**kw):
 def _source_models():
     res = cache.get("isc_dhcp_src_models")
     if res is None:
+        from django.db import DatabaseError
+
         from ..hosts.models import HostSource
 
-        res = set(HostSource.objects.exclude(model="").values_list("model", flat=True))
+        try:
+            with transaction.atomic():  # savepoint: a missing table (first install, migrations running) never breaks the caller's transaction
+                res = set(HostSource.objects.exclude(model="").values_list("model", flat=True))
+        except DatabaseError:
+            return set()  # tables not created yet: nothing to watch (not cached)
         cache.set("isc_dhcp_src_models", res, 300)
     return res
 
@@ -114,13 +120,13 @@ def _label(sender):
 
 
 def obj_before(sender, instance, raw=False, **kwargs):
-    if raw or sender._meta.app_label == "netbox_isc_dhcp" or not instance.pk or _label(sender) not in _source_models():
+    if raw or sender._meta.app_label in ("netbox_isc_dhcp", "migrations") or not instance.pk or _label(sender) not in _source_models():
         return
     instance._isc_groups_before = _groups_with(instance, _label(sender))
 
 
 def obj_after(sender, instance, raw=False, **kwargs):
-    if raw or sender._meta.app_label == "netbox_isc_dhcp" or _label(sender) not in _source_models():
+    if raw or sender._meta.app_label in ("netbox_isc_dhcp", "migrations") or _label(sender) not in _source_models():
         return
     before = getattr(instance, "_isc_groups_before", set())
     after = set() if kwargs.get("signal") is post_delete else _groups_with(instance, _label(sender))
