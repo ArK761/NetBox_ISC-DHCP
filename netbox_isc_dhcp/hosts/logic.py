@@ -90,15 +90,18 @@ def groups_overview(cfg, open_row=None) -> dict:
     gkeys = {o["key"] for o in field_options(gm)}
     gname = cfg.group_name_field if cfg.group_name_field in gkeys else ""
     existing = {hg.group_pk: hg for hg in HostGroup.objects.filter(group_model=cfg.group_model)}
-    rows = []
+    rows, tpl = [], None
     for g in qs:
         name = name_of(g, gname)
         hg = existing.get(g.pk)
         if hg is None:
             from .models import HostCodeTemplate
-            hg = HostGroup.objects.create(group_model=cfg.group_model, group_pk=g.pk, name=name[:200],
-                                          dynamic_template=HostCodeTemplate.objects.filter(kind="dynamic").first(),
-                                          static_template=HostCodeTemplate.objects.filter(kind="static").first())
+
+            if tpl is None:
+                tpl = (HostCodeTemplate.objects.filter(kind="dynamic").first(), HostCodeTemplate.objects.filter(kind="static").first())
+            # get_or_create: two requests at the same time (a long save + a page reload) never create the same group twice
+            hg, _ = HostGroup.objects.get_or_create(group_model=cfg.group_model, group_pk=g.pk,
+                                                    defaults={"name": name[:200], "dynamic_template": tpl[0], "static_template": tpl[1]})
         elif hg.name != name[:200]:
             from .classes import sync_name
 
