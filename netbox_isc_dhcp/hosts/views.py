@@ -28,15 +28,26 @@ def _need_texts(need):
     return [t(keys[n]) for n in need]
 
 
+def _tpl_groups(tp):
+    """(groups of the current table source using the template, those whose file goes into the CFG = stored for the DHCP servers)."""
+    from ..export.models import ExportFile
+
+    cfg = host_config()
+    groups = list(HostGroup.objects.filter(group_model=cfg.group_model, **{tp.kind + "_template": tp}).order_by("name"))
+    live_keys = set(ExportFile.objects.filter(area="table", key__endswith=f":{tp.kind}").values_list("key", flat=True))
+    live = [g for g in groups if f"group:{g.pk}:{tp.kind}" in live_keys and g.is_default(tp.kind)]  # own code = template not used in the file
+    return groups, live
+
+
 def _tpl_rows(request):
     drafts = request.session.get("hosts_tpl_draft", {})
     out = []
     for tp in HostCodeTemplate.objects.all():
-        groups = list(HostGroup.objects.filter(**{tp.kind + "_template": tp}).order_by("name"))
+        groups, live = _tpl_groups(tp)
         used = len(groups)
         solo = [g for g in groups if not g.is_default(tp.kind)]
-        out.append({"solo": solo, "solo_text": t("hosts.tpl_solo", n=len(solo)) if solo else "", "t": tp, "code": drafts.get(str(tp.pk), tp.code), "draft": str(tp.pk) in drafts, "used": used,
-                    "used_text": t("hosts.tpl_used", n=used), "vars": t("hosts.code_vars_" + tp.kind)})
+        out.append({"solo": solo, "solo_text": t("hosts.tpl_solo", n=len(solo)) if solo else "", "t": tp, "code": drafts.get(str(tp.pk), tp.code), "draft": str(tp.pk) in drafts, "used": len(live),
+                    "used_text": t("hosts.tpl_used2", n=used, m=len(live)), "vars": t("hosts.code_vars_" + tp.kind)})
     return out
 
 
@@ -139,10 +150,15 @@ class HostsInlineView(LoginRequiredMixin, View):
             if tp is None:
                 err = t("hosts.err_tpl")
             elif field == "tpl_del":
-                used = HostGroup.objects.filter(**{tp.kind + "_template": tp}).count()
-                if used:
-                    err = t("hosts.err_tpl_used", n=used)
+                groups, live = _tpl_groups(tp)
+                other = HostCodeTemplate.objects.filter(kind=tp.kind).exclude(pk=tp.pk).order_by("pk").first()
+                if live:  # its files go to the DHCP servers: never deleted just like that
+                    err = t("hosts.err_tpl_live", n=len(live), names=", ".join(g.name for g in live[:5]))
+                elif groups and other is None:
+                    err = t("hosts.err_tpl_last", n=len(groups))
                 else:
+                    if other is not None:  # groups without generated files take another template of the same kind
+                        HostGroup.objects.filter(**{tp.kind + "_template": tp}).update(**{tp.kind + "_template": other})
                     tp.delete()
                     anchor = "isc-tpls"
             else:
