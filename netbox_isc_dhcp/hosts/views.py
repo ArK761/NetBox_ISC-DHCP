@@ -112,8 +112,12 @@ class HostsInlineView(LoginRequiredMixin, View):
         group_keys = {o["key"] for o in field_options(get_model(cfg.group_model))}
         err, anchor, edit = "", "isc-src-group", None
         if field == "group_model":
+            from .logic import MAX_GROUPS, too_many_groups
+
             if value and value not in {v for v, _, _ in source_models()}:
                 err = t("hosts.err_object")
+            elif value and too_many_groups(value):
+                err = t("hosts.err_too_many", n=too_many_groups(value), max=MAX_GROUPS, obj=source_label(value))
             elif value != cfg.group_model:
                 cfg.group_model, cfg.group_name_field, cfg.group_conditions = value, "name", []
         elif field == "group_name_field":

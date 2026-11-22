@@ -77,8 +77,18 @@ def group_texts(hg, state=None) -> dict:
     return out
 
 
+def _tables_blocked(state=None) -> bool:
+    """Table source with too many items (wrong object): generate nothing, keep the stored files as they are."""
+    from ..hosts.logic import too_many_groups
+
+    cfg = (state or _tables_state())[0]
+    return bool(cfg is not None and too_many_groups(cfg.group_model))
+
+
 def regen_group(hg, state=None):
     """Both files of one group. Not stored (and removed) when the group is not included, empty or failing."""
+    if _tables_blocked(state):
+        return False
     changed = False
     keep = set()
     for key, path, text in group_texts(hg, state).values():
@@ -95,6 +105,8 @@ def regen_tables():
     from ..hosts.models import HostGroup
 
     state = _tables_state()
+    if _tables_blocked(state):
+        return False
     changed = False
     seen = set()
     for hg in HostGroup.objects.all():

@@ -65,6 +65,10 @@ def lost_by_tables(cfg_after) -> dict:
     from ..services import dynamic_classes
     from .models import HostGroup
 
+    from .logic import too_many_groups
+
+    if too_many_groups(cfg_after.group_model):
+        return {}  # refused anyway (wrong table source), never build thousands of groups
     cfg, st, gm = _tables_state()
     if cfg_after.include_tables and st is not None and getattr(st, "table_dir", None) and gm is not None:
         state = (cfg_after, st, gm)

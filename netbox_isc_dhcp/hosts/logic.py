@@ -22,6 +22,16 @@ en_source_models = _english(_sf.source_models)
 label_for = _english(_sf.label_for)
 
 MAX_HOSTS = 3
+MAX_GROUPS = 100  # table source: every item = one DHCP class (2 files); more = a wrong object (e.g. Tenant instead of Tenant group)
+
+
+def too_many_groups(label) -> int:
+    """Number of items of the table source object when it is over MAX_GROUPS (0 = fine)."""
+    gm = get_model(label) if label else None
+    if gm is None:
+        return 0
+    n = gm.objects.count()
+    return n if n > MAX_GROUPS else 0
 
 
 def _scalar(obj):
@@ -82,6 +92,10 @@ def groups_overview(cfg, open_row=None) -> dict:
     gm = get_model(cfg.group_model)
     out = {"group_model": gm, "groups": [], "conditions": []}
     if gm is None:
+        return out
+    many = too_many_groups(cfg.group_model)
+    if many:  # wrong object: no thousands of groups created / built on a page view
+        out["too_many"], out["total"] = many, many
         return out
     conds = []  # owner: no table-source conditions, the per-group switch is enough
     out["conditions"] = condition_rows(gm, conds, open_row)

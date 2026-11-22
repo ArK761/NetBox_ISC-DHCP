@@ -48,8 +48,9 @@
     </div>
   </div>
 
+  {% if ov.too_many %}<div class="alert alert-danger d-block mb-3"><i class="mdi mdi-alert-octagon-outline"></i> {% tr_fmt "hosts.too_many" n=ov.too_many max=100 obj=group_label %}</div>{% endif %}
   {# ---- groups (like the pools list) ---- #}
-  {% if cfg.group_model %}
+  {% if cfg.group_model and not ov.too_many %}
   <div class="card mb-3" id="isc-groups">
     <h5 class="card-header d-flex align-items-center"><span class="isc-step">3</span><i class="mdi mdi-format-list-group me-2"></i>{% tr "hosts.groups_table" %}
       <span class="badge text-bg-secondary ms-2" id="isc-groups-count">{{ groups_count_text }}</span></h5>
