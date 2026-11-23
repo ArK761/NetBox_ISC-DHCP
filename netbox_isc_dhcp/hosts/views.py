@@ -12,7 +12,7 @@ from .logic import en_field_options as field_options, en_source_label as source_
 from ..views import _editor_vars
 from .codegen import DEFAULT_DYNAMIC, DEFAULT_STATIC, code_errors, render_files
 from .usage import defined_classes, included_paths, references, usage_of
-from .logic import MAX_HOSTS, build_group, groups_overview, source_info
+from .logic import build_group, groups_overview, source_info
 from .models import HostCodeTemplate, HostGroup, HostGroupCode, HostSource, host_config
 
 
@@ -242,7 +242,7 @@ class HostGroupView(LoginRequiredMixin, View):
                          "mac_opts": [(o["key"], o["label"] + (f" ({t('hosts.used_row', n=n)})" if n else "")) for o in opts
                                       for n in [next((i for i, r in enumerate(src.hosts or [], 1) if r.get("mac") == o["key"]), 0)]
                                       if o["key"] not in {r.get("ip") for r in src.hosts or []}],
-                         "need_texts": _need_texts(info["need"]), "hn_choices": [("name", t("hosts.hn_name")), ("host", t("hosts.hn_host")), ("none", t("hosts.hn_none"))], "rows": rows, "can_add": len(src.hosts or []) < MAX_HOSTS,
+                         "need_texts": _need_texts(info["need"]), "hn_choices": [("name", t("hosts.hn_name")), ("host", t("hosts.hn_host")), ("none", t("hosts.hn_none"))], "rows": rows, "can_add": True,
                          "host_name_label": labels.get(src.host_name_field, ""), "used_fields": [c["field"] for c in info["conditions"]],
                          "names_hint": t("hosts.names_hint1") if len(rows) <= 1 else t("hosts.names_hintn", n=len(rows))})
             sources.append(info)
@@ -282,7 +282,7 @@ class HostGroupView(LoginRequiredMixin, View):
             "lost": [(h, t("hosts.lost_" + r), v) for h, r, v in built["lost"]],
             "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
             "warn_title": t("hosts.warn_title", n=len(built["warnings"])), "usage": usage,
-            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title", n=MAX_HOSTS), "found_label": t("hosts.found_n"), "lines_label": t("hosts.snip_lines"), "snip_show": t("hosts.snip_show"), "snip_hide": t("hosts.snip_hide"), "editor_vars": _editor_vars(),
+            "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title"), "found_label": t("hosts.found_n"), "lines_label": t("hosts.snip_lines"), "snip_show": t("hosts.snip_show"), "snip_hide": t("hosts.snip_hide"), "editor_vars": _editor_vars(),
         })
 
 
@@ -406,9 +406,7 @@ class HostGroupInlineView(LoginRequiredMixin, View):
                 ip = "" if noip else ip
                 labels = {o["key"]: o["label"] for o in field_options(get_model(src.model))}
                 same = next((n for n, r in enumerate(rows, 1) if r.get("mac") == mac), None)
-                if len(rows) >= MAX_HOSTS:
-                    err = t("hosts.err_max_rows", n=MAX_HOSTS)
-                elif mac not in keys or (ip and ip not in keys) or (noip and noip not in keys) or mac == ip:
+                if mac not in keys or (ip and ip not in keys) or (noip and noip not in keys) or mac == ip:
                     err = t("hosts.err_field")
                 elif same is not None and (bool(ip) == bool(rows[same - 1].get("ip")) or rows[same - 1].get("dyn")
                                            or (ip and request.POST.get("dyn") == "1")):

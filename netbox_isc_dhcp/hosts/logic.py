@@ -21,7 +21,7 @@ en_source_label = _english(_sf.source_label)
 en_source_models = _english(_sf.source_models)
 label_for = _english(_sf.label_for)
 
-MAX_HOSTS = 3
+MAX_HOSTS = None  # owner: no limit of host rows per object (every MAC field once in _Dynamic and once in _Static still applies)
 MAX_GROUPS = 100  # table source: every item = one DHCP class (2 files); more = a wrong object (e.g. Tenant instead of Tenant group)
 
 
@@ -164,7 +164,7 @@ def source_info(src, open_row=None) -> dict:
 def host_rows(src, keys) -> list[dict]:
     """Usable host rows of a source: MAC field exists; IP field exists or is empty."""
     out = []
-    for r in (src.hosts or [])[:MAX_HOSTS]:
+    for r in (src.hosts or []):
         if r.get("mac") in keys and (not r.get("ip") or r["ip"] in keys):
             hn = r.get("hn") or "name"
             out.append({"mac": r["mac"], "ip": r.get("ip") or "", "dyn": bool(r.get("dyn")),
