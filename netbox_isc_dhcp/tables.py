@@ -47,7 +47,7 @@ class DHCPGroupTable(NetBoxTable):
 
 
 REGEN = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dhcpfile_regenerate' pk=record.pk %}" class="d-inline">
-{% csrf_token %}<button type="submit" class="btn btn-link p-0 border-0" title="Regenerate"><i class="mdi mdi-refresh fs-4"></i></button></form>"""
+{% csrf_token %}<button type="submit" formmethod="post" formaction="{% url 'plugins:netbox_isc_dhcp:dhcpfile_regenerate' pk=record.pk %}" class="btn btn-link p-0 border-0" title="Regenerate"><i class="mdi mdi-refresh fs-4"></i></button></form>"""
 
 
 class DHCPFileTable(NetBoxTable):
@@ -66,7 +66,7 @@ class DHCPFileTable(NetBoxTable):
 
 
 TOGGLE = """<form method="post" action="{% url 'plugins:netbox_isc_dhcp:dnsserver_toggle' pk=record.pk %}" class="d-inline">
-{% csrf_token %}<button type="submit" class="btn btn-link p-0 border-0"><i class="mdi {% if record.active %}mdi-checkbox-marked text-success{% else %}mdi-checkbox-blank-outline text-muted{% endif %} fs-3"></i></button></form>"""
+{% csrf_token %}<button type="submit" formmethod="post" formaction="{% url 'plugins:netbox_isc_dhcp:dnsserver_toggle' pk=record.pk %}" class="btn btn-link p-0 border-0"><i class="mdi {% if record.active %}mdi-checkbox-marked text-success{% else %}mdi-checkbox-blank-outline text-muted{% endif %} fs-3"></i></button></form>"""
 
 
 class DNSServerTable(NetBoxTable):
