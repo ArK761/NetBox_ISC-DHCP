@@ -538,15 +538,19 @@ def _pool_key_locked(conds, row, action) -> str:
     from collections import Counter
 
     from .export import build
-    from .export.models import ExportFile
+    from .export.models import DHCPServer, ExportFile
 
+    # owner: only while a DHCP server actually runs dhcpd; without active servers the pool type is free
+    active = list(DHCPServer.objects.filter(enabled=True, dhcpd_running=True).values_list("name", flat=True))
+    if not active:
+        return ""
     live = set(ExportFile.objects.filter(area="subnet").values_list("key", flat=True))
     if not live:
         return ""
     per_pool = Counter(v[1].name for pk, v in build._subnet_plan().items() if f"subnet:{pk}" in live)
     n = sum(per_pool.values()) or len(live)
     names = ", ".join(sorted(per_pool)[:6]) + (" …" if len(per_pool) > 6 else "")
-    return t("err.pool_key_live", n=n, names=names or "—")
+    return t("err.pool_key_live", n=n, names=names or "—", servers=", ".join(sorted(active)))
 
 
 def _pool_info(instance):

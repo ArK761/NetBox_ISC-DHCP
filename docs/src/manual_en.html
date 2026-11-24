@@ -210,7 +210,7 @@ host PC-002 {
 <ol><li>Choose the <b>object</b> (e.g. IPAM › Prefix) and the <b>subdirectory for subnets</b>.</li>
 <li><b>Add field</b> – any field of the object (standard or custom field).</li>
 <li>Click a row – the list of all values opens with search, <b>Select all / Untick all</b> and the switch <b>only ticked / all except ticked</b>. Nothing ticked = <i>any (no filter)</i>.</li>
-<li>On the field that defines the pool type (e.g. <code>POOL_TYPE</code>) click the <b>key</b> icon. A field with more than 100 values cannot be chosen.</li></ol>
+<li>On the field that defines the pool type (e.g. <code>POOL_TYPE</code>) switch on <b>Pool type</b>. At most one can be on; off everywhere = no pools. A field with more than 100 values cannot be chosen. While the pools' subnets are in the CFG and at least one active DHCP server runs (enabled, dhcpd running), the pool type cannot be switched off or moved (take them out of the CFG first). Without active DHCP servers it can be changed freely. Saving on the Subnets page works without a page reload ("recalculating…" at the top right during the recalculation).</li></ol>
 <p>Below the conditions you see the number of selected objects and the <b>gateway (GW)</b> for all prefixes: first or last usable IP.</p>
 <h3>Pools and their code</h3>
 <p>Every pool type has its own <b>code (template)</b>, a <b>Generate</b> switch and a <b>preview</b> on a real prefix. Variables in the code:</p>

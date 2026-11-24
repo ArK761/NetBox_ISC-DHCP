@@ -210,7 +210,7 @@ host PC-002 {
 <ol><li>Zvoľte <b>objekt</b> (napr. IPAM › Prefix) a <b>podadresár pre subnety</b>.</li>
 <li><b>Pridať pole</b> – ľubovoľné pole objektu (štandardné aj custom field).</li>
 <li>Kliknite na riadok – rozbalí sa zoznam všetkých hodnôt s vyhľadávaním, tlačidlami <b>Vybrať všetky / Odškrtnúť všetky</b> a prepínačom <b>iba zaškrtnuté / všetko okrem zaškrtnutých</b>. Nič nezaškrtnuté = <i>ľubovoľná (nefiltruje)</i>.</li>
-<li>Pri poli, ktoré určuje typ poolu (napr. <code>POOL_TYPE</code>), zapnite prepínač <b>Typ poolu</b>. Zapnutý môže byť najviac jeden; vypnutý všade = žiadne pooly. Pole s viac ako 100 hodnotami sa nedá zvoliť. Kým sú subnety poolov v CFG pre DHCP servery, typ poolu nemožno vypnúť ani presunúť (najprv ich vyraďte z CFG). Ukladanie na stránke Subnety prebieha bez obnovenia stránky (počas prepočtu je vpravo hore „prepočítava sa…“).</li></ol>
+<li>Pri poli, ktoré určuje typ poolu (napr. <code>POOL_TYPE</code>), zapnite prepínač <b>Typ poolu</b>. Zapnutý môže byť najviac jeden; vypnutý všade = žiadne pooly. Pole s viac ako 100 hodnotami sa nedá zvoliť. Kým sú subnety poolov v CFG a beží aspoň jeden aktívny DHCP server (zapnutý, dhcpd beží), typ poolu nemožno vypnúť ani presunúť (najprv ich vyraďte z CFG). Bez aktívnych DHCP serverov sa dá meniť voľne. Ukladanie na stránke Subnety prebieha bez obnovenia stránky (počas prepočtu je vpravo hore „prepočítava sa…“).</li></ol>
 <p>Pod podmienkami je počet vybraných objektov a <b>brána (GW)</b> pre všetky rozsahy: prvá alebo posledná použiteľná IP.</p>
 <h3>Pooly a ich kód</h3>
 <p>Každý typ poolu má vlastný <b>kód (šablónu)</b>, prepínač <b>Generovať</b> a <b>náhľad</b> na konkrétnom rozsahu. Premenné v kóde:</p>
