@@ -1,7 +1,7 @@
 {% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
 {% block title %}{% tr "hosts.title" %}{% endblock %}
 {% block breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'plugins:netbox_isc_dhcp:dhcp_hub' %}">{% tr "menu.dhcp" %}</a></li>{% endblock breadcrumbs %}
-{% block content %}<style>details.isc-use>summary{cursor:pointer;list-style:none}details.isc-use>summary::before{content:"\25B8  ";}details.isc-use[open]>summary::before{content:"\25BE  ";}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}{% include "netbox_isc_dhcp/hosts/_style.html" %}{% include "netbox_isc_dhcp/hosts/_cls_confirm.html" %}
+{% block content %}<style>details.isc-use>summary{cursor:pointer;list-style:none}details.isc-use>summary::before{content:"\25B8  ";}details.isc-use[open]>summary::before{content:"\25BE  ";}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}{% include "netbox_isc_dhcp/hosts/_style.html" %}{% include "netbox_isc_dhcp/hosts/_cls_confirm.html" %}<div id="isc-live">
 {% url 'plugins:netbox_isc_dhcp:hosts_inline' as inline_url %}
 <div class="row"><div class="col-12">
 
@@ -119,4 +119,5 @@
   {% include "netbox_isc_dhcp/_code_editor.html" %}
   {% endif %}
 </div></div>
+</div>{% include "netbox_isc_dhcp/hosts/_live.html" %}
 {% endblock %}

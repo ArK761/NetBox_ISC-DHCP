@@ -1,6 +1,6 @@
 {% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
 {% block title %}{{ hg.name }}{% endblock %}
-{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}{% include "netbox_isc_dhcp/hosts/_style.html" %}{% include "netbox_isc_dhcp/hosts/_cls_confirm.html" %}
+{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}{% include "netbox_isc_dhcp/hosts/_style.html" %}{% include "netbox_isc_dhcp/hosts/_cls_confirm.html" %}<div id="isc-live">
 {% url 'plugins:netbox_isc_dhcp:hosts_group_inline' pk=hg.pk as inline_url %}
 <div class="row"><div class="col-12">
   <a class="btn btn-sm btn-outline-secondary mb-3" id="isc-back" href="{% url 'plugins:netbox_isc_dhcp:hosts' %}#g{{ hg.pk }}"><i class="mdi mdi-arrow-left"></i> {% tr "lbl.back_to" %} {% tr "hosts.title" %}</a>
@@ -179,4 +179,5 @@ document.querySelectorAll('.isc-hsearch').forEach(function (inp) {
   });
 });
 </script>
+</div>{% include "netbox_isc_dhcp/hosts/_live.html" %}
 {% endblock %}

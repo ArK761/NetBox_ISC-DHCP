@@ -1,0 +1,81 @@
+{% load isc_dhcp_i18n %}
+<style>#isc-live.isc-busy{opacity:.55;pointer-events:none}#isc-live-busy{position:fixed;top:4.5rem;right:1.5rem;z-index:1080;display:none}
+#isc-live-msg{position:fixed;top:7rem;right:1.5rem;z-index:1081;max-width:34rem}#isc-live-msg .alert{box-shadow:0 .5rem 1.5rem rgba(0,0,0,.35);cursor:pointer}
+.isc-cls-inline{border:2px solid var(--tblr-warning,#f59f00)}</style>
+<div id="isc-live-msg"></div>
+<div id="isc-live-busy" class="badge text-bg-info fs-6 shadow"><span class="spinner-border spinner-border-sm me-1"></span> {% tr "lbl.recalc" %}</div>
+<script>
+(function () {  // Hosty / group page: every save in the background (no reload, same scroll); a change that removes a used class asks next to the clicked row
+  var root = document.getElementById("isc-live"), busy = document.getElementById("isc-live-busy"), mbox = document.getElementById("isc-live-msg");
+  if (!root || !window.fetch || !window.DOMParser) return;
+  var T = {ok: {{ "cls.confirm_box"|tr_js }}, go: {{ "cls.confirm_btn"|tr_js }}, no: {{ "cls.confirm_cancel"|tr_js }}};
+  function patch() {  // onchange="this.form.submit()" skips the submit event: route it through requestSubmit
+    root.querySelectorAll("form").forEach(function (f) {
+      if (f.__isc) return; f.__isc = 1;
+      f.submit = function () { if (f.requestSubmit) f.requestSubmit(); else HTMLFormElement.prototype.submit.call(f); };
+    });
+  }
+  function msgs(doc) {
+    var out = [];
+    doc.querySelectorAll("#django-messages .toast").forEach(function (t) {
+      var h = t.querySelector(".toast-header"), m = (h && h.className.match(/text-bg-(\w+)/)) || [0, "info"];
+      out.push('<div class="alert alert-' + (m[1] === "danger" ? "danger" : m[1] === "warning" ? "warning" : "success") + ' d-block py-2 px-3 mb-2">' + t.querySelector(".toast-body").innerHTML + "</div>");
+    });
+    return out.join("");
+  }
+  function swap(html, url) {
+    var doc = new DOMParser().parseFromString(html, "text/html"), fresh = doc.getElementById("isc-live");
+    if (!fresh) { location.href = url; return; }
+    var y = window.scrollY;
+    root.innerHTML = fresh.innerHTML;
+    root.querySelectorAll("script").forEach(function (s) {  // data blocks (json_script) stay, code runs again
+      if (s.type && s.type !== "text/javascript") return;
+      var n = document.createElement("script"); n.textContent = s.textContent; s.replaceWith(n); });
+    patch();
+    mbox.innerHTML = msgs(doc);
+    clearTimeout(swap.t); if (!mbox.querySelector(".alert-danger,.alert-warning")) swap.t = setTimeout(function () { mbox.innerHTML = ""; }, 6000);
+    window.scrollTo(0, y);
+    document.dispatchEvent(new Event("visibilitychange"));  // warning bars at the top refresh too
+  }
+  function done() { root.classList.remove("isc-busy"); busy.style.display = "none"; }
+  function reload() { root.classList.add("isc-busy"); busy.style.display = "inline-block";
+    fetch(location.href, {credentials: "same-origin"}).then(function (r) { return r.text().then(function (h) { swap(h, r.url); }); }).finally(done); }
+  function ask(f, fd, text) {
+    root.querySelectorAll(".isc-cls-inline").forEach(function (x) { (x.closest(".isc-cls-row") || x).remove(); });
+    var box = document.createElement("div");
+    box.className = "alert alert-warning d-block isc-cls-inline my-2";
+    box.innerHTML = '<div class="fw-bold mb-2"><i class="mdi mdi-alert"></i> </div><label class="form-check mb-2"><input class="form-check-input" type="checkbox"> <span class="form-check-label"></span></label>'
+      + '<button type="button" class="btn btn-sm btn-warning me-1"></button><button type="button" class="btn btn-sm btn-outline-secondary"></button>';
+    box.firstChild.appendChild(document.createTextNode(text));
+    box.querySelector(".form-check-label").textContent = T.ok;
+    var bs = box.querySelectorAll("button"); bs[0].textContent = T.go; bs[1].textContent = T.no;
+    var tr = f.closest("tr");
+    if (tr) { var row = document.createElement("tr"), td = document.createElement("td"); row.className = "isc-cls-row"; td.colSpan = 99; td.appendChild(box); row.appendChild(td); tr.after(row); }
+    else f.after(box);
+    box.scrollIntoView({block: "nearest", behavior: "smooth"});
+    bs[0].addEventListener("click", function () {
+      var cb = box.querySelector("input");
+      if (!cb.checked) { cb.focus(); box.querySelector(".form-check").classList.add("text-danger"); return; }
+      fd.set("cls_ok", "1"); post(f, fd);
+    });
+    bs[1].addEventListener("click", reload);  // nothing changed: page as it is (switch back in its stored position)
+  }
+  function post(f, fd) {
+    root.classList.add("isc-busy"); busy.style.display = "inline-block";
+    fetch(f.action, {method: "POST", body: fd, credentials: "same-origin", headers: {"X-Requested-With": "fetch"}})
+      .then(function (r) {
+        if ((r.headers.get("content-type") || "").indexOf("json") >= 0) return r.json().then(function (j) { done(); if (j.confirm) ask(f, fd, j.confirm); });
+        return r.text().then(function (h) { swap(h, r.url); done(); });
+      })
+      .catch(function () { done(); HTMLFormElement.prototype.submit.call(f); });
+  }
+  mbox.addEventListener("click", function () { mbox.innerHTML = ""; });  // click = close
+  root.addEventListener("submit", function (e) {
+    var f = e.target; if ((f.method || "").toLowerCase() !== "post") return;
+    e.preventDefault();
+    var fd = new FormData(f); if (e.submitter && e.submitter.name) fd.append(e.submitter.name, e.submitter.value);
+    post(f, fd);
+  });
+  patch();
+})();
+</script>

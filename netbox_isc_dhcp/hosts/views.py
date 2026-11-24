@@ -116,6 +116,10 @@ class HostsInlineView(LoginRequiredMixin, View):
             list(messages.get_messages(request))
             if ok:
                 messages.warning(request, warn_text(lost))
+            elif request.headers.get("X-Requested-With") == "fetch":  # page saves in the background: box next to the clicked row
+                from django.http import JsonResponse
+
+                return JsonResponse({"confirm": warn_text(lost)})
             else:
                 ask_confirm(request, lost)
         return resp
@@ -313,6 +317,10 @@ class HostGroupInlineView(LoginRequiredMixin, View):
             list(messages.get_messages(request))  # drop the success message of the rolled back change
             if ok:
                 messages.warning(request, warn_text(lost))
+            elif request.headers.get("X-Requested-With") == "fetch":  # page saves in the background: box next to the clicked row
+                from django.http import JsonResponse
+
+                return JsonResponse({"confirm": warn_text(lost)})
             else:
                 ask_confirm(request, lost)
         return resp

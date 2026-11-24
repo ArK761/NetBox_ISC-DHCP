@@ -10,6 +10,16 @@ def tr(key):
     return t(key)
 
 
+@register.filter
+def tr_js(key):
+    """Translated text as a JS string literal."""
+    import json
+
+    from django.utils.safestring import mark_safe
+
+    return mark_safe(json.dumps(t(key)).replace("<", "\\u003c"))
+
+
 @register.simple_tag
 def tr_fmt(key, **kw):
     return t(key, **kw)
