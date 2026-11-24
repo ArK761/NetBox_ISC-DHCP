@@ -1,7 +1,7 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}<style>details.isc-use>summary{cursor:pointer;list-style:none}details.isc-use>summary::before{content:"\25B8  ";}details.isc-use[open]>summary::before{content:"\25BE  ";}mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0 2px;border-radius:2px}mark.isc-cls{background:rgba(56,189,248,.30);color:inherit;padding:0 2px;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
 {% url 'plugins:netbox_isc_dhcp:subnetconfig_inline' pk=object.pk as inline_url %}
-<div class="row" id="isc-sub-main"><div class="col-12 col-xl-10"><div id="isc-sub-msg"></div>
+<div id="isc-sub-msg"></div><div class="row" id="isc-sub-main"><div class="col-12 col-xl-10">
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.subnet_source" %}</h5>
     <table class="table attr-table mb-0">
@@ -133,7 +133,8 @@
       {% else %}<span class="text-warning"><i class="mdi mdi-alert-outline"></i> {% tr "cls.unused" %}</span>{% endif %}</td></tr>{% endfor %}</table>
     {% else %}<div class="card-body text-warning small pt-0">{% tr "cls.none" %}</div>{% endif %}</div>
 </div></div>
-<style>#isc-sub-main.isc-busy{opacity:.55;pointer-events:none;position:relative}#isc-sub-busy{position:fixed;top:4.5rem;right:1.5rem;z-index:1080;display:none}</style>
+<style>#isc-sub-main.isc-busy{opacity:.55;pointer-events:none;position:relative}#isc-sub-busy{position:fixed;top:4.5rem;right:1.5rem;z-index:1080;display:none}
+#isc-sub-msg{position:fixed;top:7rem;right:1.5rem;z-index:1081;max-width:34rem}#isc-sub-msg .alert{box-shadow:0 .5rem 1.5rem rgba(0,0,0,.35);cursor:pointer}</style>
 <div id="isc-sub-busy" class="badge text-bg-info fs-6 shadow"><span class="spinner-border spinner-border-sm me-1"></span> {% tr "lbl.recalc" %}</div>
 <script>
 (function () {  // Subnety: every save / row toggle without a page reload; the page parts are swapped in place
@@ -152,7 +153,8 @@
     if (!fresh) { location.href = url; return; }
     var y = window.scrollY;
     root.innerHTML = fresh.innerHTML;
-    document.getElementById("isc-sub-msg").innerHTML = msgs(doc);
+    var box = document.getElementById("isc-sub-msg"); box.innerHTML = msgs(doc);  // floating, visible wherever the page is scrolled
+    clearTimeout(swap.t); if (!box.querySelector(".alert-danger,.alert-warning")) swap.t = setTimeout(function () { box.innerHTML = ""; }, 6000);
     window.scrollTo(0, y);
     document.dispatchEvent(new Event("visibilitychange"));  // the warning bars at the top refresh too
   }
@@ -163,6 +165,7 @@
       .catch(function () { location.href = url; })
       .finally(function () { root.classList.remove("isc-busy"); busy.style.display = "none"; });
   }
+  document.getElementById("isc-sub-msg").addEventListener("click", function () { this.innerHTML = ""; });  // click = close
   root.addEventListener("submit", function (e) {
     var f = e.target; if (f.method.toLowerCase() !== "post") return;
     e.preventDefault();
