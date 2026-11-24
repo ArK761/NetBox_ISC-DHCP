@@ -1,7 +1,7 @@
 {% extends 'generic/object.html' %}{% load isc_dhcp_i18n %}
 {% block content %}<style>details.isc-use>summary{cursor:pointer;list-style:none}details.isc-use>summary::before{content:"\25B8  ";}details.isc-use[open]>summary::before{content:"\25BE  ";}mark.isc-var{background:rgba(250,204,21,.35);color:inherit;padding:0 2px;border-radius:2px}mark.isc-cls{background:rgba(56,189,248,.30);color:inherit;padding:0 2px;border-radius:2px}</style>{% include "netbox_isc_dhcp/_inline_css.html" %}
 {% url 'plugins:netbox_isc_dhcp:subnetconfig_inline' pk=object.pk as inline_url %}
-<div class="row"><div class="col-12 col-xl-10">
+<div class="row" id="isc-sub-main"><div class="col-12 col-xl-10"><div id="isc-sub-msg"></div>
   <div class="card mb-3">
     <h5 class="card-header">{% tr "lbl.subnet_source" %}</h5>
     <table class="table attr-table mb-0">
@@ -61,8 +61,8 @@
                 </div>
               </form>{% endif %}</div>
             <div class="d-flex gap-1 text-nowrap">
-              {% if c.can_key %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_poolkey"><input type="hidden" name="index" value="{{ c.index }}">
-                <button class="btn btn-sm btn-outline-primary" title="{% tr 'lbl.set_pool_key' %}"><i class="mdi mdi-key-outline"></i></button></form>{% endif %}
+              <form method="post" action="{{ inline_url }}" class="m-0 d-flex align-items-center me-2">{% csrf_token %}<input type="hidden" name="field" value="{% if c.pool_key %}cond_poolkey_off{% else %}cond_poolkey{% endif %}"><input type="hidden" name="index" value="{{ c.index }}">
+                <label class="form-check form-switch m-0 small" title="{% tr 'lbl.pool_type_sw_hint' %}"><input class="form-check-input" type="checkbox"{% if c.pool_key %} checked{% endif %}{% if not c.can_key %} disabled{% endif %} onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"> {% tr "lbl.pool_type_sw" %}</label></form>
               <form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="cond_del"><input type="hidden" name="index" value="{{ c.index }}">
                 <button class="btn btn-sm btn-danger"><i class="mdi mdi-trash-can-outline"></i></button></form>
             </div>
@@ -133,4 +133,49 @@
       {% else %}<span class="text-warning"><i class="mdi mdi-alert-outline"></i> {% tr "cls.unused" %}</span>{% endif %}</td></tr>{% endfor %}</table>
     {% else %}<div class="card-body text-warning small pt-0">{% tr "cls.none" %}</div>{% endif %}</div>
 </div></div>
+<style>#isc-sub-main.isc-busy{opacity:.55;pointer-events:none;position:relative}#isc-sub-busy{position:fixed;top:4.5rem;right:1.5rem;z-index:1080;display:none}</style>
+<div id="isc-sub-busy" class="badge text-bg-info fs-6 shadow"><span class="spinner-border spinner-border-sm me-1"></span> {% tr "lbl.recalc" %}</div>
+<script>
+(function () {  // Subnety: every save / row toggle without a page reload; the page parts are swapped in place
+  var root = document.getElementById("isc-sub-main"), busy = document.getElementById("isc-sub-busy");
+  if (!root || !window.fetch || !window.DOMParser) return;
+  function msgs(doc) {
+    var out = [];
+    doc.querySelectorAll("#django-messages .toast").forEach(function (t) {
+      var h = t.querySelector(".toast-header"), m = (h && h.className.match(/text-bg-(\w+)/)) || [0, "info"];
+      out.push('<div class="alert alert-' + (m[1] === "danger" ? "danger" : m[1] === "warning" ? "warning" : "success") + ' d-block py-2 px-3 mb-2">' + t.querySelector(".toast-body").innerHTML + "</div>");
+    });
+    return out.join("");
+  }
+  function swap(html, url) {
+    var doc = new DOMParser().parseFromString(html, "text/html"), fresh = doc.getElementById("isc-sub-main");
+    if (!fresh) { location.href = url; return; }
+    var y = window.scrollY;
+    root.innerHTML = fresh.innerHTML;
+    document.getElementById("isc-sub-msg").innerHTML = msgs(doc);
+    window.scrollTo(0, y);
+    document.dispatchEvent(new Event("visibilitychange"));  // the warning bars at the top refresh too
+  }
+  function go(url, opts) {
+    root.classList.add("isc-busy"); busy.style.display = "inline-block";
+    return fetch(url, Object.assign({credentials: "same-origin"}, opts || {}))
+      .then(function (r) { return r.text().then(function (h) { swap(h, r.url); }); })
+      .catch(function () { location.href = url; })
+      .finally(function () { root.classList.remove("isc-busy"); busy.style.display = "none"; });
+  }
+  root.addEventListener("submit", function (e) {
+    var f = e.target; if (f.method.toLowerCase() !== "post") return;
+    e.preventDefault();
+    var fd = new FormData(f); if (e.submitter && e.submitter.name) fd.append(e.submitter.name, e.submitter.value);
+    go(f.action, {method: "POST", body: fd});
+  });
+  root.addEventListener("click", function (e) {  // open / close a condition row (?edit=N) without reload
+    var a = e.target.closest("a[href^='?']"); if (!a || !root.contains(a)) return;
+    e.preventDefault();
+    var url = location.pathname + a.getAttribute("href").split("#")[0];
+    history.replaceState(null, "", url);
+    go(url);
+  });
+})();
+</script>
 {% endblock %}

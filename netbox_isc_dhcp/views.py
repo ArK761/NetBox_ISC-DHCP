@@ -479,6 +479,12 @@ class SubnetConfigInlineView(View):
             st = settings_obj() or PluginSettings.objects.create()
             st.subnet_dir_id = int(value) if value.isdigit() and DHCPPath.objects.filter(pk=int(value)).exists() else None
             st.save()
+        elif row is not None and action in ("cond_poolkey", "cond_poolkey_off", "cond_del") and (action != "cond_del" or row.get("pool_key")) \
+                and (locked := _pool_key_locked(conds, row, action)):
+            messages.error(request, locked)  # pools in the CFG for the DHCP servers: never changed just like that
+            return redirect(obj.get_absolute_url())
+        elif row is not None and action == "cond_poolkey_off":
+            row["pool_key"] = False  # no pool type = no pools
         elif row is not None and action == "cond_poolkey" and len(distinct_values(model, row["field"])) > MAX_POOLS:
             messages.error(request, t("err.pool_key_many", n=len(distinct_values(model, row["field"])), max=MAX_POOLS))
             return redirect(obj.get_absolute_url())
@@ -522,6 +528,25 @@ class DHCPHubView(LoginRequiredMixin, View):
             ("plugins:netbox_isc_dhcp:export", "mdi-file-tree-outline", "menu.export", "hub.export"),
         ]
         return render(request, "netbox_isc_dhcp/dhcp_hub.html", {"items": items})
+
+
+def _pool_key_locked(conds, row, action) -> str:
+    """'' or why the pool type may not change now: subnets of the current pools are in the CFG for the DHCP servers."""
+    current = next((c for c in conds if c.get("pool_key")), None)
+    if current is None or (action == "cond_poolkey" and current is row):
+        return ""  # setting the first pool type (or the same row) never breaks a running CFG
+    from collections import Counter
+
+    from .export import build
+    from .export.models import ExportFile
+
+    live = set(ExportFile.objects.filter(area="subnet").values_list("key", flat=True))
+    if not live:
+        return ""
+    per_pool = Counter(v[1].name for pk, v in build._subnet_plan().items() if f"subnet:{pk}" in live)
+    n = sum(per_pool.values()) or len(live)
+    names = ", ".join(sorted(per_pool)[:6]) + (" …" if len(per_pool) > 6 else "")
+    return t("err.pool_key_live", n=n, names=names or "—")
 
 
 def _pool_info(instance):
@@ -589,7 +614,7 @@ def _subnetconfig_context(request, instance):
             summary = t("lbl.none_selected") if mode == "exclude" else t("lbl.all_values", n=len(options))
         else:
             summary = (t("lbl.all_except", n=len(vals)) if mode == "exclude" else t("lbl.n_selected", n=len(vals))) if vals else ""
-        can_key = not c.get("pool_key") and len(options or distinct_values(model, c.get("field"))) <= MAX_POOLS
+        can_key = bool(c.get("pool_key")) or len(options or distinct_values(model, c.get("field"))) <= MAX_POOLS  # switch usable
         rows.append({"index": i, "key": c.get("field"), "label": label_for(model, c.get("field")), "values": set(vals), "mode": mode,
                      "pool_key": bool(c.get("pool_key")), "summary": summary, "options": options if is_open else [], "open": is_open,
                      "can_key": can_key})
