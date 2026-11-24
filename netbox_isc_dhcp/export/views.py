@@ -716,7 +716,8 @@ class PlanView(View):
 
         from .agent import test_timer
 
-        if test_timer(server, audit.client_ip(request)) or test_verify(server, mh, check, audit.client_ip(request)):  # stop now (time up / CFG verified)
+        if ((test_timer(server, audit.client_ip(request)) or test_verify(server, mh, check, audit.client_ip(request)))
+                and server.agent_cmd):  # stop now (time up / CFG verified); no command while the admin's run time is on
             cmd, cid = server.agent_cmd.split(":", 1)
             info["cmd"] = f"{cmd}\t{cid}"
         reason, names = gate(server, mh)
