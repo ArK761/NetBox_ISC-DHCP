@@ -88,6 +88,26 @@ def refuse_text(lost: dict) -> str:
     return t("cls.refuse", items="; ".join(f'"{c}" ({where_text(u)})' for c, u in sorted(lost.items())))
 
 
+def warn_text(lost: dict) -> str:
+    from ..i18n import t
+
+    return t("cls.warn", items="; ".join(f'"{c}" ({where_text(u)})' for c, u in sorted(lost.items())))
+
+
+def ask_confirm(request, lost: dict) -> None:
+    """Owner: a change that removes a used class is not forbidden - the page shows the classes + 'Rozumiem' checkbox
+    and the same POST is sent again with cls_ok=1. Subnets using a missing class are then incompatible (not exported)."""
+    request.session["isc_cls_confirm"] = {
+        "url": request.path, "text": warn_text(lost),
+        "post": {k: request.POST.getlist(k) for k in request.POST if k not in ("csrfmiddlewaretoken", "cls_ok")},
+    }
+
+
+def confirm_ctx(request):
+    box = request.session.pop("isc_cls_confirm", None)
+    return box if box and box.get("url") else None
+
+
 def literal_lines(text) -> list:
     """Hand-written allow/deny members of "X" lines whose class X is dynamic: [(line no, mode, name)]."""
     from ..services import dynamic_classes

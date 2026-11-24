@@ -1,0 +1,6 @@
+{% load isc_dhcp_i18n %}{% if cls_confirm %}<div class="alert alert-warning" id="isc-cls-confirm" style="display:block">
+  <div class="fw-bold mb-2"><i class="mdi mdi-alert"></i> {{ cls_confirm.text }}</div>
+  <form method="post" action="{{ cls_confirm.url }}">{% csrf_token %}{% for k, vals in cls_confirm.post.items %}{% for v in vals %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}{% endfor %}
+    <label class="form-check mb-2"><input class="form-check-input" type="checkbox" name="cls_ok" value="1" required> <span class="form-check-label">{% tr "cls.confirm_box" %}</span></label>
+    <button type="submit" class="btn btn-sm btn-warning">{% tr "cls.confirm_btn" %}</button>
+    <a href="{{ request.path }}" class="btn btn-sm btn-outline-secondary">{% tr "cls.confirm_cancel" %}</a></form></div>{% endif %}

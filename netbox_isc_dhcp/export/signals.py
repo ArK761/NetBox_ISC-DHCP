@@ -56,7 +56,11 @@ def _flush():
 def mark(**kw):
     """Collect what to recompute; flushed once when the transaction commits (at once outside a transaction)."""
     p = getattr(_local, "p", None)
-    new = p is None
+    conn = transaction.get_connection()
+    # a rolled back transaction drops its on_commit callback but not _local.p: without this check every later change
+    # in this process would only be collected and never flushed (no regeneration until NetBox restarts)
+    stale = p is not None and not any(_flush in x for x in conn.run_on_commit)
+    new = p is None or stale
     if new:
         p = _local.p = _new()
     for k, v in kw.items():

@@ -93,6 +93,7 @@ class HostsView(LoginRequiredMixin, View):
             "groups_count_text": t("hosts.groups_selected", n=len(ov["groups"]), total=ov.get("total", 0)),
             "table_dir": st.table_dir if st else None, "subdirs": DHCPPath.objects.all(),
             "tpls": _tpl_rows(request), "editor_vars": _editor_vars(),
+            "cls_confirm": __import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).confirm_ctx(request),
         })
 
 
@@ -102,17 +103,21 @@ class HostsInlineView(LoginRequiredMixin, View):
     def post(self, request):
         from django.db import transaction
 
-        from .classes import lost_by_tables, refuse_text
+        from .classes import ask_confirm, lost_by_tables, warn_text
         from .models import HostConfig
 
-        with transaction.atomic():  # anti-mistake: table switches / template edits that remove a used class are rolled back
+        ok = request.POST.get("cls_ok") == "1"
+        with transaction.atomic():  # anti-mistake: a change that removes a used class needs 'Rozumiem' (else rolled back)
             resp = self._post(request)
             lost = lost_by_tables(HostConfig.objects.first() or host_config())
-            if lost:
+            if lost and not ok:
                 transaction.set_rollback(True)
         if lost:
             list(messages.get_messages(request))
-            messages.error(request, refuse_text(lost))
+            if ok:
+                messages.warning(request, warn_text(lost))
+            else:
+                ask_confirm(request, lost)
         return resp
 
     def _post(self, request):
@@ -283,6 +288,7 @@ class HostGroupView(LoginRequiredMixin, View):
             "lost_title": t("hosts.lost_title", n=len(built["lost"])), "lost_parts": " · ".join(lost_parts),
             "warn_title": t("hosts.warn_title", n=len(built["warnings"])), "usage": usage,
             "table_dir": st.table_dir if st else None, "rows_title": t("hosts.rows_title"), "found_label": t("hosts.found_n"), "lines_label": t("hosts.snip_lines"), "snip_show": t("hosts.snip_show"), "snip_hide": t("hosts.snip_hide"), "editor_vars": _editor_vars(),
+            "cls_confirm": __import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).confirm_ctx(request),
         })
 
 
@@ -295,16 +301,20 @@ class HostGroupInlineView(LoginRequiredMixin, View):
         get_object_or_404(HostGroup, pk=pk)
         from django.db import transaction
 
-        from .classes import lost_by_group, refuse_text
+        from .classes import ask_confirm, lost_by_group, warn_text
 
-        with transaction.atomic():  # anti-mistake: a change that removes a used class is rolled back
+        ok = request.POST.get("cls_ok") == "1"
+        with transaction.atomic():  # anti-mistake: a change that removes a used class needs 'Rozumiem' (else rolled back)
             resp = self._post(request, pk)
             lost = lost_by_group(HostGroup.objects.get(pk=pk))
-            if lost:
+            if lost and not ok:
                 transaction.set_rollback(True)
         if lost:
             list(messages.get_messages(request))  # drop the success message of the rolled back change
-            messages.error(request, refuse_text(lost))
+            if ok:
+                messages.warning(request, warn_text(lost))
+            else:
+                ask_confirm(request, lost)
         return resp
 
     def _post(self, request, pk):
