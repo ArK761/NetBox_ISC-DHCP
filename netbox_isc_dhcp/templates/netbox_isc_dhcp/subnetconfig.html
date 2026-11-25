@@ -115,25 +115,25 @@
       {% empty %}<tr><td colspan="7" class="text-muted">—</td></tr>{% endfor %}
     </table>{% endif %}
   </div>
-  {% if has_pool_key and not pools_error %}<div class="card mb-3" id="isc-prepared"><h5 class="card-header"><i class="mdi mdi-archive-outline"></i> {% tr "pp.title" %} ({{ prepared|length }})</h5>
+  {% if has_pool_key and not pools_error %}<div class="card mb-3" id="isc-prepared"><h5 class="card-header"><i class="mdi mdi-archive-outline"></i> {% tr_fmt "pp.title2" field=pool_field_label %} ({{ prepared|length }})</h5>
     <div class="card-body small text-muted pb-2">{% tr "pp.hint" %}</div>
     {% if prepared %}<table class="table table-sm table-hover mb-0">
-      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "pp.source" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "lbl.generate" %}</th><th></th></tr></thead>
-      {% for r in prepared %}<tr><td><a href="{{ r.obj.get_absolute_url }}"><strong>{{ r.obj.name }}</strong></a></td>
-        <td class="small">{% if r.state == "obj" %}<span class="text-muted">{% tr "pp.obj" %}</span>{% elif r.state == "gone" %}<span class="text-warning">{% tr "pp.gone" %}</span>{% else %}<span class="text-muted">{% tr "pp.name" %}</span>{% endif %}</td>
+      <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "lbl.generate" %}</th><th></th></tr></thead>
+      {% for r in prepared %}<tr>
+        {% if r.obj %}<td><a href="{{ r.obj.get_absolute_url }}"><strong>{{ r.name }}</strong></a></td>
         <td class="text-nowrap">{% include "netbox_isc_dhcp/_code_state.html" with pool=r.obj ovr=0 %}</td>
         <td>{% url 'plugins:netbox_isc_dhcp:pooltemplate_inline' pk=r.obj.pk as pin_url %}<form method="post" action="{{ pin_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="enabled"><input type="hidden" name="next" value="{{ request.path }}"><input type="hidden" name="value" value="{% if r.obj.enabled %}0{% else %}1{% endif %}">
           <button class="btn btn-link p-0 border-0" title="{% tr 'pp.gen_hint' %}"><i class="mdi {% if r.obj.enabled %}mdi-toggle-switch text-success{% else %}mdi-toggle-switch-off-outline text-secondary{% endif %} fs-2"></i></button></form></td>
         <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-primary" href="{{ r.obj.get_absolute_url }}"><i class="mdi mdi-code-braces"></i> {% tr "lbl.template_code" %}</a>
-          <a class="btn btn-sm btn-outline-danger" href="{% url 'plugins:netbox_isc_dhcp:pooltemplate_delete' pk=r.obj.pk %}?return_url={{ request.path }}"><i class="mdi mdi-trash-can-outline"></i></a></td></tr>{% endfor %}
-    </table>{% endif %}
-    <div class="card-body d-flex flex-wrap gap-2 align-items-center border-top">
-      <form method="post" action="{{ inline_url }}" class="d-flex gap-2 m-0">{% csrf_token %}<input type="hidden" name="field" value="pool_add">
-        <input name="value" class="form-control form-control-sm" style="max-width:16rem" placeholder="{% tr 'pp.add_ph' %}" required>
-        <button class="btn btn-sm btn-primary text-nowrap"><i class="mdi mdi-plus"></i> {% tr "pp.add" %}</button></form>
-      {% if fill_n %}<form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="pool_fill">
-        <button class="btn btn-sm btn-outline-primary"><i class="mdi mdi-playlist-plus"></i> {% tr_fmt "pp.fill" field=pool_field_label n=fill_n %}</button></form>{% endif %}
-    </div></div>{% endif %}
+          <a class="btn btn-sm btn-outline-danger" href="{% url 'plugins:netbox_isc_dhcp:pooltemplate_delete' pk=r.obj.pk %}?return_url={{ request.path }}"><i class="mdi mdi-trash-can-outline"></i></a></td>
+        {% else %}<td><strong>{{ r.name }}</strong></td><td class="text-muted small">{% tr "pp.none" %}</td><td></td>
+        <td class="text-end"><form method="post" action="{{ inline_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="pool_prepare"><input type="hidden" name="value" value="{{ r.value }}">
+          <button class="btn btn-sm btn-primary"><i class="mdi mdi-plus"></i> {% tr "pp.prepare" %}</button></form></td>{% endif %}</tr>{% endfor %}
+    </table>{% else %}<div class="card-body pt-0 text-muted small">{% tr "pp.empty" %}</div>{% endif %}
+    {% if orphans %}<div class="card-body border-top small"><div class="text-warning mb-1"><i class="mdi mdi-link-variant-off"></i> {% tr "pp.orphans" %}</div>
+      {% for o in orphans %}<span class="d-inline-flex align-items-center gap-1 me-3 mb-1"><a href="{{ o.get_absolute_url }}"><code>{{ o.name }}</code></a>{% include "netbox_isc_dhcp/_code_state.html" with pool=o ovr=0 %}
+        <a class="btn btn-sm btn-outline-danger py-0" href="{% url 'plugins:netbox_isc_dhcp:pooltemplate_delete' pk=o.pk %}?return_url={{ request.path }}"><i class="mdi mdi-trash-can-outline"></i></a></span>{% endfor %}</div>{% endif %}
+  </div>{% endif %}
   {% if incompatible %}<div class="card mb-3 border-danger"><h5 class="card-header text-danger">{% tr "lbl.incompat" %} ({{ incompatible|length }})</h5>
     <table class="table table-sm mb-0"><thead><tr><th>{% tr "lbl.pool" %}</th><th>Subnet</th><th>{% tr "lbl.reason" %}</th></tr></thead>
     {% for x in incompatible|slice:":100" %}<tr><td><a href="{% url 'plugins:netbox_isc_dhcp:pooltemplate' pk=x.pool_pk %}">{{ x.pool }}</a></td><td><code>{{ x.prefix }}</code></td><td class="text-danger">{{ x.reason }}</td></tr>{% endfor %}</table></div>{% endif %}
@@ -149,10 +149,16 @@
     <table class="table table-sm mb-0">{% for c in unknown_classes %}<tr><td><code>"{{ c.name }}"</code></td><td>{% for u in c.uses %}<a class="me-2" href="{% if u.where == 'override' %}{% url 'plugins:netbox_isc_dhcp:pooltemplate' pk=u.pk %}{% else %}{% url 'plugins:netbox_isc_dhcp:pooltemplate' pk=u.pk %}{% endif %}">{{ u.name }}</a>{% endfor %}</td></tr>{% endfor %}</table></div>{% endif %}
   <div class="card mb-3"><h5 class="card-header"><i class="mdi mdi-account-group-outline"></i> {% tr "cls.title" %} ({{ classes|length }})</h5>
     <div class="card-body small text-muted pb-1">{% tr "cls.hint" %}</div>
-    {% if classes %}<table class="table table-sm mb-0"><thead><tr><th>Class</th><th>{% tr "cls.used_in" %}</th></tr></thead>
-    {% for c in classes %}<tr><td><code>"{{ c.name }}"</code></td>
-      <td>{% if c.used %}{% for u in c.uses %}{% if u.where != "static" %}<span class="me-2 text-nowrap">{% for m in u.modes %}<span class="badge {% if m == 'deny' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ m }}</span> {% endfor %}{{ u.label }}</span>{% endif %}{% endfor %}
-      {% else %}<span class="text-warning"><i class="mdi mdi-alert-outline"></i> {% tr "cls.unused" %}</span>{% endif %}</td></tr>{% endfor %}</table>
+    {% if classes %}<style>details.isc-cls-row>summary{list-style:none;cursor:pointer}details.isc-cls-row>summary::-webkit-details-marker{display:none}
+      details.isc-cls-row>summary .isc-arr::before{content:"\25B8";display:inline-block;width:1rem}details.isc-cls-row[open]>summary .isc-arr::before{content:"\25BE"}details.isc-nouse>summary{cursor:default}details.isc-nouse .isc-arr{visibility:hidden}</style>
+    <div class="list-group list-group-flush">
+    {% for c in classes %}<details class="list-group-item isc-cls-row py-2{% if not c.used %} isc-nouse{% endif %}">
+      <summary class="d-flex align-items-center gap-2"><span class="isc-arr text-muted"></span><code style="min-width:16rem">"{{ c.name }}"</code>
+        {% if c.used %}<span class="small">{% tr_fmt "cls.sum" n=c.n_uses s=c.subnets %}</span>
+          {% if "allow" in c.modes_all %}<span class="badge text-bg-warning">allow</span>{% endif %}{% if "deny" in c.modes_all %}<span class="badge text-bg-danger">deny</span>{% endif %}
+        {% else %}<span class="small text-warning"><i class="mdi mdi-alert-outline"></i> {% tr "cls.unused" %}</span>{% endif %}</summary>
+      {% if c.used %}<ul class="list-unstyled small mb-0 mt-2 ms-4">{% for u in c.uses %}{% if u.where != "static" %}<li class="mb-1">{% for m in u.modes %}<span class="badge {% if m == 'deny' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ m }}</span> {% endfor %}{{ u.label }}</li>{% endif %}{% endfor %}</ul>{% endif %}
+    </details>{% endfor %}</div>
     {% else %}<div class="card-body text-warning small pt-0">{% tr "cls.none" %}</div>{% endif %}</div>
 </div></div>
 <style>#isc-sub-main.isc-busy{opacity:.55;pointer-events:none;position:relative}#isc-sub-busy{position:fixed;top:4.5rem;right:1.5rem;z-index:1080;display:none}

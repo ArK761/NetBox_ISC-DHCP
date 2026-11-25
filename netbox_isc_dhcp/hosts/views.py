@@ -59,6 +59,8 @@ def _usage_rows(rows):
             u["modes"] = sorted(u["mode"].split(" / "))
             u["label"] = {"pool": t("hosts.use_pool", name=u["name"], n=u["subnets"]), "override": t("hosts.use_override", name=u["name"]),
                           "static": t("hosts.use_static")}[u["where"]] + ("" if u["enabled"] else " – " + t("hosts.pool_off"))
+        r["modes_all"] = sorted({m for u in r["uses"] if u["where"] != "static" for m in u["modes"]})
+        r["n_uses"] = sum(1 for u in r["uses"] if u["where"] != "static")
     return rows
 
 

@@ -498,25 +498,16 @@ class SubnetConfigInlineView(View):
             row["pool_key"] = True
         elif row is not None and action == "cond_del":
             conds.pop(idx)
-        elif action == "pool_add" and value:  # prepare a pool in advance (code first, subnets later)
-            if not PoolTemplate.objects.filter(name=value[:100]).exists():
-                PoolTemplate.objects.create(name=value[:100], enabled=False)
-            return redirect(PoolTemplate.objects.get(name=value[:100]).get_absolute_url())
-        elif action == "pool_fill":  # a pool for every value of the pool type field without one (e.g. every tenant group)
+        elif action == "pool_prepare" and value:  # a pool for one value of the pool type field (object id), code written in advance
             from .newvalues import _candidates
 
             key = next((c for c in conds if c.get("pool_key") and c.get("field")), None)
-            made = 0
-            if key is not None:
-                have_ref = set(PoolTemplate.objects.exclude(ref="").values_list("ref", flat=True))
-                have_name = set(PoolTemplate.objects.values_list("name", flat=True))
-                for v, n in _candidates(model, key["field"]):
-                    n = str(n)[:100]
-                    if str(v) not in have_ref and n not in have_name:
-                        PoolTemplate.objects.create(name=n, ref=str(v), enabled=False)
-                        have_name.add(n)
-                        made += 1
-            messages.success(request, t("msg.pools_filled", n=made))
+            name = dict((str(v), str(n)) for v, n in _candidates(model, key["field"])).get(value) if key else None
+            if name:
+                pt = PoolTemplate.objects.filter(ref=value).first() or PoolTemplate.objects.filter(name=name[:100]).first()
+                if pt is None:
+                    pt = PoolTemplate.objects.create(name=name[:100], ref=value, enabled=False)
+                return redirect(pt.get_absolute_url())
             return redirect(obj.get_absolute_url())
         elif row is not None and action == "cond_ignore" and value:  # warnings bar: 'Nepoužívať' = never report this value
             ign = [str(v) for v in row.get("ignored") or []]
@@ -667,27 +658,28 @@ def _class_context():
 
 
 def _prepared_pools(model, key, active):
-    """Pools without subnets (prepared in advance or no longer used): code kept, never in the CFG. And how many values
-    of the pool type field (e.g. tenant groups) have no pool yet ('Doplniť z ...')."""
+    """Owner: exactly the values of the pool type field (e.g. tenant groups) WITHOUT an active pool, one row each:
+    a pool already prepared (code, Generate, delete) or the button 'Pripraviť'. Pools whose object no longer exists
+    (or old pools of another field, e.g. YES/True) are listed apart. Never in the CFG."""
     from .newvalues import _candidates
 
-    cand = dict(_candidates(model, key["field"]))
+    cand = [(str(v), str(n)) for v, n in _candidates(model, key["field"])]
     act = {p["obj"].pk for p in active}
-    by_name = {str(n)[:100]: str(v) for v, n in cand.items()}
-    taken = set(PoolTemplate.objects.exclude(ref="").values_list("ref", flat=True))
-    for pt in PoolTemplate.objects.exclude(pk__in=act).filter(ref=""):  # unused pool with an object of that name: pair it now
-        v = by_name.get(pt.name)
-        if v and v not in taken:
-            PoolTemplate.objects.filter(pk=pt.pk).update(ref=v)
-            taken.add(v)
-    rows = []
-    for pt in PoolTemplate.objects.exclude(pk__in=act).order_by("name"):
-        state = "obj" if pt.ref and pt.ref in cand else ("gone" if pt.ref else "name")
-        rows.append({"obj": pt, "state": state})
-    have_ref = set(PoolTemplate.objects.exclude(ref="").values_list("ref", flat=True))
-    have_name = set(PoolTemplate.objects.values_list("name", flat=True))
-    missing = [v for v, n in cand.items() if v not in have_ref and str(n)[:100] not in have_name]
-    return rows, len(missing)
+    by_ref = {p.ref: p for p in PoolTemplate.objects.exclude(ref="")}
+    by_name = {p.name: p for p in PoolTemplate.objects.all()}
+    rows, used = [], set(act)
+    for v, n in cand:
+        pt = by_ref.get(v) or (by_name.get(n[:100]) if by_name.get(n[:100]) and not by_name[n[:100]].ref else None)
+        if pt is not None and pt.pk in act:
+            continue  # active pool: shown in the pools table above
+        if pt is not None and not pt.ref:
+            PoolTemplate.objects.filter(pk=pt.pk).update(ref=v)  # pair the old pool with its object now
+            pt.ref = v
+        rows.append({"value": v, "name": n, "obj": pt})
+        if pt is not None:
+            used.add(pt.pk)
+    orphans = list(PoolTemplate.objects.exclude(pk__in=used).order_by("name"))
+    return rows, orphans
 
 
 def _ignored_rows(model, c):
@@ -752,10 +744,10 @@ def _subnetconfig_context(request, instance):
                               "range": f"/{lo} – /{hi}" if lo else "—", "bad": sum(1 for x in bad if x["pool_pk"] == pt.pk),
                               "ovr": ovr.get(pt.pk, 0), "lit": len(__import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).literal_lines(pt.template)),
                               "uses": __import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).code_uses(pt.template, _cfiles)})
-    prepared, fill_n = _prepared_pools(model, key, pools) if key is not None and not pools_error else ([], 0)
+    prepared, orphans = _prepared_pools(model, key, pools) if key is not None and not pools_error else ([], [])
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
-            "prepared": prepared, "fill_n": fill_n, "pool_field_label": label_for(model, key["field"]) if key is not None else "",
+            "prepared": prepared, "orphans": orphans, "pool_field_label": label_for(model, key["field"]) if key is not None else "",
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
             "overrides": __import__("netbox_isc_dhcp.compat", fromlist=["x"]).overrides(),
             **_class_context(),
