@@ -222,8 +222,9 @@ class DNSWarningMiddleware:
             out.append(("warning", "mdi-pencil-outline", t("warn.overrides", n=len(ovr)), subnets, t("menu.subnets"), tree))
         out += self._server_notices()
         from .newvalues import notices as new_value_notices
+        from .newvalues import pool_notices
 
-        out += new_value_notices()
+        out += pool_notices() + new_value_notices()
         rank = {"danger": 0, "warning": 1}
         return sorted(out, key=lambda n: rank.get(n[0], 2))  # red first, then yellow, then info
 

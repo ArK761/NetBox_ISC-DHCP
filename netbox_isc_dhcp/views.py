@@ -498,6 +498,26 @@ class SubnetConfigInlineView(View):
             row["pool_key"] = True
         elif row is not None and action == "cond_del":
             conds.pop(idx)
+        elif action == "pool_add" and value:  # prepare a pool in advance (code first, subnets later)
+            if not PoolTemplate.objects.filter(name=value[:100]).exists():
+                PoolTemplate.objects.create(name=value[:100], enabled=False)
+            return redirect(PoolTemplate.objects.get(name=value[:100]).get_absolute_url())
+        elif action == "pool_fill":  # a pool for every value of the pool type field without one (e.g. every tenant group)
+            from .newvalues import _candidates
+
+            key = next((c for c in conds if c.get("pool_key") and c.get("field")), None)
+            made = 0
+            if key is not None:
+                have_ref = set(PoolTemplate.objects.exclude(ref="").values_list("ref", flat=True))
+                have_name = set(PoolTemplate.objects.values_list("name", flat=True))
+                for v, n in _candidates(model, key["field"]):
+                    n = str(n)[:100]
+                    if str(v) not in have_ref and n not in have_name:
+                        PoolTemplate.objects.create(name=n, ref=str(v), enabled=False)
+                        have_name.add(n)
+                        made += 1
+            messages.success(request, t("msg.pools_filled", n=made))
+            return redirect(obj.get_absolute_url())
         elif row is not None and action == "cond_ignore" and value:  # warnings bar: 'Nepoužívať' = never report this value
             ign = [str(v) for v in row.get("ignored") or []]
             if value not in ign:
@@ -584,7 +604,7 @@ def _pool_info(instance):
 MAX_POOLS = 100
 
 
-def _pool_names(model, qs, key) -> list[tuple[str, str]]:
+def _pool_names_raw(model, qs, key) -> list[tuple[str, str]]:
     """Pools = (value, name) of the pool type field. Names (e.g. WorkStation) are shown, values are used to filter."""
     from .source_fields import cond_values, distinct_values
 
@@ -603,6 +623,37 @@ def _pool_names(model, qs, key) -> list[tuple[str, str]]:
     return [(v, l) for v, l in options if v in used] or [(v, label.get(v, v)) for v in sorted(used)]
 
 
+def _pool_names(model, qs, key) -> list[tuple[str, str]]:
+    pairs = _pool_names_raw(model, qs, key)
+    _sync_pools(pairs)
+    return pairs
+
+
+def _sync_pools(pairs):
+    """A pool belongs to the VALUE of the pool type field (object id), not to its name: a renamed object (tenant group
+    XXX -> ZZZ) renames its pool and keeps the code. Pools from before (no value stored) are paired by name once."""
+    if not pairs:
+        return
+    by_ref = {p.ref: p for p in PoolTemplate.objects.exclude(ref="")}
+    names = set(PoolTemplate.objects.values_list("name", flat=True))
+    renamed = False
+    for value, name in pairs:
+        name = str(name)[:100]
+        pt = by_ref.get(str(value))
+        if pt is not None:
+            if pt.name != name and name not in names:  # never over another pool of that name (it would be ambiguous)
+                PoolTemplate.objects.filter(pk=pt.pk).update(name=name)
+                names.discard(pt.name)
+                names.add(name)
+                renamed = True
+        elif name in names:
+            PoolTemplate.objects.filter(name=name, ref="").update(ref=str(value))
+    if renamed:
+        from . import compat
+
+        compat.invalidate()
+
+
 def _class_context():
     """Subnety card: dynamic classes (from the stored group files) with their use, and classes used but not existing."""
     from .hosts.usage import references, usage_of
@@ -613,6 +664,23 @@ def _class_context():
     known = dyn | set(check_context()["site"].get("classes", ()))
     unknown = [{"name": n, "uses": [u for u in us if u["where"] != "static"]} for n, us in sorted(refs.items()) if n not in known]
     return {"classes": _usage_rows(usage_of(sorted(dyn, key=str.lower), refs)), "unknown_classes": [u for u in unknown if u["uses"]]}
+
+
+def _prepared_pools(model, key, active):
+    """Pools without subnets (prepared in advance or no longer used): code kept, never in the CFG. And how many values
+    of the pool type field (e.g. tenant groups) have no pool yet ('Doplniť z ...')."""
+    from .newvalues import _candidates
+
+    cand = dict(_candidates(model, key["field"]))
+    act = {p["obj"].pk for p in active}
+    rows = []
+    for pt in PoolTemplate.objects.exclude(pk__in=act).order_by("name"):
+        state = "obj" if pt.ref and pt.ref in cand else ("gone" if pt.ref else "name")
+        rows.append({"obj": pt, "state": state})
+    have_ref = set(PoolTemplate.objects.exclude(ref="").values_list("ref", flat=True))
+    have_name = set(PoolTemplate.objects.values_list("name", flat=True))
+    missing = [v for v, n in cand.items() if v not in have_ref and str(n)[:100] not in have_name]
+    return rows, len(missing)
 
 
 def _ignored_rows(model, c):
@@ -671,14 +739,16 @@ def _subnetconfig_context(request, instance):
 
             _cfiles = class_files()
             for value, name in names:
-                pt, _ = PoolTemplate.objects.get_or_create(name=name[:100])
+                pt, _ = PoolTemplate.objects.get_or_create(name=name[:100], defaults={"enabled": False, "ref": str(value)})  # owner: a new pool never goes to the CFG by itself
                 lo, hi = pt.allowed_range()
                 pools.append({"obj": pt, "count": qs.filter(_field_q(model, key["field"], [value])).count(),
                               "range": f"/{lo} – /{hi}" if lo else "—", "bad": sum(1 for x in bad if x["pool_pk"] == pt.pk),
                               "ovr": ovr.get(pt.pk, 0), "lit": len(__import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).literal_lines(pt.template)),
                               "uses": __import__("netbox_isc_dhcp.hosts.classes", fromlist=["x"]).code_uses(pt.template, _cfiles)})
+    prepared, fill_n = _prepared_pools(model, key, pools) if key is not None and not pools_error else ([], 0)
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
+            "prepared": prepared, "fill_n": fill_n, "pool_field_label": label_for(model, key["field"]) if key is not None else "",
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
             "overrides": __import__("netbox_isc_dhcp.compat", fromlist=["x"]).overrides(),
             **_class_context(),
@@ -829,6 +899,11 @@ class PoolTemplateInlineView(View):
             return redirect(f"{url}?p={p}" if p.isdigit() else url)
         elif field == "enabled":
             obj.enabled = request.POST.get("value") == "1"
+            nxt = request.POST.get("next", "")
+            if nxt.startswith("/plugins/isc-dhcp/"):
+                obj.save()
+                messages.success(request, t("msg.saved"))
+                return redirect(nxt)
         elif field == "include":
             obj.include = request.POST.get("value") == "1"
             obj.save()

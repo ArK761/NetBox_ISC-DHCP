@@ -74,6 +74,8 @@ class PoolTemplate(NetBoxModel):
     """Template (script) of one pool type: how <network>_CFG of every subnet of that type looks."""
 
     name = models.CharField(max_length=100, unique=True, help_text="Pool type value, e.g. WorkStation.")
+    ref = models.CharField(max_length=64, blank=True, default="", db_index=True,
+                           help_text="Value of the pool type field (object id) this pool belongs to - a renamed object keeps its pool and code.")
     enabled = models.BooleanField(default=True, verbose_name="Generate")
     include = models.BooleanField(default=True, help_text="Subnets of this pool are included in dhcpd.conf (when controlled per pool).")
     template = models.TextField(blank=True, default=default_pool_template, help_text="Jinja template of the subnet file.")

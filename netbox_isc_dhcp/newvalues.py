@@ -7,8 +7,12 @@ CACHE_KEY = "isc_dhcp_newvalues"
 SHOW = 20  # values listed per field (the rest is a count)
 
 
+POOLS_KEY = "isc_dhcp_pools_off"
+
+
 def invalidate(*args, **kwargs):
     cache.delete(CACHE_KEY)
+    cache.delete(POOLS_KEY)
 
 
 def _candidates(model, key):
@@ -88,3 +92,44 @@ def notices():
         if f["more"]:
             out.append(("info", "mdi-new-box", t("nv.more", field=f["label"], n=f["more"]), url, t("menu.subnets")))
     return out
+
+
+def pools_off():
+    """[(pool name, subnets)] of pools that HAVE subnets but Generate is off (new pools start off) - not in the CFG."""
+    data = cache.get(POOLS_KEY)
+    if data is not None:
+        return data
+    data = []
+    try:
+        from .models import PoolTemplate, SubnetConfig
+        from .source_fields import _field_q
+        from .views import _pool_info, _pool_names
+
+        cfg = SubnetConfig.objects.first()
+        model, qs, key = _pool_info(cfg) if cfg else (None, None, None)
+        if key is not None:
+            pools = {p.name: p for p in PoolTemplate.objects.all()}
+            for value, name in _pool_names(model, qs, key):
+                pt = pools.get(str(name)[:100])
+                if pt is None or not pt.enabled:  # no pool yet (made on the Subnety page) or Generate off
+                    n = qs.filter(_field_q(model, key["field"], [value])).count()
+                    if n:
+                        data.append((pt.name if pt else str(name), n))
+    except Exception:
+        data = []
+    cache.set(POOLS_KEY, data, 60)
+    return data
+
+
+def pool_notices():
+    from django.urls import reverse
+
+    from .i18n import t
+    from .models import SubnetConfig
+
+    data = pools_off()
+    if not data:
+        return []
+    cfg = SubnetConfig.objects.first()
+    url = cfg.get_absolute_url() if cfg else reverse("plugins:netbox_isc_dhcp:subnetconfig_list")
+    return [("warning", "mdi-pause-circle-outline", t("warn.pool_off", name=n, n=c), url, t("menu.subnets")) for n, c in data]

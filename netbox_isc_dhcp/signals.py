@@ -80,3 +80,40 @@ def _connect_invalidation():
 
 
 _connect_invalidation()
+
+
+def pool_deleting(sender, instance, **kwargs):
+    """A pool that still has subnets cannot be deleted: it would come back with the default code (no classes)
+    and that code would go to the CFG of the DHCP servers. Pools without subnets: NetBox delete confirmation."""
+    from .models import SubnetConfig
+    from .source_fields import _field_q
+    from .views import _pool_info, _pool_names
+
+    cfg = SubnetConfig.objects.first()
+    model, qs, key = _pool_info(cfg) if cfg else (None, None, None)
+    if key is None:
+        return
+    for value, name in _pool_names(model, qs, key):
+        if name == instance.name or (instance.ref and str(value) == instance.ref):
+            n = qs.filter(_field_q(model, key["field"], [value])).count()
+            if n:
+                from utilities.exceptions import AbortRequest
+
+                from .i18n import t
+
+                raise AbortRequest(t("err.pool_has_subnets", name=instance.name, n=n))
+
+
+def _connect_pool_protect():
+    from django.db.models.signals import pre_delete
+
+    from .models import PoolTemplate
+
+    pre_delete.connect(pool_deleting, sender=PoolTemplate, dispatch_uid="isc_dhcp_pool_protect")
+    from . import newvalues
+
+    post_save.connect(newvalues.invalidate, sender=PoolTemplate, dispatch_uid="isc_dhcp_newvals_save_PoolTemplate")
+    post_delete.connect(newvalues.invalidate, sender=PoolTemplate, dispatch_uid="isc_dhcp_newvals_del_PoolTemplate")
+
+
+_connect_pool_protect()
