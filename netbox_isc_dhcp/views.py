@@ -252,7 +252,7 @@ class NoticesView(LoginRequiredMixin, View):
         from .middleware import DNSWarningMiddleware, notices_html
 
         try:
-            html = notices_html(DNSWarningMiddleware(None)._notices(request), (t("lbl.tree_show"), t("lbl.tree_hide")))
+            html = notices_html(DNSWarningMiddleware(None)._notices(request), (t("lbl.tree_show"), t("lbl.tree_hide")), request)
         except Exception:
             return HttpResponse(status=204)
         r = HttpResponse(html, content_type="text/html; charset=utf-8")
@@ -385,7 +385,11 @@ class PluginSettingsInlineView(View):
             raise PermissionDenied
         obj = get_object_or_404(PluginSettings, pk=pk)
         field = request.POST.get("field")
-        if field in self.FIELDS:
+        if field == "notices_open":  # display only: never regenerates the CFG
+            obj.notices_open = request.POST.get("value") == "1"
+            obj.save(update_fields=["notices_open"])
+            messages.success(request, t("msg.saved"))
+        elif field in self.FIELDS:
             value = request.POST.get("value", "").strip()
             if field in ("table_dir", "subnet_dir"):
                 field, value = f"{field}_id", (int(value) if value.isdigit() else None)
@@ -494,9 +498,20 @@ class SubnetConfigInlineView(View):
             row["pool_key"] = True
         elif row is not None and action == "cond_del":
             conds.pop(idx)
+        elif row is not None and action == "cond_ignore" and value:  # warnings bar: 'Nepoužívať' = never report this value
+            ign = [str(v) for v in row.get("ignored") or []]
+            if value not in ign:
+                row["ignored"] = ign + [value]
+        elif row is not None and action == "cond_unignore":  # report it again
+            row["ignored"] = [str(v) for v in row.get("ignored") or [] if str(v) != value]
         obj.conditions = conds
         obj.save()
         messages.success(request, t("msg.saved"))
+        nxt = request.POST.get("next", "")
+        from django.utils.http import url_has_allowed_host_and_scheme
+
+        if action in ("cond_ignore", "cond_unignore") and nxt and url_has_allowed_host_and_scheme(nxt, {request.get_host()}):
+            return redirect(nxt)  # back to the page where 'Nepoužívať' was clicked
         return redirect(obj.get_absolute_url())
 
 
@@ -600,6 +615,17 @@ def _class_context():
     return {"classes": _usage_rows(usage_of(sorted(dyn, key=str.lower), refs)), "unknown_classes": [u for u in unknown if u["uses"]]}
 
 
+def _ignored_rows(model, c):
+    """Values marked 'Nepoužívať' in the warnings bar (not reported as new): [(value, name)]."""
+    ign = [str(v) for v in c.get("ignored") or []]
+    if not ign:
+        return []
+    from .newvalues import _candidates
+
+    names = dict(_candidates(model, c.get("field")))
+    return [(v, names.get(v, v)) for v in ign]
+
+
 def _subnetconfig_context(request, instance):
     from .source_fields import (_field_q, cond_values, distinct_values, field_options, is_active, label_for,
                                 source_label, source_models)
@@ -621,7 +647,7 @@ def _subnetconfig_context(request, instance):
         can_key = bool(c.get("pool_key")) or len(options or distinct_values(model, c.get("field"))) <= MAX_POOLS  # switch usable
         rows.append({"index": i, "key": c.get("field"), "label": label_for(model, c.get("field")), "values": set(vals), "mode": mode,
                      "pool_key": bool(c.get("pool_key")), "summary": summary, "options": options if is_open else [], "open": is_open,
-                     "can_key": can_key})
+                     "can_key": can_key, "ignored": _ignored_rows(model, c) if is_open else []})
     groups = {}
     for value, app, label in source_models():
         groups.setdefault(app, []).append((value, label))

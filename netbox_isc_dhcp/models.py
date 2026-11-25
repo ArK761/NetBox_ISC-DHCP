@@ -251,6 +251,7 @@ class PluginSettings(NetBoxModel):
 
     language = models.CharField(max_length=2, default="sk", choices=(("sk", "Slovenčina"), ("en", "English")))
     lease_factor = models.FloatField(default=1.3, help_text="max-lease-time = lease x this factor.")
+    notices_open = models.BooleanField(default=False, help_text="Warnings bar at the bottom of plugin pages: expanded (one line per warning) when a page opens.")
     config_path = models.CharField(max_length=255, blank=True, default="", help_text="Directory of dhcpd.conf on the DHCP server.")
     base_path = models.CharField(max_length=255, blank=True, default="", help_text="Base directory of all other DHCP files; subdirectories (TABLE, SUBNET...) live below it.")
     table_dir = models.ForeignKey("DHCPPath", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",

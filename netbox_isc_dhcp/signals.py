@@ -72,6 +72,11 @@ def _connect_invalidation():
     for m in (Prefix, PoolTemplate, SubnetConfig, DNSServer, ConfigVariable, BaseConfig, DHCPFile, SubnetOverride):
         post_save.connect(compat.invalidate, sender=m, dispatch_uid=f"isc_dhcp_compat_save_{m.__name__}")
         post_delete.connect(compat.invalidate, sender=m, dispatch_uid=f"isc_dhcp_compat_del_{m.__name__}")
+    from . import newvalues
+
+    for m in (Prefix, SubnetConfig):  # new values on Subnety (warnings bar)
+        post_save.connect(newvalues.invalidate, sender=m, dispatch_uid=f"isc_dhcp_newvals_save_{m.__name__}")
+        post_delete.connect(newvalues.invalidate, sender=m, dispatch_uid=f"isc_dhcp_newvals_del_{m.__name__}")
 
 
 _connect_invalidation()

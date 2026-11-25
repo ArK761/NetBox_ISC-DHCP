@@ -17,65 +17,125 @@ _BADGE = ('<div id="isc-dhcp-version" class="text-end mb-2"><a href="%s" target=
 _MARKER = '<div class="container-fluid tab-content py-3">'
 
 
-_TREE_CSS = (
-    "<style>details.isc-notice{display:block!important}details.isc-notice>summary{list-style:none;cursor:pointer}details.isc-notice>summary::-webkit-details-marker{display:none}"
-    "details.isc-notice .isc-hide,details.isc-notice[open] .isc-show{display:none}details.isc-notice[open] .isc-hide{display:inline}"
-    "details.isc-notice .isc-tog{border:1px solid currentColor;border-radius:.3rem;padding:0 .5rem}details.isc-notice .isc-tree{margin:.4rem 0 .1rem 2rem;max-height:22rem;overflow:auto}"
-    "details.isc-notice .isc-tree ul{list-style:none;padding-left:1.2rem;margin:.1rem 0 .4rem;border-left:1px solid currentColor}"
-    "details.isc-notice a{color:inherit}details.isc-notice .isc-tree li{margin:.1rem 0}</style>"
+_BAR_CSS = (
+    "<style>"
+    "body{padding-bottom:2.4rem}"
+    "#isc-bar{position:fixed;left:0;right:0;bottom:0;z-index:1035;font-size:.8rem;font-weight:600}"
+    "#isc-bar .isc-strip{display:flex;align-items:center;height:2rem;background:var(--tblr-bg-surface,var(--bs-body-bg,#fff));"
+    "border-top:2px solid var(--tblr-warning,#f59f00);box-shadow:0 -.25rem .75rem rgba(0,0,0,.2)}"
+    "#isc-bar .isc-view{flex:1;overflow:hidden;white-space:nowrap;position:relative;height:100%}"
+    "#isc-bar .isc-track{position:absolute;top:0;height:100%;display:flex;align-items:center;gap:2.5rem;padding-left:100%;"
+    "animation:iscrun var(--d,30s) linear infinite}"
+    "#isc-bar .isc-view:hover .isc-track,#isc-bar .isc-tx.isc-mq:hover>span{animation-play-state:paused}"
+    "@keyframes iscrun{from{transform:translateX(0)}to{transform:translateX(-100%)}}"
+    "#isc-bar .isc-cnt{flex:none;display:flex;align-items:center;gap:.35rem;height:100%;padding:0 .9rem;cursor:pointer;user-select:none;"
+    "border-left:1px solid rgba(128,128,128,.35)}"
+    "#isc-bar .isc-arrow::before{content:'\\25B2'}#isc-notices.isc-open #isc-bar .isc-arrow::before{content:'\\25BC'}"
+    "#isc-bar .isc-panel{display:none;max-height:60vh;overflow:auto}#isc-notices.isc-open #isc-bar .isc-panel{display:block}"
+    "#isc-bar .isc-row{display:flex;align-items:center;gap:.5rem;height:1.9rem;padding:0 .9rem;white-space:nowrap;"
+    "border-bottom:1px solid rgba(0,0,0,.25)}"
+    "#isc-bar .isc-tx{flex:1;overflow:hidden;position:relative;height:100%}"
+    "#isc-bar .isc-tx>span{position:absolute;top:0;line-height:1.9rem;white-space:nowrap}"
+    "#isc-bar .isc-tx.isc-mq>span{animation:iscslide var(--d,12s) ease-in-out infinite alternate}"
+    "@keyframes iscslide{0%,12%{transform:translateX(0)}88%,100%{transform:translateX(var(--s,0))}}"
+    "#isc-bar a{color:inherit}#isc-bar code{background:transparent;color:inherit;padding:0}#isc-bar .isc-row a.isc-go{font-weight:700;text-decoration:underline}"
+    "#isc-bar .isc-btn{border:1px solid currentColor;background:transparent;color:inherit;border-radius:.25rem;padding:0 .45rem;font-size:.72rem;line-height:1.3}"
+    "#isc-bar .isc-tree{display:none;max-height:16rem;overflow:auto;padding:.3rem .9rem .5rem 2.4rem;font-weight:400}"
+    "#isc-bar .isc-tree.isc-on{display:block}#isc-bar .isc-tree ul{list-style:none;padding-left:1.1rem;margin:.1rem 0 .3rem;border-left:1px solid currentColor}"
+    "@media (prefers-reduced-motion:reduce){#isc-bar .isc-track{animation:none;padding-left:.8rem}#isc-bar .isc-tx.isc-mq>span{animation:none}}"
+    "</style>"
 )
-_NOTICE = ('<div class="alert text-bg-{level} border-0 d-flex align-items-center gap-2 py-2 mb-2 fw-semibold"><i class="mdi {icon} fs-4"></i>'
-           '<span>{text}</span>{link}</div>')
+
+_GROUP = {"danger": "danger", "warning": "warning"}  # everything else counts as info
 
 
-def notices_html(notices, toggle=("Show tree", "Hide tree")):
-    """HTML of the plugin warning bars (also served live by the notices view)."""
-    badge = ""
-    for level, icon, text, url, link_text, *rest in notices:  # plugin warnings at the top of the page (never cover buttons)
+def _count_text(n):
+    from .i18n import current_language
+
+    if current_language() == "sk":
+        return f"{n} " + ("upozornenie" if n == 1 else "upozornenia" if 2 <= n <= 4 else "upozornení")
+    return f"{n} " + ("warning" if n == 1 else "warnings")
+
+
+def notices_html(notices, toggle=("Show tree", "Hide tree"), request=None):
+    """The warnings bar at the bottom of plugin pages (also served live by the notices view): one line that scrolls,
+    expandable to one line per warning (long text scrolls inside its line), trees and actions in the rows."""
+    if not notices:
+        return ""
+    import hashlib
+
+    token = ""
+    if request is not None:
+        from django.middleware.csrf import get_token
+
+        token = get_token(request)
+    rows, items, counts = "", "", {"danger": 0, "warning": 0, "info": 0}
+    for level, icon, text, url, link_text, *rest in notices:
         tree = rest[0] if rest else None
-        link = "" if tree else f' <a class="ms-auto fw-bold text-reset" href="{escape(url)}">{escape(link_text)} &rarr;</a>' if url else ""
-        if not tree:
-            badge += _NOTICE.format(level=level, icon=icon, text=escape(text), link=link)
-            continue
-        # tree: pool -> its subnets; every item opens in a new window
-        nodes = ""
-        for (pool, pool_url), items in tree.items():
-            leaves = "".join(
-                f'<li><a href="{escape(u)}" target="_blank" rel="noopener"><code class="text-reset">{escape(lbl)}</code></a>'
-                + (f' <span class="opacity-75">– {escape(note)}</span>' if note else "") + "</li>"
-                for lbl, u, note in items[:200])
-            more = f"<li>… +{len(items) - 200}</li>" if len(items) > 200 else ""
-            nodes += (f'<li><a href="{escape(pool_url)}" target="_blank" rel="noopener"><i class="mdi mdi-folder-outline"></i> <b>{escape(pool)}</b></a>'
-                      f' <span class="opacity-75">({len(items)})</span><ul>{leaves}{more}</ul></li>')
-        badge += (f'<details class="isc-notice alert text-bg-{level} border-0 py-2 mb-2 fw-semibold">'
-                  f'<summary class="d-flex align-items-center gap-2"><i class="mdi {icon} fs-4"></i><span>{escape(text)}</span>'
-                  f'<span class="isc-tog ms-auto text-nowrap"><i class="mdi mdi-file-tree"></i> '
-                  f'<span class="isc-show">{escape(toggle[0])} &#9662;</span><span class="isc-hide">{escape(toggle[1])} &#9652;</span></span></summary>'
-                  f'<div class="isc-tree fw-normal"><ul class="border-0 ps-0">{nodes}</ul></div></details>')
-    return badge
+        action = rest[1] if len(rest) > 1 else None
+        counts[_GROUP.get(level, "info")] += 1
+        items += f'<span class="badge text-bg-{level} isc-it"><i class="mdi {icon}"></i> {escape(text)}</span>'
+        extra = ""
+        tree_html = ""
+        if tree:
+            key = hashlib.sha1(text.encode()).hexdigest()[:10]
+            nodes = ""
+            for (pool, pool_url), its in tree.items():
+                leaves = "".join(
+                    f'<li><a href="{escape(u)}" target="_blank" rel="noopener"><code class="text-reset">{escape(lbl)}</code></a>'
+                    + (f' <span class="opacity-75">– {escape(note)}</span>' if note else "") + "</li>"
+                    for lbl, u, note in its[:200])
+                more = f"<li>… +{len(its) - 200}</li>" if len(its) > 200 else ""
+                nodes += (f'<li><a href="{escape(pool_url)}" target="_blank" rel="noopener"><i class="mdi mdi-folder-outline"></i> <b>{escape(pool)}</b></a>'
+                          f' <span class="opacity-75">({len(its)})</span><ul>{leaves}{more}</ul></li>')
+            extra += f'<button type="button" class="isc-btn isc-tree-btn" data-k="{key}"><i class="mdi mdi-file-tree"></i> {escape(toggle[0])}</button>'
+            tree_html = f'<div class="isc-tree text-bg-{level}" data-k="{key}"><ul class="border-0 ps-0">{nodes}</ul></div>'
+        if action and token:
+            post, fields, label_ = action
+            hidden = "".join(f'<input type="hidden" name="{escape(k)}" value="{escape(v)}">' for k, v in fields.items())
+            extra += (f'<form method="post" action="{escape(post)}" class="m-0 isc-act"><input type="hidden" name="csrfmiddlewaretoken" value="{escape(token)}">'
+                      f'{hidden}<input type="hidden" name="next" value=""><button class="isc-btn">{escape(label_)}</button></form>')
+        if url:
+            extra += f'<a class="isc-go" href="{escape(url)}">{escape(link_text)} &rarr;</a>'
+        rows += (f'<div class="isc-row text-bg-{level}"><i class="mdi {icon} fs-5"></i><span class="isc-tx"><span>{escape(text)}</span></span>{extra}</div>'
+                 + tree_html)
+    dots = "".join(f'<span class="badge rounded-pill text-bg-{lv}">{n}</span>' for lv, n in counts.items() if n)
+    return (f'<div id="isc-bar"><div class="isc-panel">{rows}</div><div class="isc-strip"><div class="isc-view"><div class="isc-track">{items}</div></div>'
+            f'<div class="isc-cnt" role="button" tabindex="0">{dots} <span>{escape(_count_text(len(notices)))}</span> <span class="isc-arrow"></span></div></div></div>')
 
 
 _LIVE_JS = (
-    "<script>(function(){var b=document.getElementById('isc-notices');if(!b||!window.fetch)return;"
+    "<script>(function(){var b=document.getElementById('isc-notices');if(!b)return;var trees={};"
+    "function marq(){var v=b.querySelector('.isc-view'),tr=b.querySelector('.isc-track');"
+    "if(v&&tr)tr.style.setProperty('--d',Math.max(12,(tr.scrollWidth)/70)+'s');"
+    "[].forEach.call(b.querySelectorAll('.isc-tx'),function(t){var i=t.firstElementChild;t.classList.remove('isc-mq');"
+    "var o=i?i.scrollWidth-t.clientWidth:0;if(o>4){t.classList.add('isc-mq');t.style.setProperty('--s',(-o-16)+'px');t.style.setProperty('--d',Math.max(4,o/40)+'s')}})}"
+    "function restore(){[].forEach.call(b.querySelectorAll('.isc-tree'),function(x){if(trees[x.dataset.k])x.classList.add('isc-on')})}"
+    "b.addEventListener('click',function(e){var c=e.target.closest('.isc-cnt');if(c){b.classList.toggle('isc-open');setTimeout(marq,0);return}"
+    "var t=e.target.closest('.isc-tree-btn');if(t){var k=t.dataset.k,x=b.querySelector('.isc-tree[data-k=\"'+k+'\"]');if(x){trees[k]=!x.classList.contains('isc-on');x.classList.toggle('isc-on')}}});"
+    "b.addEventListener('keydown',function(e){if(e.target.closest('.isc-cnt')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();b.classList.toggle('isc-open');setTimeout(marq,0)}});"
+    "b.addEventListener('submit',function(e){var n=e.target.querySelector('input[name=next]');if(n)n.value=location.pathname+location.search});"
+    "window.addEventListener('resize',marq);marq();"
+    "if(!window.fetch)return;"
     "function go(){if(document.hidden)return;fetch(b.dataset.url,{credentials:'same-origin'}).then(function(r){return r.status==200?r.text():null}).then(function(h){"
-    "if(h===null||h===b.innerHTML)return;var o=[].map.call(b.querySelectorAll('details[open] summary'),function(x){return x.textContent});"
-    "b.innerHTML=h;[].forEach.call(b.querySelectorAll('details summary'),function(x){if(o.indexOf(x.textContent)>-1)x.parentNode.open=true})}).catch(function(){})}"
+    "if(h===null||h===b.innerHTML)return;b.innerHTML=h;restore();marq()}).catch(function(){})}"
     "setInterval(go,10000);document.addEventListener('visibilitychange',go)})();</script>"
 )
 
 
-def _live_box(notices, toggle):
-    """Warning bars in a box that refreshes itself every 10 s (state of servers changes without a page reload)."""
+def _live_box(notices, toggle, request=None, open_=False):
+    """Warnings bar in a box that refreshes itself every 10 s (state of servers changes without a page reload)."""
     from django.urls import reverse
 
     try:
         url = reverse("plugins:netbox_isc_dhcp:notices")
     except Exception:
-        return notices_html(notices, toggle)
-    return f'<div id="isc-notices" data-url="{escape(url)}">{notices_html(notices, toggle)}</div>' + _LIVE_JS
+        return notices_html(notices, toggle, request)
+    cls = ' class="isc-open"' if open_ else ""
+    return f'<div id="isc-notices" data-url="{escape(url)}"{cls}>{notices_html(notices, toggle, request)}</div>' + _LIVE_JS
 
 
-def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
+def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree"), request=None, open_=False):
     """Insert the version badge before </body> of an HTML response (no JavaScript involved)."""
     if response.status_code != 200 or getattr(response, "streaming", False):
         return response
@@ -94,7 +154,7 @@ def inject_badge(response, notices=(), toggle=("Show tree", "Hide tree")):
     except Exception:
         manual = "/plugins/isc-dhcp/manual/"
     badge = _BADGE % (manual, escape(t("lbl.manual")), escape(label()))
-    badge += _TREE_CSS + _live_box(notices, toggle)
+    badge += _BAR_CSS + _live_box(notices, toggle, request, open_)
     i = body.find(_MARKER)
     if i != -1:
         i += len(_MARKER)
@@ -161,7 +221,11 @@ class DNSWarningMiddleware:
                 tree.setdefault((o.pool.name, pool_url), []).append((o.prefix_text, url, ""))
             out.append(("warning", "mdi-pencil-outline", t("warn.overrides", n=len(ovr)), subnets, t("menu.subnets"), tree))
         out += self._server_notices()
-        return out
+        from .newvalues import notices as new_value_notices
+
+        out += new_value_notices()
+        rank = {"danger": 0, "warning": 1}
+        return sorted(out, key=lambda n: rank.get(n[0], 2))  # red first, then yellow, then info
 
     @staticmethod
     def _server_notices():
@@ -250,7 +314,10 @@ class DNSWarningMiddleware:
         response = self.get_response(request)
         if on_plugin:
             try:
-                response = inject_badge(response, notices, (t("lbl.tree_show"), t("lbl.tree_hide")))
+                from .models import settings_obj
+
+                st = settings_obj()
+                response = inject_badge(response, notices, (t("lbl.tree_show"), t("lbl.tree_hide")), request, bool(st and st.notices_open))
             except Exception:
                 pass
         return response

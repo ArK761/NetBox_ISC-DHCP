@@ -59,7 +59,10 @@
                   <button class="btn btn-sm btn-outline-secondary" name="field" value="cond_all">{% tr "lbl.select_all" %}</button>
                   <button class="btn btn-sm btn-outline-secondary" name="field" value="cond_none">{% tr "lbl.select_none" %}</button>
                 </div>
-              </form>{% endif %}</div>
+              </form>
+              {% if c.ignored %}<div class="small mt-2 isc-ignored"><span class="text-muted">{% tr "nv.ignored_title" %}</span>
+                {% for v, l in c.ignored %}<form method="post" action="{{ inline_url }}" class="d-inline-flex align-items-center gap-1 ms-2">{% csrf_token %}<input type="hidden" name="field" value="cond_unignore"><input type="hidden" name="index" value="{{ c.index }}"><input type="hidden" name="value" value="{{ v }}">
+                  <code>{{ l }}</code><button class="btn btn-sm btn-link p-0" title="{% tr 'nv.unignore' %}">{% tr "nv.unignore" %}</button></form>{% endfor %}</div>{% endif %}{% endif %}</div>
             <div class="d-flex gap-1 text-nowrap">
               <form method="post" action="{{ inline_url }}" class="m-0 d-flex align-items-center me-2">{% csrf_token %}<input type="hidden" name="field" value="{% if c.pool_key %}cond_poolkey_off{% else %}cond_poolkey{% endif %}"><input type="hidden" name="index" value="{{ c.index }}">
                 <label class="form-check form-switch m-0 small" title="{% tr 'lbl.pool_type_sw_hint' %}"><input class="form-check-input" type="checkbox"{% if c.pool_key %} checked{% endif %}{% if not c.can_key %} disabled{% endif %} onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()"> {% tr "lbl.pool_type_sw" %}</label></form>
