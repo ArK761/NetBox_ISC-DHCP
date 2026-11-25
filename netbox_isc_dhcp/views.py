@@ -673,6 +673,13 @@ def _prepared_pools(model, key, active):
 
     cand = dict(_candidates(model, key["field"]))
     act = {p["obj"].pk for p in active}
+    by_name = {str(n)[:100]: str(v) for v, n in cand.items()}
+    taken = set(PoolTemplate.objects.exclude(ref="").values_list("ref", flat=True))
+    for pt in PoolTemplate.objects.exclude(pk__in=act).filter(ref=""):  # unused pool with an object of that name: pair it now
+        v = by_name.get(pt.name)
+        if v and v not in taken:
+            PoolTemplate.objects.filter(pk=pt.pk).update(ref=v)
+            taken.add(v)
     rows = []
     for pt in PoolTemplate.objects.exclude(pk__in=act).order_by("name"):
         state = "obj" if pt.ref and pt.ref in cand else ("gone" if pt.ref else "name")
