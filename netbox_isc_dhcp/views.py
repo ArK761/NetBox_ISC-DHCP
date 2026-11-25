@@ -657,6 +657,21 @@ def _class_context():
     return {"classes": _usage_rows(usage_of(sorted(dyn, key=str.lower), refs)), "unknown_classes": [u for u in unknown if u["uses"]]}
 
 
+def _pool_source_obj(model, key):
+    """What the values of the pool type field are: the object type of an object custom field (e.g. 'Tenant group')."""
+    from .source_fields import _custom_field
+
+    cf = _custom_field(model, key["field"]) if key["field"].startswith("cf_") else None
+    if cf is not None and cf.type in ("object", "multiobject") and cf.related_object_type is not None:
+        m = cf.related_object_type.model_class()
+        if m is not None:
+            from django.utils import translation
+
+            with translation.override("en"):
+                return f"{m._meta.app_config.verbose_name} › {str(m._meta.verbose_name).capitalize()}"
+    return ""
+
+
 def _prepared_pools(model, key, active):
     """Owner: exactly the values of the pool type field (e.g. tenant groups) WITHOUT an active pool, one row each:
     a pool already prepared (code, Generate, delete) or the button 'Pripraviť'. Pools whose object no longer exists
@@ -747,7 +762,7 @@ def _subnetconfig_context(request, instance):
     prepared, orphans = _prepared_pools(model, key, pools) if key is not None and not pools_error else ([], [])
     return {"source_groups": groups, "source_label": source_label(instance.source_model), "field_options": field_options(model),
             "cond_rows": rows, "matched_count": count, "has_pool_key": key is not None, "pools": pools, "pools_error": pools_error,
-            "prepared": prepared, "orphans": orphans, "pool_field_label": label_for(model, key["field"]) if key is not None else "",
+            "prepared": prepared, "orphans": orphans, "pool_source_obj": _pool_source_obj(model, key) if key is not None else "", "pool_field_label": label_for(model, key["field"]) if key is not None else "",
             "incompatible": [dict(x, reason=tmsg(x["reason"])) for x in __import__("netbox_isc_dhcp.compat", fromlist=["x"]).incompatible()] if key is not None and any_active else [],
             "overrides": __import__("netbox_isc_dhcp.compat", fromlist=["x"]).overrides(),
             **_class_context(),

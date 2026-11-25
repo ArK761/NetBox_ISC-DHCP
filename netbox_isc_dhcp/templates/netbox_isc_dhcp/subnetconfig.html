@@ -116,7 +116,9 @@
     </table>{% endif %}
   </div>
   {% if has_pool_key and not pools_error %}<div class="card mb-3" id="isc-prepared"><h5 class="card-header"><i class="mdi mdi-archive-outline"></i> {% tr_fmt "pp.title2" field=pool_field_label %} ({{ prepared|length }})</h5>
-    <div class="card-body small text-muted pb-2">{% tr "pp.hint" %}</div>
+    <div class="card-body pb-2"><div class="alert alert-info d-block py-2 mb-2"><i class="mdi mdi-database-arrow-right-outline"></i>
+      {% if pool_source_obj %}{% tr_fmt "pp.src_obj" field=pool_field_label obj=pool_source_obj %}{% else %}{% tr_fmt "pp.src_field" field=pool_field_label %}{% endif %}</div>
+      <div class="small text-muted">{% tr "pp.hint" %}</div></div>
     {% if prepared %}<table class="table table-sm table-hover mb-0">
       <thead><tr><th>{% tr "lbl.name" %}</th><th>{% tr "lbl.code_state" %}</th><th>{% tr "lbl.generate" %}</th><th></th></tr></thead>
       {% for r in prepared %}<tr>
