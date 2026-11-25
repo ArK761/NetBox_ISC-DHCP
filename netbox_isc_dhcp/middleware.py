@@ -42,7 +42,6 @@ _BAR_CSS = (
     "#isc-bar .isc-btn{border:1px solid currentColor;background:transparent;color:inherit;border-radius:.25rem;padding:0 .45rem;font-size:.72rem;line-height:1.3}"
     "#isc-bar .isc-tree{display:none;max-height:16rem;overflow:auto;padding:.3rem .9rem .5rem 2.4rem;font-weight:400}"
     "#isc-bar .isc-tree.isc-on{display:block}#isc-bar .isc-tree ul{list-style:none;padding-left:1.1rem;margin:.1rem 0 .3rem;border-left:1px solid currentColor}"
-    "@media (prefers-reduced-motion:reduce){#isc-bar .isc-track{animation:none;padding-left:.8rem}#isc-bar .isc-tx.isc-mq>span{animation:none}}"
     "</style>"
 )
 
@@ -105,20 +104,21 @@ def notices_html(notices, toggle=("Show tree", "Hide tree"), request=None):
 
 
 _LIVE_JS = (
-    "<script>(function(){var b=document.getElementById('isc-notices');if(!b)return;var trees={};"
+    "<script>(function(){var b=document.getElementById('isc-notices');if(!b)return;var trees={};function key(x){return x.replace(/name=\\x22csrfmiddlewaretoken\\x22 value=\\x22[^\\x22]*\\x22/g,'')}var last=key(b.innerHTML);function norm(h){var t=document.createElement('div');t.innerHTML=h;return key(t.innerHTML)}"
     "function marq(){var v=b.querySelector('.isc-view'),tr=b.querySelector('.isc-track');"
     "if(v&&tr)tr.style.setProperty('--d',Math.max(12,(tr.scrollWidth)/70)+'s');"
     "[].forEach.call(b.querySelectorAll('.isc-tx'),function(t){var i=t.firstElementChild;t.classList.remove('isc-mq');"
     "var o=i?i.scrollWidth-t.clientWidth:0;if(o>4){t.classList.add('isc-mq');t.style.setProperty('--s',(-o-16)+'px');t.style.setProperty('--d',Math.max(4,o/40)+'s')}})}"
+    "function place(){var bar=b.querySelector('#isc-bar'),w=document.querySelector('.page-wrapper');if(bar)bar.style.left=(w?Math.max(0,w.getBoundingClientRect().left):0)+'px'}"
     "function restore(){[].forEach.call(b.querySelectorAll('.isc-tree'),function(x){if(trees[x.dataset.k])x.classList.add('isc-on')})}"
     "b.addEventListener('click',function(e){var c=e.target.closest('.isc-cnt');if(c){b.classList.toggle('isc-open');setTimeout(marq,0);return}"
     "var t=e.target.closest('.isc-tree-btn');if(t){var k=t.dataset.k,x=b.querySelector('.isc-tree[data-k=\"'+k+'\"]');if(x){trees[k]=!x.classList.contains('isc-on');x.classList.toggle('isc-on')}}});"
     "b.addEventListener('keydown',function(e){if(e.target.closest('.isc-cnt')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();b.classList.toggle('isc-open');setTimeout(marq,0)}});"
     "b.addEventListener('submit',function(e){var n=e.target.querySelector('input[name=next]');if(n)n.value=location.pathname+location.search});"
-    "window.addEventListener('resize',marq);marq();"
+    "window.addEventListener('resize',function(){place();marq()});place();marq();"
     "if(!window.fetch)return;"
     "function go(){if(document.hidden)return;fetch(b.dataset.url,{credentials:'same-origin'}).then(function(r){return r.status==200?r.text():null}).then(function(h){"
-    "if(h===null||h===b.innerHTML)return;b.innerHTML=h;restore();marq()}).catch(function(){})}"
+    "if(h===null)return;var n=norm(h);if(n===last)return;last=n;b.innerHTML=h;place();restore();marq()}).catch(function(){})}"
     "setInterval(go,10000);document.addEventListener('visibilitychange',go)})();</script>"
 )
 
