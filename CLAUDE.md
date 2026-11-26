@@ -1,6 +1,7 @@
 # NetBox ISC DHCP plugin: project notes (read first)
 
 Owner: ArK761 (Slovak; answer in Slovak, short, no token waste, no unrequested bash scripts).
+OWNER GUIDANCE STYLE: when guiding him, ONE step at a time: "choď sem -> klikni na toto -> urob toto", wait for his result, then the next step. No lists of many steps, no explanations he did not ask for.
 Repo: https://github.com/ArK761/NetBox_ISC-DHCP, working branch `claude/skeleton-pool-planner`.
 Install on test server (ALWAYS this form, migrations must be committed, never makemigrations on server):
 `sudo bash -c 'source /opt/netbox/venv/bin/activate && pip install --upgrade --force-reinstall --no-deps "git+https://github.com/ArK761/NetBox_ISC-DHCP.git@<SHA>" && cd /opt/netbox/netbox && python manage.py migrate netbox_isc_dhcp && systemctl restart netbox netbox-rq'`
