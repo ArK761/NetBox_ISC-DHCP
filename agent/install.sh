@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installer of isc-dhcp-agent (systemd service).
 #   install:    sudo bash install.sh --url https://<netbox>/plugins/isc-dhcp/dhcp/export/agent/
-#   from git:   curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/<ref>/agent/install.sh | sudo bash -s -- --ref <ref> --url <agent API url> --token <key>
+#   from git:   curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/<ref>/agent/install.sh | sudo bash -s -- --ref <ref>
+#               then: sudo isc-dhcp-agent --set-url <agent API url> ; sudo isc-dhcp-agent --set-token <key>
 #   uninstall:  sudo bash install.sh --uninstall      (keeps /etc/isc-dhcp-agent.conf and the backups)
 set -eu
 REPO="https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP"
@@ -55,8 +56,14 @@ if [ -n "$TOKEN" ]; then
   if grep -q '^NETBOX_TOKEN=' "$CONF"; then sed -i "s|^NETBOX_TOKEN=.*|NETBOX_TOKEN=\"$TOKEN\"|" "$CONF"; else echo "NETBOX_TOKEN=\"$TOKEN\"" >>"$CONF"; fi
 fi
 chown root:root "$CONF" 2>/dev/null; chmod 600 "$CONF"  # the key is in it: root only, always
-grep -q '^NETBOX_URL="https\?://[^"]' "$CONF" || { echo "set NETBOX_URL in $CONF, then: systemctl enable --now isc-dhcp-agent"; exit 0; }
 systemctl daemon-reload
+if ! grep -q '^NETBOX_URL="https\?://[^"]' "$CONF"; then
+  systemctl enable isc-dhcp-agent  # enabled, not started: --set-url / --set-token start it
+  echo "isc-dhcp-agent $("$BIN" --version) installed. Now run:"
+  echo "  sudo isc-dhcp-agent --set-url <agent API url>"
+  echo "  sudo isc-dhcp-agent --set-token <key>"
+  exit 0
+fi
 systemctl enable --now isc-dhcp-agent
 systemctl restart isc-dhcp-agent
 echo "isc-dhcp-agent $("$BIN" --version) installed and running (log: /var/log/isc-dhcp-agent.log)"

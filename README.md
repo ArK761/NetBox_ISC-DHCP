@@ -42,9 +42,15 @@ Upgrade: the same command with `--upgrade --force-reinstall --no-deps` and the n
 ## 2. Install the agent (each DHCP server)
 1. NetBox → **CFG pluginu → DHCP servery**: add the server (name + IP/FQDN), press **Vygenerovať kľúč / Generate key**.
    The page shows the agent API address and a ready install command.
-2. On the DHCP server:
+2. On the DHCP server: install (agent of this release), then the API address and the key:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/v1.0.0/agent/install.sh | sudo bash -s -- --ref v1.0.0 --url https://<netbox>/api/plugins/isc-dhcp/agent/ --token <key>
+curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/1.0.0/agent/install.sh | sudo bash -s -- --ref 1.0.0
+```
+```bash
+sudo isc-dhcp-agent --set-url https://<netbox>/api/plugins/isc-dhcp/agent/
+```
+```bash
+sudo isc-dhcp-agent --set-token <key>
 ```
 3. Check: `sudo isc-dhcp-agent --show`, `sudo systemctl status isc-dhcp-agent`, log `/var/log/isc-dhcp-agent.log`.
    The server turns *online* in NetBox within one interval.
@@ -123,9 +129,15 @@ podadresáre) → **DHCP-CFG** (dhcpd.conf, DNS, Subnety, Hosty). Aktualizácia 
 ## Inštalácia agenta (každý DHCP server)
 1. NetBox → **CFG pluginu → DHCP servery**: pridaj server (názov + IP/FQDN), stlač **Vygenerovať kľúč**. Stránka ukáže
    API adresu agenta a hotový inštalačný príkaz.
-2. Na DHCP serveri:
+2. Na DHCP serveri: inštalácia (agent tejto verzie), potom API adresa a kľúč:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/v1.0.0/agent/install.sh | sudo bash -s -- --ref v1.0.0 --url https://<netbox>/api/plugins/isc-dhcp/agent/ --token <kľúč>
+curl -fsSL https://raw.githubusercontent.com/ArK761/NetBox_ISC-DHCP/1.0.0/agent/install.sh | sudo bash -s -- --ref 1.0.0
+```
+```bash
+sudo isc-dhcp-agent --set-url https://<netbox>/api/plugins/isc-dhcp/agent/
+```
+```bash
+sudo isc-dhcp-agent --set-token <kľúč>
 ```
 3. Kontrola: `sudo isc-dhcp-agent --show`, `sudo systemctl status isc-dhcp-agent`, log `/var/log/isc-dhcp-agent.log`.
    Server je v NetBoxe *online* do jedného intervalu. Ďalšie verzie agenta nainštaluješ z NetBoxu tlačidlom **Aktualizovať agenta**.
