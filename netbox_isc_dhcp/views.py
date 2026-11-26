@@ -272,7 +272,7 @@ class ServersTableView(LoginRequiredMixin, View):
         if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
             raise PermissionDenied
         return render(request, "netbox_isc_dhcp/_servers_table.html", {
-            "servers": _server_rows(), "first_pk": _first_pk(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "check_hash": build.check_hash(), "leases_on": bool(getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "agent_leases_every", 0)), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
+            "servers": _server_rows(), "first_pk": _first_pk(), "test_srv": _test_srv(), "n_enabled": __import__("netbox_isc_dhcp.export.models", fromlist=["x"]).DHCPServer.objects.filter(enabled=True).count(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "check_hash": build.check_hash(), "leases_on": bool(getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "agent_leases_every", 0)), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
             "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0], "agent_src": _agent_src()})
 
 
@@ -287,6 +287,13 @@ def _agent_src():
     return {"ver": ver, "src": src, "when": when, "err": err, "url": GITHUB_AGENT}
 
 
+def _test_srv():
+    """Enabled test DHCP server (then the order / First / staged rollout do not apply), or None."""
+    from .export.models import DHCPServer
+
+    return DHCPServer.objects.filter(is_test=True, enabled=True).order_by("pk").first()
+
+
 def _first_pk():
     from .export.models import DHCPServer
 
@@ -297,7 +304,7 @@ def _first_pk():
 # --- Plugin settings: language, dhcpd.conf path, base path and subdirectories ---
 _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
       extra_context=lambda request, instance: {
-          "servers": _server_rows(), "first_pk": _first_pk(),
+          "servers": _server_rows(), "first_pk": _first_pk(), "test_srv": _test_srv(), "n_enabled": __import__("netbox_isc_dhcp.export.models", fromlist=["x"]).DHCPServer.objects.filter(enabled=True).count(),
           "current_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(),
           "check_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["x"]).check_hash(),
           "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(__import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(), create=True),

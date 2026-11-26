@@ -453,9 +453,28 @@ class ServersInlineView(LoginRequiredMixin, View):
             if request.POST.get("value") == "1" and other is not None:
                 messages.error(request, t("srv.test_one", name=other.name))
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            pick = None
+            if request.POST.get("value") != "1" and srv.is_test and srv.enabled:  # test off: with more servers the admin picks the First one
+                others = DHCPServer.objects.filter(enabled=True)
+                if others.count() > 1:
+                    pk = request.POST.get("first", "")
+                    pick = others.filter(pk=int(pk)).first() if pk.isdigit() else None
+                    if pick is None:
+                        messages.error(request, t("srv.err_pick_first"))
+                        return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+                    cur, why = _first_check(pick)
+                    if why:
+                        messages.error(request, why)
+                        return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             srv.is_test = request.POST.get("value") == "1"
             srv.save(update_fields=["is_test"])
+            if pick is not None:
+                cur = DHCPServer.objects.order_by("order", "pk").first()
+                _make_first(pick)
+                log_first = ("first", cur.name if cur else "", pick.name)
             log = [(f"is_test {srv.name}", str(not srv.is_test), str(srv.is_test))]
+            if pick is not None:
+                log.append(log_first)
             if srv.is_test:  # a test server goes first: new CFG is tried there before the production servers
                 cur, why = _first_check(srv)
                 if why:  # same rules as the First button (ISC versions differ / server cannot be first): order kept

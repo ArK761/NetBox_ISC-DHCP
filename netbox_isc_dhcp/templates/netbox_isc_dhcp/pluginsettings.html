@@ -78,10 +78,10 @@
         <select name="value" class="form-select form-select-sm" style="max-width:20rem" onchange="this.form.submit()">
           <option value="plan"{% if object.agent_mode != "export" %} selected{% endif %}>{% tr "srv.mode_plan" %}</option>
           <option value="export"{% if object.agent_mode == "export" %} selected{% endif %}>{% tr "srv.mode_export" %}</option></select></form>
-      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-staged">{% csrf_token %}<input type="hidden" name="field" value="staged">
+      {% if test_srv %}<div class="small mt-2 text-info" id="isc-staged"><i class="mdi mdi-flask-outline"></i> <strong>{% tr "srv.staged" %}</strong> – {% tr_fmt "srv.order_by_test" name=test_srv.name %}</div>{% else %}      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="mt-2" id="isc-staged">{% csrf_token %}<input type="hidden" name="field" value="staged">
         <input type="hidden" name="value" value="{% if object.staged_rollout %}0{% else %}1{% endif %}">
         <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox"{% if object.staged_rollout %} checked{% endif %} onchange="this.form.submit()">
-          <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form>
+          <span class="form-check-label small"><strong>{% tr "srv.staged" %}</strong> – {% tr "srv.staged_hint" %}</span></label></form>{% endif %}
       <details class="mt-1 ms-5 small" id="isc-staged-how"><summary><strong><i class="mdi mdi-file-tree"></i> {% tr "st.how" %}</strong></summary>
         <div class="isc-how mt-1">
           <div class="fw-bold"><i class="mdi mdi-flask-outline"></i> {% tr "st.t_title" %}</div>
