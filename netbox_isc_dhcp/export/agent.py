@@ -194,6 +194,8 @@ def gate(server, manifest_hash):
             return "", []  # verified on the test server: all production servers at once
         failed = test.last_hash == manifest_hash and test.last_result and test.last_result != "ok"
         return ("test_failed" if failed else "test_wait"), [test.name]
+    if test is not None:
+        return "", []  # the test server itself never waits for production servers (staged order ignored with a test server)
     st = settings_obj()
     if (st and st.staged_rollout) or running_mismatch():
         before = [s for s in enabled_servers() if s.order < server.order and s.last_seen]  # no agent yet = blocks nobody
