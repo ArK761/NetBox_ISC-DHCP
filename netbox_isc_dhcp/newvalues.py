@@ -5,6 +5,7 @@ from django.core.cache import cache
 
 CACHE_KEY = "isc_dhcp_newvalues"
 SHOW = 20  # values listed per field (the rest is a count)
+TREE = 200  # objects listed in the warning tree (Zobraziť strom)
 
 
 POOLS_KEY = "isc_dhcp_pools_off"
@@ -53,7 +54,11 @@ def compute():
             continue
         others = [x for j, x in enumerate(conds) if j != i]
         base = model.objects.filter(build_q(model, others))
-        rows = [(v, lbl, base.filter(_field_q(model, c["field"], [v])).count()) for v, lbl in new[:SHOW]]
+        rows = []
+        for v, lbl in new[:SHOW]:
+            qs = base.filter(_field_q(model, c["field"], [v]))
+            items = [(str(o), o.get_absolute_url() if hasattr(o, "get_absolute_url") else "") for o in qs[:TREE]]
+            rows.append((v, lbl, qs.count(), items))
         out.append({"index": i, "field": c["field"], "label": label_for(model, c["field"]), "pool_key": bool(c.get("pool_key")),
                     "rows": rows, "more": max(0, len(new) - SHOW)})
     return out
@@ -85,10 +90,13 @@ def notices():
     post = reverse("plugins:netbox_isc_dhcp:subnetconfig_inline", kwargs={"pk": cfg.pk}) if cfg else ""
     out = []
     for f in data:
-        for value, lbl, n in f["rows"]:
+        for row in f["rows"]:
+            value, lbl, n = row[:3]
+            items = row[3] if len(row) > 3 else []
             text = t("nv.zero" if n == 0 else "nv.some", field=f["label"], value=lbl, n=n)
             action = (post, {"field": "cond_ignore", "index": str(f["index"]), "value": value}, t("nv.ignore"))
-            out.append(("info", "mdi-new-box", text, url, t("menu.subnets"), None, action))
+            tree = {(f"{f['label']} = {lbl}", url): [(name, u, "") for name, u in items]} if items else None
+            out.append(("info", "mdi-new-box", text, url, t("menu.subnets"), tree, action))
         if f["more"]:
             out.append(("info", "mdi-new-box", t("nv.more", field=f["label"], n=f["more"]), url, t("menu.subnets")))
     return out
