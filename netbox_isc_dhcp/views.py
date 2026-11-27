@@ -274,7 +274,7 @@ class ServersTableView(LoginRequiredMixin, View):
         if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
             raise PermissionDenied
         return render(request, "netbox_isc_dhcp/_servers_table.html", {
-            "servers": _server_rows(), "first_pk": _first_pk(), "test_srv": _test_srv(), "n_enabled": __import__("netbox_isc_dhcp.export.models", fromlist=["x"]).DHCPServer.objects.filter(enabled=True).count(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "check_hash": build.check_hash(), "leases_on": bool(getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "agent_leases_every", 0)), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
+            "servers": _server_rows(), "first_pk": _first_pk(), "test_srv": _test_srv(), "n_outdated": _outdated_count(), "n_enabled": __import__("netbox_isc_dhcp.export.models", fromlist=["x"]).DHCPServer.objects.filter(enabled=True).count(), "isc_lock": isc_mismatch(), "current_hash": build.manifest_hash(), "check_hash": build.check_hash(), "leases_on": bool(getattr(__import__("netbox_isc_dhcp.models", fromlist=["x"]).settings_obj(), "agent_leases_every", 0)), "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(build.manifest_hash(), create=True),
             "agent_latest": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).agent_script()[0], "agent_src": _agent_src()})
 
 
@@ -287,6 +287,14 @@ def _agent_src():
     ver, src, checked, err = agent_source()
     when = _ago(datetime.datetime.fromtimestamp(checked, tz=datetime.timezone.utc)) if checked else ""
     return {"ver": ver, "src": src, "when": when, "err": err, "url": GITHUB_AGENT}
+
+
+def _outdated_count():
+    """Servers (switched-off ones too) whose agent is older than the newest one: the global 'Update all agents' button."""
+    from .export.agent import agent_outdated
+    from .export.models import DHCPServer
+
+    return sum(1 for s in DHCPServer.objects.filter(last_seen__isnull=False) if agent_outdated(s))
 
 
 def _test_srv():
@@ -306,7 +314,7 @@ def _first_pk():
 # --- Plugin settings: language, dhcpd.conf path, base path and subdirectories ---
 _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, singleton=True,
       extra_context=lambda request, instance: {
-          "servers": _server_rows(), "first_pk": _first_pk(), "test_srv": _test_srv(), "n_enabled": __import__("netbox_isc_dhcp.export.models", fromlist=["x"]).DHCPServer.objects.filter(enabled=True).count(),
+          "servers": _server_rows(), "first_pk": _first_pk(), "test_srv": _test_srv(), "n_outdated": _outdated_count(), "n_enabled": __import__("netbox_isc_dhcp.export.models", fromlist=["x"]).DHCPServer.objects.filter(enabled=True).count(),
           "current_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(),
           "check_hash": __import__("netbox_isc_dhcp.export.build", fromlist=["x"]).check_hash(),
           "current_label": __import__("netbox_isc_dhcp.export.versions", fromlist=["x"]).label(__import__("netbox_isc_dhcp.export.build", fromlist=["manifest_hash"]).manifest_hash(), create=True),

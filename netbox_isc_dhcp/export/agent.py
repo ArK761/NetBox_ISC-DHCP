@@ -118,6 +118,34 @@ def test_server():
     return DHCPServer.objects.filter(is_test=True, enabled=True, last_seen__isnull=False).order_by("pk").first()
 
 
+def cfg_proven(manifest_hash, exclude=None):
+    """Some enabled server already runs this CFG set OK (deployed, tested, dhcpd running): the test server need not hold the others back."""
+    from .models import DHCPServer
+
+    qs = DHCPServer.objects.filter(enabled=True, last_result="ok", last_hash=manifest_hash, running_hash=manifest_hash, dhcpd_running=True)
+    if exclude is not None:
+        qs = qs.exclude(pk=exclude.pk)
+    return qs.exists()
+
+
+def test_kick(server, manifest_hash, client_ip=""):
+    """Test server holds this CFG (deployed OK) but it is not verified and dhcpd is stopped from NetBox: start it for the check
+    (test_verify then stops it again). Returns True when a start was queued."""
+    from ..i18n import t
+    from . import versions
+    from .models import AuditEvent
+
+    if (server is None or not server.is_test or not server.enabled or server.agent_cmd or server.test_ok_hash == manifest_hash
+            or server.last_result != "ok" or server.last_hash != manifest_hash or server.running_hash != manifest_hash
+            or server.dhcpd_running is not False or server.dhcpd_by != "admin"):
+        return False
+    server.agent_cmd = f"start:{timezone.now().strftime('%Y%m%d%H%M%S')}"
+    server.save(update_fields=["agent_cmd"])
+    AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=client_ip, level="info",
+                              manifest_hash=manifest_hash, cause=t("aud.test_kick", cfg=versions.label(manifest_hash)))
+    return True
+
+
 def test_verify(server, manifest_hash, check, client_ip=""):
     """Test server: CFG deployed OK, hash = NetBox and dhcpd running >= TEST_VERIFY_S -> verified (production may get it),
     dhcpd on the test server is stopped (NetBox command, visible in the Audit). Returns True when it was verified now."""
@@ -129,7 +157,8 @@ def test_verify(server, manifest_hash, check, client_ip=""):
         return False
     from datetime import timedelta
 
-    old = timezone.now() - timedelta(seconds=TEST_VERIFY_S)
+    proven = cfg_proven(manifest_hash, exclude=server)  # runs OK elsewhere already: test + start is enough, no 60 s wait
+    old = timezone.now() - timedelta(seconds=0 if proven else TEST_VERIFY_S)
     ok = (server.last_result == "ok" and server.last_hash == manifest_hash and server.running_hash == manifest_hash
           and server.dhcpd_running and server.disk_hash == check and server.last_report and server.last_report <= old
           and (server.dhcpd_since is None or server.dhcpd_since <= old))
@@ -143,7 +172,7 @@ def test_verify(server, manifest_hash, check, client_ip=""):
         fields += ["agent_cmd", "stop_why"]
     server.save(update_fields=fields)
     AuditEvent.objects.create(time=timezone.now(), kind="agent", server=server.name, client_ip=client_ip, level="info",
-                              manifest_hash=manifest_hash, cause=t("aud.test_ok", cfg=versions.label(manifest_hash), s=TEST_VERIFY_S))
+                              manifest_hash=manifest_hash, cause=t("aud.test_ok_proven" if proven else "aud.test_ok", cfg=versions.label(manifest_hash), s=TEST_VERIFY_S))
     return True
 
 
@@ -190,8 +219,8 @@ def gate(server, manifest_hash):
         return "failed_same", []  # never send the set that already failed here again (no endless restore loop)
     test = test_server()
     if test is not None and server.pk != test.pk:  # test server: production gets the CFG only after the test server verified it (no release button)
-        if test.test_ok_hash == manifest_hash:
-            return "", []  # verified on the test server: all production servers at once
+        if test.test_ok_hash == manifest_hash or cfg_proven(manifest_hash):
+            return "", []  # verified on the test server, or already running OK on a server: all production servers at once
         failed = test.last_hash == manifest_hash and test.last_result and test.last_result != "ok"
         return ("test_failed" if failed else "test_wait"), [test.name]
     if test is not None:

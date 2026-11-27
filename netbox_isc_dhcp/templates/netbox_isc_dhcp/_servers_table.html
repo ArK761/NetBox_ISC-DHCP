@@ -105,8 +105,6 @@
       {% if x.s.last_seen %}
         <form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="retry"><input type="hidden" name="pk" value="{{ x.s.pk }}">
           <button class="btn btn-sm btn-outline-secondary py-0" title="{% tr 'srv.retry_hint' %}"><i class="mdi mdi-download"></i> {% tr "srv.retry" %}</button></form>
-        <form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="update"><input type="hidden" name="pk" value="{{ x.s.pk }}">
-          <button class="btn btn-sm {% if x.outdated %}btn-warning{% else %}btn-outline-secondary{% endif %} py-0"{% if not x.outdated %} disabled title="{% tr 'srv.agent_current' %}"{% endif %}><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.cmd_update" %}{% if x.outdated %} {{ agent_latest }}{% endif %}</button></form>
       {% endif %}
       {% if x.s.is_test and x.s.enabled and n_enabled > 1 %}<details class="isc-runpick"><summary><span class="form-check form-switch m-0 small d-inline-flex align-items-center" title="{% tr 'srv.is_test_hint' %}"><input class="form-check-input pe-none" type="checkbox" checked tabindex="-1"> <span class="ms-1">{% tr "srv.is_test" %}</span></span></summary>
         <div class="isc-runbox small"><form method="post" action="{{ srv_url }}" class="m-0">{% csrf_token %}<input type="hidden" name="field" value="is_test"><input type="hidden" name="pk" value="{{ x.s.pk }}"><input type="hidden" name="value" value="0">
@@ -127,6 +125,8 @@
   ({% if agent_src.src == "github" %}GitHub{% else %}{% tr "srv.agent_in_plugin" %}{% endif %}) ·
   {% tr "srv.agent_gh_check" %} {% if agent_src.when %}{{ agent_src.when }}{% else %}{% tr "srv.agent_gh_running" %}{% endif %}{% if agent_src.err %} – <span class="text-warning">{% tr "srv.agent_gh_err" %} ({{ agent_src.err }})</span>{% endif %}
   <form method="post" action="{{ srv_url }}" class="d-inline m-0 ms-2">{% csrf_token %}<input type="hidden" name="field" value="gh_check">
-    <button class="btn btn-sm btn-outline-secondary py-0"><i class="mdi mdi-refresh"></i> {% tr "srv.agent_gh_now" %}</button></form></div>
+    <button class="btn btn-sm btn-outline-secondary py-0"><i class="mdi mdi-refresh"></i> {% tr "srv.agent_gh_now" %}</button></form>
+  <form method="post" action="{{ srv_url }}" class="d-inline m-0 ms-2" onsubmit="return confirm('{% tr 'srv.upd_all_confirm' %}')">{% csrf_token %}<input type="hidden" name="field" value="update_all">
+    <button class="btn btn-sm {% if n_outdated %}btn-warning{% else %}btn-outline-secondary{% endif %} py-0"{% if not n_outdated %} disabled title="{% tr 'srv.upd_all_none' %}"{% endif %}><i class="mdi mdi-arrow-up-bold"></i> {% tr "srv.upd_all" %}{% if n_outdated %} {{ agent_latest }} ({{ n_outdated }}){% endif %}</button></form></div>
 <span id="isc-cur-cfg-src" hidden>{{ current_label }}</span>
 <div id="isc-hash-src" hidden>{% include "netbox_isc_dhcp/_cfg_hash.html" %}</div>

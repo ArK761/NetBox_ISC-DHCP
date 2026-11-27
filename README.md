@@ -55,7 +55,7 @@ sudo isc-dhcp-agent --set-token <key>
 3. Check: `sudo isc-dhcp-agent --show`, `sudo systemctl status isc-dhcp-agent`, log `/var/log/isc-dhcp-agent.log`.
    The server turns *online* in NetBox within one interval.
 
-Later agent updates come from NetBox (button **Aktualizovať agenta / Update agent**), no reinstall needed.
+Later agent updates come from NetBox (button **Aktualizovať všetkých agentov / Update all agents** below the servers table), no reinstall needed.
 Uninstall: `sudo bash install.sh --uninstall` (keeps the config and the backups).
 
 **Server that already runs DHCP:** back up the original configuration yourself first (`/etc/dhcp`, include files, `/var/lib/dhcp`).
@@ -140,7 +140,7 @@ sudo isc-dhcp-agent --set-url https://<netbox>/api/plugins/isc-dhcp/agent/
 sudo isc-dhcp-agent --set-token <kľúč>
 ```
 3. Kontrola: `sudo isc-dhcp-agent --show`, `sudo systemctl status isc-dhcp-agent`, log `/var/log/isc-dhcp-agent.log`.
-   Server je v NetBoxe *online* do jedného intervalu. Ďalšie verzie agenta nainštaluješ z NetBoxu tlačidlom **Aktualizovať agenta**.
+   Server je v NetBoxe *online* do jedného intervalu. Ďalšie verzie agenta nainštaluješ z NetBoxu tlačidlom **Aktualizovať všetkých agentov** pod tabuľkou serverov.
 
 ## Nastavenie agenta
 V NetBoxe (CFG pluginu → DHCP servery): interval, príkaz testu a reštartu, adresár záloh (**len pod `/opt/`**,

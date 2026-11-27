@@ -98,6 +98,20 @@ def _key_progress(request, server, info):
                                   changes=[{"path": "agent_key_old", "action": "delete", "old": "***", "new": ""}])
 
 
+def _disabled_server(request):
+    """A switched-off DHCP server (its IP + the agent key): NetBox gives it only the agent update, never a CFG."""
+    from .models import DHCPServer
+    from .servers import resolve
+
+    if not _key_ok(request):
+        return None
+    ip = audit.client_ip(request)
+    for s in DHCPServer.objects.filter(enabled=False):
+        if ip in resolve(s.address)[0]:
+            return s
+    return None
+
+
 def _client_allowed(request):
     """Logged-in user with view right, or a DHCP server: its IP is in the list AND it sends the agent key (when one exists)."""
     if request.user.is_authenticated and request.user.has_perm("netbox_isc_dhcp.view_exportfile"):
@@ -162,11 +176,11 @@ class AgentSelfView(View):
     def get(self, request):
         from .agent import agent_script
 
-        if not _client_allowed(request):
+        if not _client_allowed(request) and _disabled_server(request) is None:
             _refused_contact(request)
             raise PermissionDenied
         ver, sha, raw = agent_script()
-        if not raw:
+        if not raw:  # (a switched-off server may fetch the agent too: update for every agent)
             raise Http404
         resp = HttpResponse(raw, content_type="text/x-shellscript; charset=utf-8")
         resp["X-SHA256"], resp["X-Agent-Version"] = sha, ver
@@ -570,6 +584,28 @@ class ServersInlineView(LoginRequiredMixin, View):
                 log.append((f"test_time {srv.name}", "", timezone.localtime(srv.test_until).strftime("%H:%M") + f" ({mins} min)"))
             messages.success(request, t("srv.cmd_queued", cmd=t("srv.cmd_%s" % action), name=srv.name)
                              + (" " + t("srv.test_run_set", m=mins) if action == "start" and srv.is_test else ""))
+        elif action == "update_all":  # every agent (switched-off servers too) gets the newest agent at its next contact
+            from .agent import agent_outdated
+
+            stamp = timezone.now().strftime('%Y%m%d%H%M%S')
+            log, busy = [], []
+            for x in DHCPServer.objects.filter(last_seen__isnull=False).order_by("order", "pk"):
+                if not agent_outdated(x):
+                    continue
+                if x.agent_cmd:
+                    busy.append(x.name)
+                    continue
+                x.agent_cmd = f"update:{stamp}"
+                x.save(update_fields=["agent_cmd"])
+                log.append((f"cmd_update {x.name}", "", x.agent_cmd))
+            if log:
+                messages.success(request, t("srv.upd_all_queued", n=len(log)))
+            else:
+                messages.info(request, t("srv.upd_all_none"))
+            if busy:
+                messages.warning(request, t("srv.upd_all_busy", names=", ".join(busy)))
+            if not log:
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
         elif action == "gh_check":  # look for a new agent on GitHub now (otherwise every 5 minutes in the background)
             from .agent import _checking, _fetch_github, agent_source
 
@@ -666,10 +702,13 @@ class PlanView(View):
         from .models import AuditEvent
         from ..models import CONF_DIR, base_path, settings_obj
 
+        off = None
         if not _client_allowed(request):
-            _refused_contact(request)
-            raise PermissionDenied
-        server = server_for(request)
+            off = _disabled_server(request)  # switched off in NetBox: heartbeat + agent update only, never a CFG
+            if off is None:
+                _refused_contact(request)
+                raise PermissionDenied
+        server = off or server_for(request)
         if data and request.method == "POST":
             heartbeat(server, request, data)
         mh = build.manifest_hash()
@@ -687,6 +726,16 @@ class PlanView(View):
                 return HttpResponse(as_text(d, steps), status=status, content_type="text/plain; charset=utf-8")
             return HttpResponse(json.dumps(dict(d, steps=steps), indent=1), status=status, content_type="application/json")
 
+        if off is not None:
+            extra = {"wait": "disabled"}
+            if off.agent_cmd.startswith("update:"):
+                from .agent import agent_script
+
+                api = request.path_info.startswith("/api/")
+                extra["cmd"] = "update\t" + off.agent_cmd.split(":", 1)[1]
+                extra["agent_url"] = request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_self" if api else "plugins:netbox_isc_dhcp:export_agent_self"))
+                extra["agent_sha"] = agent_script()[1]
+            return reply([], extra)
         if not ExportFile.objects.filter(area="conf").exists():  # never let a server restart without a dhcpd.conf
             return reply([], {"error": "dhcpd.conf is not generated"}, status=409)
         api = request.path_info.startswith("/api/")
@@ -747,8 +796,10 @@ class PlanView(View):
 
         from .agent import test_timer
 
-        if ((test_timer(server, audit.client_ip(request)) or test_verify(server, mh, check, audit.client_ip(request)))
-                and server.agent_cmd):  # stop now (time up / CFG verified); no command while the admin's run time is on
+        from .agent import test_kick
+
+        if ((test_timer(server, audit.client_ip(request)) or test_verify(server, mh, check, audit.client_ip(request))
+             or test_kick(server, mh, audit.client_ip(request))) and server.agent_cmd):  # stop now (time up / CFG verified); no command while the admin's run time is on
             cmd, cid = server.agent_cmd.split(":", 1)
             info["cmd"] = f"{cmd}\t{cid}"
         reason, names = gate(server, mh)
