@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.27.0"
+AGENT_VERSION="1.28.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -1109,8 +1109,10 @@ leases_tick() {  # copy the lease database every N minutes to <backup dir>/lease
   backup_ok "$dir" || return 0
   [ -d "$dir" ] && leases_rename "$dir"
   [[ "$ev" =~ ^[0-9]+$ ]] && [ "$ev" -gt 0 ] || return 0
-  now=$(date +%s); last=$(state leases_ts); [[ "$last" =~ ^[0-9]+$ ]] || last=0
-  [ $((now - last)) -ge $((ev * 60)) ] || return 0
+  local mid slot  # copies at the clock: interval slots counted from midnight (1 h = xx:00, 30 min = xx:00 + xx:30) -> all servers at the same minute
+  now=$(date +%s); mid=$(date -d "$(date +%F) 00:00" +%s 2>/dev/null) || mid=$((now - now % 86400))
+  slot="$(date +%Y%m%d)-$(( (now - mid) / (ev * 60) ))"
+  [ "$slot" != "$(state leases_slot)" ] || return 0
   [ -f "$LEASES_FILE" ] && [ ! -L "$LEASES_FILE" ] || return 0
   mkdir -p "$dir" || return 0
   sum=$(sha256sum "$LEASES_FILE" | cut -d' ' -f1)
@@ -1127,6 +1129,7 @@ leases_tick() {  # copy the lease database every N minutes to <backup dir>/lease
   fi
   prune_leases "$dir" "$kp"  # also after the count was lowered in NetBox
   echo "$now" >"$STATE_DIR/leases_ts"
+  echo "$slot" >"$STATE_DIR/leases_slot"
 }
 
 copy_leases_to() {  # dhcpd.leases (+ dhcpd.leases~) with the original names into $1
