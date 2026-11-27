@@ -462,7 +462,21 @@ class ServersInlineView(LoginRequiredMixin, View):
                 return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             _make_first(srv)
             log = [("first", cur.name if cur else "", srv.name)]
+        elif action == "production" and srv:  # protection: no Stop from NetBox, cannot become the test server
+            on = request.POST.get("value") == "1"
+            if on and srv.is_test:
+                messages.error(request, t("srv.prod_is_test"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            if not on and request.POST.get("ok") != "1":
+                messages.error(request, t("srv.prod_off_confirm_err"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
+            log = [(f"production {srv.name}", str(srv.production), str(on))]
+            srv.production = on
+            srv.save(update_fields=["production"])
         elif action == "is_test" and srv:  # test DHCP server: first in the rollout + the Test button
+            if request.POST.get("value") == "1" and srv.production:
+                messages.error(request, t("srv.test_is_prod"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             other = DHCPServer.objects.filter(is_test=True).exclude(pk=srv.pk).first()
             if request.POST.get("value") == "1" and other is not None:
                 messages.error(request, t("srv.test_one", name=other.name))
@@ -568,6 +582,9 @@ class ServersInlineView(LoginRequiredMixin, View):
 
             from .agent import TEST_RUN_MIN
 
+            if action == "stop" and srv.production:
+                messages.error(request, t("srv.stop_prod"))
+                return redirect(reverse("plugins:netbox_isc_dhcp:pluginsettings_list") + "#isc-servers")
             mins = int(request.POST["minutes"]) if request.POST.get("minutes", "").isdigit() else 0
             if action == "start" and srv.is_test and mins not in TEST_RUN_MIN:
                 messages.error(request, t("srv.test_run_pick"))
