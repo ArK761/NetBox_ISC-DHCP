@@ -10,7 +10,7 @@ FAILED = ("test_failed", "rolled_back", "failed")
 # Shown read-only in CFG pluginu -> DHCP servery. as_text() never writes a line that is not here; the agent ignores it anyway.
 AGENT_COMMANDS = (
     "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
-    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "cmd restoreleases", "agent_url", "agent_sha",
+    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "cmd restoreleases", "cmd delfirst", "agent_url", "agent_sha",
     "key", "interval", "report", "base", "dir", "conf_dir",
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format", "test_server",
 )
@@ -530,6 +530,8 @@ def heartbeat(server, request, data):
         cmd_failed = res != "ok"
         if res == "ok" and server.agent_cmd.startswith("restoreleases:"):
             server.leases_restored = f"{int(timezone.now().timestamp())}|{(txt[0] if txt else '')[:300]}"
+        if res == "ok" and server.agent_cmd.startswith("delfirst:"):  # original backups deleted: nothing of the original DHCP is shown any more
+            server.first_leases = server.leases_kept = server.leases_restored = server.first_cfg = ""
         if res == "ok" and server.agent_cmd.startswith("simfirst:"):  # agent cleared its state: NetBox side of a first installation
             server.takeover, server.takeover_info = "foreign", t("srv.sim_info")
             server.first_leases = server.leases_kept = server.leases_restored = ""
@@ -586,6 +588,8 @@ def heartbeat(server, request, data):
         server.first_leases = fl
         _t, n, sha, where = fl.split("|")
         msgs.append(t("aud.first_leases", n=n, sha=sha[:12], path=where))
+    if "first_cfg" in data:  # agent 1.27.0+: backup of the original CFG (start_<time>) still on the server
+        server.first_cfg = "".join(ch for ch in str(data.get("first_cfg", ""))[:1000] if ch.isalnum() or ch in "/._-:|,")
     lt = str(data.get("leases_last", ""))
     if lt.isdigit() and len(lt) <= 12:  # unix time of the last periodic lease copy (agent 1.18.0+)
         import datetime as _dt
@@ -609,7 +613,7 @@ def heartbeat(server, request, data):
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["stop_why", "test_until", "disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["first_cfg", "stop_why", "test_until", "disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
@@ -763,6 +767,24 @@ def agent_outdated(server) -> bool:
 
 
 CMDS = ("start", "stop", "restart", "update")
+
+
+def delfirst_block(server, manifest_hash):
+    """Why 'delete the original backup' is disabled ('' = allowed): the NetBox CFG must run on the server (deployed, tested OK, dhcpd up)."""
+    try:
+        new_agent = tuple(int(x) for x in str(server.agent_version).split(".")[:3]) >= (1, 27, 0)
+    except ValueError:
+        new_agent = False
+    if not new_agent:
+        return "srv.df_agent"
+    if not server.first_leases and not server.first_cfg:
+        return "srv.df_none"
+    if server.takeover == "foreign":
+        return "srv.rl_takeover"
+    if (server.disk_broken or server.last_result != "ok" or server.last_hash != manifest_hash
+            or server.running_hash != manifest_hash or server.dhcpd_running is not True):
+        return "srv.df_cfg"
+    return ""
 
 
 def restore_block(server, manifest_hash):

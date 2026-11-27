@@ -206,6 +206,8 @@ def _server_rows():
                     "sync_hint": _sync_hint(srv, st, mh),
                     "disk": ("ok" if srv.disk_hash == ck else "bad") if srv.disk_hash and srv.enabled else "",
                     "first_leases": _first_leases(srv),
+                    "first_cfg": [{"path": p[0], "files": p[1], "kb": p[2]} for p in (x.split("|") for x in srv.first_cfg.split(",") if x) if len(p) == 3],
+                    "df_block": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).delfirst_block(srv, mh),
                     "rl_block": __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).restore_block(srv, mh),
                     "rl_done": (lambda p: {"when": fmt_time(p[0]), "txt": p[1] if len(p) > 1 else ""} if p and p[0].isdigit() else None)(srv.leases_restored.split("|", 1)),
                     "leases_kept": (lambda k: {"b": k[0], "a": k[1], "path": k[2], "ok": int(k[1]) >= int(k[0])} if len(k) == 3 and k[0].isdigit() and k[1].isdigit() else None)(srv.leases_kept.split("|")),

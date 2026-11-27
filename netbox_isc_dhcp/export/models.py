@@ -110,6 +110,7 @@ class DHCPServer(models.Model):
     leases_restored = models.CharField(max_length=400, blank=True, default="", help_text="Original leases put back by the agent (unix time|text).")
     is_test = models.BooleanField(default=False, help_text="Test DHCP server: first in the rollout, the Test button simulates the first run of the agent.")
     first_leases = models.CharField(max_length=400, blank=True, default="", help_text="First run of the agent: copy of the original leases (unix time|IPs|sha256|path).")
+    first_cfg = models.CharField(max_length=1000, blank=True, default="", help_text="Agent's backup of the original CFG (start_<time>): path|files|KB, comma separated.")
     leases_kept = models.CharField(max_length=400, blank=True, default="", help_text="First NetBox CFG: IPs in the leases before|after the start|copy path.")
     takeover = models.CharField(max_length=10, blank=True, default="", help_text="Original DHCP found by the agent: '' | foreign (waiting for the admin's consent) | approved.")
     takeover_info = models.CharField(max_length=1000, blank=True, default="", help_text="What the agent found: dhcpd state, include files of the original dhcpd.conf.")
