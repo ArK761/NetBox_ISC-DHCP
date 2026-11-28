@@ -253,7 +253,7 @@ def agent_settings_data():
 
     st = settings_obj()
     out = []
-    for s in DHCPServer.objects.order_by("order", "pk"):
+    for s in DHCPServer.objects.order_by("pk"):  # the same order as the DHCP servers table
         rows, local, used = settings_rows(s, st)
         reported = bool(s.agent_eff)
         out.append({"server": s.name, "enabled": s.enabled, "agent": s.agent_version or "", "reported": reported,
