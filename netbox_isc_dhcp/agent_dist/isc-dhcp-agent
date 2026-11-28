@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.28.3"
+AGENT_VERSION="1.28.4"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -1011,7 +1011,7 @@ contact() {
       test) TEST_CMD="$a" ;; restart) RESTART_CMD="$a" ;; delete) DELETES+=("$a") ;;
     esac
   done < <([ "$code" = 200 ] && cat "$resp")  # only a real NetBox answer is a plan (a proxy error page is not)
-  if [ "$code" = 200 ]; then  # NetBox's switch "Test server", kept for the next boot
+  if [ "$code" = 200 ] && [ "$WAIT" != disabled ]; then  # NetBox's switch "Test server", kept for the next boot (a switched-off server gets no switch: keep the last one)
     if [ -n "$NB_TEST" ]; then [ "$(state is_test)" = 1 ] || echo 1 >"$STATE_DIR/is_test"; else rm -f "$STATE_DIR/is_test"; fi
   fi
   [ "$code" = 200 ] && event_sent
