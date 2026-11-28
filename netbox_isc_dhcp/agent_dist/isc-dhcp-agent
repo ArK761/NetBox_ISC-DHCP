@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.28.1"
+AGENT_VERSION="1.28.2"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -1061,7 +1061,10 @@ contact() {
     [ "$(isc_version)" != none ] && { [ "$(dhcpd_running)" != 1 ] || ! svc_is_active; } && diag "$WORK/diag"
   fi
   if [ -n "$WAIT" ]; then  # log only when the reason changes (no line every interval)
-    [ "$WAIT $CFG" != "${LAST_WAIT:-}" ] && log "waiting ($WAIT) CFG $CFG"
+    if [ "$WAIT $CFG" != "${LAST_WAIT:-}" ]; then
+      if [ "$WAIT" = disabled ]; then log "server is switched off in NetBox - no CFG, only agent updates (current CFG and dhcpd stay as they are)"
+      else log "waiting ($WAIT) CFG $CFG"; fi
+    fi
     LAST_WAIT="$WAIT $CFG"; return 0
   fi
   LAST_WAIT=""
