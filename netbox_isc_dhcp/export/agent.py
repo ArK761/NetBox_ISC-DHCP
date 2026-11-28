@@ -416,7 +416,7 @@ def svc_text(raw):
     return raw
 
 
-_WARN = ("aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto", "aud.disk_warn", "aud.reboot_down")
+_WARN = ("aud.cfg_offline", "aud.cfg_offline_bad", "aud.ag_dhcpd_down", "aud.ag_isc_none", "aud.svc_bad", "aud.svc_state", "aud.insecure", "aud.dup", "aud.ag_agent_stop_auto", "aud.disk_warn", "aud.reboot_down")
 _INFO = ("aud.reboot_up", "aud.reboot_stopped", "aud.svc_admin_off", "aud.disk_info", "aud.disk_ok", "aud.first_leases", "aud.leases_copy", "aud.ag_first", "aud.ag_updated", "aud.ag_isc_new", "aud.ag_isc_changed", "aud.fix", "aud.svc_ok", "aud.fail_cleared",
          "aud.secure", "aud.ag_agent_start_auto", "aud.ag_agent_start_nb", "aud.ag_agent_stop_nb", "aud.cmd_done")
 
@@ -587,9 +587,28 @@ def heartbeat(server, request, data):
     if insecure != server.agent_insecure and (insecure or server.last_seen):
         msgs.append(t("aud.insecure") if insecure else t("aud.secure"))
     server.agent_insecure = insecure
-    fix = str(data.get("fix", ""))[:300]
-    if fix:
-        msgs.append(t("aud.fix", txt=fix))
+    fix = str(data.get("fix", ""))[:4000]
+    if fix:  # agent 1.30.5+: changes outside the agent while NetBox was not reachable come with their own time
+        import re as _re
+
+        parts = _re.split(r"; (?=\S+ \(NetBox not reachable, reported after reconnect\): )", fix)
+        for part in parts:
+            part = part.strip().strip(";").strip()
+            if not part:
+                continue
+            m = _re.match(r"(\S+) \(NetBox not reachable, reported after reconnect\): (.*)$", part)
+            if not m:
+                msgs.append(t("aud.fix", txt=part[:300]))
+                continue
+            when, rest = m.group(1), m.group(2)
+            if "damaged" in rest:
+                msgs.append(t("aud.cfg_offline_bad", when=when))
+                continue
+            rm = _re.search(r": restored (.*?)(?:; removed (.*))?$", rest)
+            restored = (rm.group(1) if rm else "").strip()
+            removed = (rm.group(2) or "").strip() if rm else ""
+            msgs.append(t("aud.cfg_offline", when=when, files=restored or "—")
+                        + (t("aud.cfg_offline_rm", files=removed) if removed else ""))
     if svc and (svc != server.svc_state or (svc not in ("active", "none") and svc_why and svc_why != server.svc_why)):
         if svc in ("active", "none"):
             if server.svc_state not in ("", "active", "none"):
