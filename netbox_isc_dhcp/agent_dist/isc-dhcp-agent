@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.28.4"
+AGENT_VERSION="1.29.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -449,7 +449,16 @@ apply() {
     for i in "${DELETES[@]}"; do [ -n "$BASE" ] && case "$i" in "$BASE"/*) true ;; *) false ;; esac && safe_path "$i" && rm -f -- "$i" && nd0=$((nd0 + 1)); done
     echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"; APPLIED=1
     log "CFG $CFG applied (${#DL_PATH[@]} files, $nd0 deleted) - dhcpd stays stopped"
-    report ok "$OUT"; prune_backups; return
+    report ok "$OUT"; snapshot_current; prune_backups; return
+  fi
+  if [ -n "$(state running)" ] && [ "$HASH" = "$(state running)" ] && [ "$(dhcpd_running)" = 1 ] && [ ! -e "$STATE_DIR/want_up" ]; then
+    # files changed outside the agent were put back to the CFG dhcpd already runs: no restart needed (dhcpd reads the CFG only at start)
+    local nd1=0
+    for i in "${DELETES[@]}"; do [ -n "$BASE" ] && case "$i" in "$BASE"/*) true ;; *) false ;; esac && safe_path "$i" && rm -f -- "$i" && nd1=$((nd1 + 1)); done
+    step running 0 "dhcpd already runs CFG $CFG - files put back from NetBox, no restart (pid $(pid_now))"
+    echo "$CFG" >"$STATE_DIR/label"; APPLIED=1
+    log "CFG $CFG files put back (${#DL_PATH[@]} files, $nd1 deleted) - dhcpd runs this CFG, not restarted"
+    report ok "$OUT"; snapshot_current; prune_backups; return
   fi
   # 5. restart + check that dhcpd runs
   cmd=$(allowed "$RESTART_CMD" "${ALLOWED_RESTART_CMDS[@]}") || echo "restart command from NetBox not allowed locally, used: $cmd" >>"$OUT"
@@ -484,7 +493,7 @@ apply() {
   # 7. remember + report
   echo "$HASH" >"$STATE_DIR/running"; echo "$CFG" >"$STATE_DIR/label"; APPLIED=1
   log "CFG $CFG applied (${#DL_PATH[@]} files, ${#DELETES[@]} deleted, dhcpd pid $(pid_now))"
-  rm -f "$STATE_DIR/want_up"; report ok "$OUT"
+  rm -f "$STATE_DIR/want_up"; report ok "$OUT"; snapshot_current
   # keep the newest backups only
   prune_backups
 }
@@ -652,6 +661,64 @@ first_cfg_info() {  # the agent's backup of the ORIGINAL CFG (made before the fi
     done
   done
   echo "$out"
+}
+
+current_dir() {  # <backup dir>/_current = copy of the running CFG (confirmed by NetBox) for a restore while NetBox is not reachable
+  local d; d=$(state backup_dir); backup_ok "$d" || d="$BACKUP_DEFAULT"
+  echo "${d%/}/_current"
+}
+
+snapshot_current() {  # save the CFG on disk (= the one NetBox confirmed) to _current: root only, read-only, with its control hash
+  local cur tmp h f; cur=$(current_dir)
+  backup_ok "$(dirname "$cur")" || return 0
+  tmp="$STATE_DIR/current.sha"; disk_files >"$tmp" 2>/dev/null; h=$(hash_of "$tmp")
+  [ -s "$tmp" ] || return 0
+  [ -f "$cur/.hash" ] && [ "$(cat "$cur/.hash" 2>/dev/null)" = "$h" ] && return 0  # already the same
+  case "$cur" in /opt/*/_current) [ -L "$cur" ] && return 0; rm -rf -- "$cur" ;; *) return 0 ;; esac
+  mkdir -p -m 700 "$cur" || return 0
+  sed -nE 's/^[0-9a-f]{64} [ *](.*)$/\1/p' "$tmp" | while IFS= read -r f; do cp -a --parents "$f" "$cur/" 2>/dev/null; done
+  cp "$tmp" "$cur/.files"; echo "$h" >"$cur/.hash"
+  chmod -R go-rwx,a-w "$cur" 2>/dev/null; chmod 700 "$cur"
+  log "copy of the running CFG saved -> $cur (control hash ${h:0:12})"
+}
+
+current_ok() {  # _current not damaged: its file list gives its stored hash and every file has the listed sha256
+  local cur="$1" sha f
+  [ -f "$cur/.hash" ] && [ -f "$cur/.files" ] || return 1
+  [ "$(hash_of "$cur/.files")" = "$(cat "$cur/.hash")" ] || return 1
+  while read -r sha f; do
+    [ -n "$f" ] || continue
+    [ -f "$cur$f" ] && [ "$(sha256sum "$cur$f" | cut -d' ' -f1)" = "$sha" ] || return 1
+  done < <(sed -nE 's/^([0-9a-f]{64}) [ *](.*)$/\1 \2/p' "$cur/.files")
+}
+
+local_restore() {  # NetBox not reachable + CFG files changed outside the agent: put back the copy of the running CFG (no restart)
+  local cur h sha f n=0 d=0 tmp="$STATE_DIR/restore.sha" B="${ALLOWED_BASE:-}" CD="$DHCP_CONF_DIR"
+  [ -n "$(state running)" ] || return 0  # no NetBox CFG yet: nothing to go back to
+  cur=$(current_dir); [ -f "$cur/.hash" ] || return 0
+  h=$(cat "$cur/.hash"); [ "$DISK_HASH" = "$h" ] && return 0
+  [ "$(state local_restore)" = "$DISK_HASH" ] && return 0  # this disk state was handled already
+  echo "$DISK_HASH" >"$STATE_DIR/local_restore"
+  if ! current_ok "$cur"; then
+    log "NetBox not reachable, CFG files changed outside the agent - the local copy $cur is DAMAGED (hash does not match): nothing restored, dhcpd keeps running"
+    FIXED="${FIXED:+$FIXED; }CFG files changed outside the agent while NetBox was not reachable - the local copy of the running CFG was damaged, nothing restored"
+    return 0
+  fi
+  while read -r sha f; do
+    [ -n "$f" ] || continue
+    case "$f" in "$CD"/*) ;; *) [ -n "$B" ] && case "$f" in "$B"/*) true ;; *) false ;; esac || continue ;; esac
+    if [ ! -f "$f" ] || [ "$(sha256sum "$f" | cut -d' ' -f1)" != "$sha" ]; then
+      mkdir -p "$(dirname "$f")" && cp -a "$cur$f" "$f.isc-new" && chmod u+w "$f.isc-new" && mv -f "$f.isc-new" "$f" && n=$((n + 1))
+    fi
+  done < <(sed -nE 's/^([0-9a-f]{64}) [ *](.*)$/\1 \2/p' "$cur/.files")
+  disk_files >"$tmp" 2>/dev/null
+  while read -r f; do  # files added by hand in the managed dirs (only below the pinned base path)
+    [ -n "$B" ] && case "$f" in "$B"/*) true ;; *) false ;; esac || continue
+    grep -qF " $f" "$cur/.files" || { rm -f -- "$f" && d=$((d + 1)); }
+  done < <(sed -nE 's/^[0-9a-f]{64} [ *](.*)$/\1/p' "$tmp")
+  disk_files >"$tmp" 2>/dev/null; DISK_HASH=$(hash_of "$tmp")
+  log "NetBox not reachable, CFG files changed outside the agent - restored $n, removed $d file(s) from the local copy of the running CFG ($cur); dhcpd not restarted (it runs this CFG)"
+  FIXED="${FIXED:+$FIXED; }CFG files changed outside the agent while NetBox was not reachable - restored from the local copy of the running CFG: $n restored, $d removed (no restart)"
 }
 
 lease_ips() { [ -f "$1" ] && grep -oE '^lease [0-9.]+' "$1" | sort -u | wc -l || echo 0; }  # different IPs in a leases file
@@ -968,9 +1035,10 @@ contact() {
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
-  [ "$code" = 000 ] && return 1
+  if [ "$code" = 000 ]; then FIXED="${FIX_NOW:+$FIX_NOW${FIXED:+; }}${FIXED:-}"; local_restore; return 1; fi
   local ck; ck=$(sed -n 's/^check\t\([0-9a-f]\{64\}\)$/\1/p' "$resp" | head -1)
   [ -n "$ck" ] && echo "$ck" >"$STATE_DIR/check"
+  [ -n "$ck" ] && [ "$ck" = "$DISK_HASH" ] && [ -n "$(state running)" ] && snapshot_current  # NetBox confirmed the files on disk
   # hash only, but NetBox's CFG changed meanwhile: ask again at once with the file list (NetBox needs it for the plan)
   if [ -n "$nofiles" ] && [ -n "$ck" ] && [ "$ck" != "$DISK_HASH" ]; then  # NetBox already got the event / fix / dup of this contact: never twice
     send="$have"; nofiles=""; LOG_EVENT="$EVENT"; EVENT=""; WHY=""; DUP_FIXED=""; FIX_NOW=""; LEASES_EV=""; continue
