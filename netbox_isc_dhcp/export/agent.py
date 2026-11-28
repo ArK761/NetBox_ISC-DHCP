@@ -10,7 +10,7 @@ FAILED = ("test_failed", "rolled_back", "failed")
 # Shown read-only in CFG pluginu -> DHCP servery. as_text() never writes a line that is not here; the agent ignores it anyway.
 AGENT_COMMANDS = (
     "download", "bundle", "backup", "test", "restart", "on_test_fail", "delete",
-    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "cmd restoreleases", "cmd delfirst", "agent_url", "agent_sha",
+    "cmd start", "cmd stop", "cmd restart", "cmd update", "cmd simfirst", "cmd restoreleases", "cmd delfirst", "settings_check", "agent_url", "agent_sha",
     "key", "interval", "report", "base", "dir", "conf_dir",
     "hash", "cfg", "mode", "server", "wait", "wait_for", "error", "disk", "restart_req", "check", "leases", "time_format", "test_server",
 )
@@ -617,6 +617,10 @@ def heartbeat(server, request, data):
         server.first_leases = fl
         _t, n, sha, where = fl.split("|")
         msgs.append(t("aud.first_leases", n=n, sha=sha[:12], path=where))
+    eff = str(data.get("eff", ""))[:2000]
+    if eff:  # agent 1.30.0+: the settings it really uses (back-check)
+        server.agent_eff = "".join(ch for ch in eff if ch.isprintable())
+        server.agent_eff_at = timezone.now()
     if "first_cfg" in data:  # agent 1.27.0+: backup of the original CFG (start_<time>) still on the server
         server.first_cfg = "".join(ch for ch in str(data.get("first_cfg", ""))[:1000] if ch.isalnum() or ch in "/._-:|,")
     lt = str(data.get("leases_last", ""))
@@ -642,7 +646,7 @@ def heartbeat(server, request, data):
     dh = str(data.get("disk_hash", "")).lower()
     if len(dh) == 64 and all(c in "0123456789abcdef" for c in dh):
         server.disk_hash = dh  # ONE hash of every CFG file on the server's disk (agent 1.16.0+)
-    server.save(update_fields=["first_cfg", "stop_why", "test_until", "disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
+    server.save(update_fields=["agent_eff", "agent_eff_at", "first_cfg", "stop_why", "test_until", "disk_usage", "leases_restored", "takeover", "takeover_info", "leases_kept", "first_leases", "leases_sha", "leases_last", "disk_hash", "agent_version", "isc_version", "running_hash", "dhcpd_running", "last_seen", "dhcpd_since", "dhcpd_by", "dhcpd_why", "dhcpd_pid", "svc_state", "svc_why", "last_result", "agent_insecure", "agent_cmd"])
     if not msgs:  # nothing changed: a status line at least once an hour
         from datetime import timedelta
 
@@ -796,6 +800,63 @@ def agent_outdated(server) -> bool:
 
 
 CMDS = ("start", "stop", "restart", "update")
+
+
+SETTINGS_CHECK = (1, 5, 10, 20)  # minutes: how often the agent reports the settings it really uses
+
+
+def _vge(v, want):
+    try:
+        return tuple(int(x) for x in str(v).split(".")[:3]) >= want
+    except ValueError:
+        return False
+
+
+def agent_settings(server, st=None):
+    """Settings NetBox sends to this agent (the same keys the plan carries): {key: value}."""
+    from ..base_config import is_backup_path
+    from ..models import BACKUP_DIR, settings_obj
+
+    st = st or settings_obj()
+    out = {"interval": str(st.agent_interval if st else 60)}
+    if server is None or _vge(server.agent_version, (1, 18, 0)):
+        bdir = st.agent_backup_dir if st and is_backup_path(st.agent_backup_dir) else BACKUP_DIR
+        out["leases"] = f"{st.agent_leases_every if st else 60}|{st.agent_leases_keep if st else 72}|{bdir.rstrip('/')}/leases"
+    if server is None or _vge(server.agent_version, (1, 19, 0)):
+        out["time_format"] = (st.agent_time_format if st else "eu") or "eu"
+    if server is None or _vge(server.agent_version, (1, 23, 0)):
+        out["is_test"] = "1" if server is not None and server.is_test else "0"
+    if server is None or _vge(server.agent_version, (1, 30, 0)):
+        out["settings_check"] = str(st.agent_settings_check if st else 5)
+    return out
+
+
+def parse_eff(text):
+    """'a=1;b=2;local=X:1,Y:2' -> ({a: 1, b: 2}, {X: 1, Y: 2})."""
+    used, local = {}, {}
+    for part in (text or "").split(";"):
+        k, _, v = part.partition("=")
+        if k == "local":
+            for item in v.split(","):
+                lk, _, lv = item.partition(":")
+                if lk:
+                    local[lk] = lv
+        elif k:
+            used[k] = v
+    return used, local
+
+
+def settings_rows(server, st=None):
+    """[(key, NetBox value, agent value, ok)] + local {..} + checked time for the page / API."""
+    want = agent_settings(server, st)
+    used, local = parse_eff(server.agent_eff)
+    rows = []
+    for k, v in want.items():
+        if k == "settings_check":
+            continue  # the agent stores it, it does not report it back
+        got = used.get(k)
+        rows.append((k, v, got if got is not None else "", got is not None and got == v))
+    return rows, local, used
 
 
 def delfirst_block(server, manifest_hash):

@@ -1,0 +1,29 @@
+{% extends 'generic/_base.html' %}{% load isc_dhcp_i18n %}
+{% block title %}{% tr "ags.title" %}{% endblock %}
+{% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
+<div class="row"><div class="col-12">
+<div class="card mb-3" id="isc-agent-settings">
+  <h5 class="card-header"><i class="mdi mdi-tune-variant me-1"></i>{% tr "ags.title" %}</h5>
+  <div class="card-body">
+    <div class="small text-muted mb-3">{% tr_fmt "ags.hint" n=every %} {% url 'plugins-api:netbox_isc_dhcp-api:agent_settings' as api_url %}<a href="{{ api_url }}" target="_blank" rel="noopener"><code>{{ api_url }}</code></a></div>
+    {% for r in rows %}
+    <div class="mb-3 p-2" style="border:2px solid var(--tblr-border-color,#3a4658);border-left:5px solid {% if r.ok %}#2fb344{% elif r.reported %}#d63939{% else %}#f59f00{% endif %};border-radius:.45rem">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-1"><strong>{{ r.server }}</strong>
+        <span class="isc-chip">{{ r.agent|default:"?" }}</span>
+        {% if not r.enabled %}<span class="badge text-bg-secondary">{% tr "ags.off" %}</span>{% endif %}
+        {% if r.ok %}<span class="badge text-bg-success"><i class="mdi mdi-check"></i> {% tr "ags.ok" %}</span>
+        {% elif r.reported %}<span class="badge text-bg-danger"><i class="mdi mdi-alert"></i> {% tr "ags.bad" %}</span>
+        {% elif not r.can_report %}<span class="small text-warning">{% tr "ags.old_agent" %}</span>
+        {% else %}<span class="small text-warning">{% tr "ags.wait" %}</span>{% endif %}
+        {% if r.checked %}<span class="small text-muted">{% tr "ags.checked" %} {{ r.checked|date:"d.m.Y H:i:s" }}</span>{% endif %}</div>
+      <table class="table table-sm small mb-1"><thead><tr><th>{% tr "ags.col_key" %}</th><th>{% tr "ags.col_nb" %}</th><th>{% tr "ags.col_ag" %}</th><th></th></tr></thead><tbody>
+      {% for s in r.settings %}<tr><td>{% with k="ags.k."|add:s.key %}{% tr k %}{% endwith %}</td><td class="font-monospace">{{ s.netbox }}</td><td class="font-monospace">{{ s.agent|default:"—" }}</td>
+        <td>{% if r.reported %}{% if s.ok %}<span class="text-success"><i class="mdi mdi-check"></i></span>{% else %}<span class="text-danger fw-bold"><i class="mdi mdi-close"></i> {% tr "ags.bad" %}</span>{% endif %}{% endif %}</td></tr>{% endfor %}
+      </tbody></table>
+      {% if r.local %}<div class="small"><span class="text-muted">{% tr "ags.local" %}:</span>
+        {% for k, v in r.local.items %}<span class="isc-chip me-1"><span class="text-muted">{{ k }}</span> {{ v|default:"—" }}</span>{% endfor %}</div>{% endif %}
+    </div>
+    {% empty %}<div class="text-muted small">{% tr "srv.none" %}</div>{% endfor %}
+  </div></div>
+</div></div>
+{% endblock %}

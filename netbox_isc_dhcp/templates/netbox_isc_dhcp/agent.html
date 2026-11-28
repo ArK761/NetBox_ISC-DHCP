@@ -2,6 +2,7 @@
 {% block title %}{% tr "menu.agent" %}{% endblock %}
 {% block content %}{% include "netbox_isc_dhcp/_inline_css.html" %}
 <div class="row"><div class="col-12">
+<div class="mb-2"><a href="{% url 'plugins:netbox_isc_dhcp:agent_settings' %}" class="btn btn-sm btn-outline-primary"><i class="mdi mdi-tune-variant"></i> {% tr "srv.settings_page" %}</a></div>
 <div class="card mb-3" id="isc-agent-commands">
   <h5 class="card-header"><i class="mdi mdi-lock-outline me-1"></i>{% tr "cmd.title" %} <span class="badge text-bg-secondary ms-2">{{ agent_commands|length }}</span> <span class="small text-muted ms-2">isc-dhcp-agent {{ agent_version }}</span></h5>
   <div class="card-body">

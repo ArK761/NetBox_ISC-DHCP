@@ -128,6 +128,10 @@
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-agent-interval">{% csrf_token %}<input type="hidden" name="field" value="interval">
         <i class="mdi mdi-timer-outline"></i><span class="small fw-semibold text-nowrap">{% tr "srv.interval" %}</span>
         <select name="value" class="form-select form-select-sm" style="width:7.5rem" onchange="this.form.submit()">{% for v, l in intervals %}<option value="{{ v }}"{% if object.agent_interval == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>
+      <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-settings-check">{% csrf_token %}<input type="hidden" name="field" value="settings_check">
+        <i class="mdi mdi-tune-variant"></i><span class="small fw-semibold text-nowrap" title="{% tr 'srv.settings_check_hint' %}">{% tr "srv.settings_check" %}</span>
+        <select name="value" class="form-select form-select-sm" style="width:6.5rem" onchange="this.form.submit()">{% for v in settings_checks %}<option value="{{ v }}"{% if object.agent_settings_check == v %} selected{% endif %}>{{ v }} min</option>{% endfor %}</select>
+        <a href="{% url 'plugins:netbox_isc_dhcp:agent_settings' %}" class="small text-nowrap"><i class="mdi mdi-open-in-new"></i> {% tr "srv.settings_page" %}</a></form>
       <form method="post" action="{% url 'plugins:netbox_isc_dhcp:servers_inline' %}" class="d-flex gap-2 align-items-center m-0" id="isc-bundle-min">{% csrf_token %}<input type="hidden" name="field" value="bundle_min">
         <i class="mdi mdi-package-variant-closed"></i><span class="small fw-semibold text-nowrap" title="{% tr 'srv.bundle_hint' %}">{% tr "srv.bundle_min" %}</span>
         <select name="value" class="form-select form-select-sm" style="width:6rem" onchange="this.form.submit()">{% for v in bundle_choices %}<option value="{{ v }}"{% if object.agent_bundle_min == v %} selected{% endif %}>{{ v }}</option>{% endfor %}</select>

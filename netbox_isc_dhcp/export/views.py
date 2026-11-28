@@ -128,6 +128,26 @@ def _client_allowed(request):
     return True
 
 
+from rest_framework.permissions import IsAuthenticated  # noqa: E402
+from rest_framework.response import Response  # noqa: E402
+from rest_framework.views import APIView  # noqa: E402
+
+
+class AgentSettingsAPIView(APIView):
+    """GET /api/plugins/isc-dhcp/agent/settings/ (NetBox login or API token): every agent's settings, NetBox vs. agent."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from ..views import agent_settings_data
+
+        if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
+            raise PermissionDenied
+        data = agent_settings_data()
+        for r in data:
+            r["checked"] = r["checked"].isoformat() if r["checked"] else None
+        return Response(data)
+
+
 @method_decorator(login_not_required, name="dispatch")  # agent / DHCP servers: no login, access = client IP
 class ManifestView(View):
     def get(self, request):
@@ -446,6 +466,15 @@ class ServersInlineView(LoginRequiredMixin, View):
                 log = [("agent_bundle_min", str(st.agent_bundle_min), str(v))]
                 st.agent_bundle_min = v
                 st.save(update_fields=["agent_bundle_min"])
+        elif action == "settings_check":
+            from .agent import SETTINGS_CHECK
+
+            st = _st()
+            v = int(request.POST.get("value", "0")) if request.POST.get("value", "").isdigit() else 0
+            if v in SETTINGS_CHECK:
+                log = [("agent_settings_check", str(st.agent_settings_check), str(v))]
+                st.agent_settings_check = v
+                st.save(update_fields=["agent_settings_check"])
         elif action == "interval":
             from .agent import INTERVALS
 
@@ -745,6 +774,17 @@ class PlanView(View):
 
         if off is not None:
             extra = {"wait": "disabled"}
+            from .agent import agent_settings
+
+            sv = agent_settings(off, st)  # a switched-off server keeps its settings current too (never a CFG)
+            if "leases" in sv:
+                extra["leases"] = sv["leases"].replace("|", "\t")
+            if "time_format" in sv:
+                extra["time_format"] = sv["time_format"]
+            if sv.get("is_test") == "1":
+                extra["test_server"] = "1"
+            if "settings_check" in sv:
+                extra["settings_check"] = sv["settings_check"]
             if off.agent_cmd.startswith("update:"):
                 from .agent import agent_script
 
@@ -772,6 +812,8 @@ class PlanView(View):
             info["time_format"] = (st.agent_time_format if st else "eu") or "eu"  # name format of the lease copy dirs; the agent renames old ones
         if server is not None and server.is_test and _ver_ge(server.agent_version, (1, 23, 0)):
             info["test_server"] = "1"  # the NetBox switch "Test server": the agent allows the first run simulation
+        if server is not None and _ver_ge(server.agent_version, (1, 30, 0)):
+            info["settings_check"] = str(st.agent_settings_check if st else 5)  # how often the agent reports the settings it uses
         if disk_hash:
             info["check"] = check  # only to agents that send their disk hash (1.16.0+); older ones would log it as an unknown command
         skipped = request.method == "POST" and str((data or {}).get("nofiles", "")) == "1"  # agent sent only its disk hash

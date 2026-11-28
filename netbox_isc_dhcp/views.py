@@ -245,6 +245,39 @@ class AgentPageView(LoginRequiredMixin, View):
             "service": m.group(1) if m else "isc-dhcp-server"})
 
 
+def agent_settings_data():
+    """Per server: NetBox settings vs. the settings the agent reports it uses (page + API)."""
+    from .export.agent import _vge, agent_settings, settings_rows
+    from .export.models import DHCPServer
+    from .models import settings_obj
+
+    st = settings_obj()
+    out = []
+    for s in DHCPServer.objects.order_by("order", "pk"):
+        rows, local, used = settings_rows(s, st)
+        reported = bool(s.agent_eff)
+        out.append({"server": s.name, "enabled": s.enabled, "agent": s.agent_version or "", "reported": reported,
+                    "can_report": _vge(s.agent_version, (1, 30, 0)), "checked": s.agent_eff_at,
+                    "ok": reported and all(r[3] for r in rows),
+                    "settings": [{"key": k, "netbox": nb, "agent": ag, "ok": ok} for k, nb, ag, ok in rows],
+                    "local": local, "netbox_all": agent_settings(s, st)})
+    return out
+
+
+class AgentSettingsView(LoginRequiredMixin, View):
+    """Nastavenia agentov: what NetBox sends to every agent and what the agent reports it really uses (back-check)."""
+
+    def get(self, request):
+        from django.shortcuts import render
+
+        if not request.user.has_perm("netbox_isc_dhcp.view_pluginsettings"):
+            raise PermissionDenied
+        from .models import settings_obj
+
+        st = settings_obj()
+        return render(request, "netbox_isc_dhcp/agent_settings.html", {"rows": agent_settings_data(), "every": st.agent_settings_check if st else 5})
+
+
 class NoticesView(LoginRequiredMixin, View):
     """Warning bars at the top of plugin pages, refreshed live (no page reload needed)."""
 
@@ -328,6 +361,7 @@ _crud(PluginSettings, forms.PluginSettingsForm, tables.PluginSettingsTable, sing
           "time_formats": [(k, t("tf." + k), __import__("django.utils.timezone", fromlist=["x"]).localtime().strftime(f)) for k, (lbl, f) in __import__("netbox_isc_dhcp.export.agent", fromlist=["x"]).TIME_FORMATS.items()],
           "leases_on": bool(instance.agent_leases_every) if instance else False,
           "bundle_choices": (1, 5, 10, 20, 50, 100),
+          "settings_checks": (1, 5, 10, 20),
           "agent_api_url": request.build_absolute_uri(reverse("plugins-api:netbox_isc_dhcp-api:agent_plan")),
           "agent_hint": t("srv.agent", plan=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_plan")),
                           report=request.build_absolute_uri(reverse("plugins:netbox_isc_dhcp:export_report"))),

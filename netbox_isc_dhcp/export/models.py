@@ -108,6 +108,8 @@ class DHCPServer(models.Model):
     test_ok_hash = models.CharField(max_length=64, blank=True, default="", help_text="Test server: CFG set verified here (deployed, hash OK, dhcpd ran 60 s) - production may get it.")
     disk_usage = models.CharField(max_length=400, blank=True, default="", help_text="Disk usage of the file systems the agent writes to (mount:percent,...).")
     leases_restored = models.CharField(max_length=400, blank=True, default="", help_text="Original leases put back by the agent (unix time|text).")
+    agent_eff = models.TextField(blank=True, default="", help_text="Settings the agent reports it really uses (back-check).")
+    agent_eff_at = models.DateTimeField(null=True, blank=True, help_text="When the agent last reported its settings.")
     production = models.BooleanField(default=False, help_text="Production server (protection): NetBox never sends Stop and it cannot become the test server.")
     is_test = models.BooleanField(default=False, help_text="Test DHCP server: first in the rollout, the Test button simulates the first run of the agent.")
     first_leases = models.CharField(max_length=400, blank=True, default="", help_text="First run of the agent: copy of the original leases (unix time|IPs|sha256|path).")

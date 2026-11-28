@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.29.3"
+AGENT_VERSION="1.30.0"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -35,7 +35,7 @@ umask 022  # files and dirs must be readable by dhcpd (it may run as its own use
 # THE ONLY commands NetBox can send to this agent - 1:1 with the plugin (export/agent.py AGENT_COMMANDS, shown read-only
 # in CFG pluginu -> DHCP servery). Set after the config file: it cannot be extended. A line from NetBox that is not here is
 # ignored and logged as SECURITY. Test / restart run only what ALLOWED_TEST_CMDS / ALLOWED_RESTART_CMDS allow.
-AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" "cmd simfirst" "cmd restoreleases" "cmd delfirst" agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases time_format test_server)
+AGENT_COMMANDS=(download bundle backup test restart on_test_fail delete "cmd start" "cmd stop" "cmd restart" "cmd update" "cmd simfirst" "cmd restoreleases" "cmd delfirst" settings_check agent_url agent_sha key interval report base dir conf_dir hash cfg mode server wait wait_for error disk restart_req check leases time_format test_server)
 BACKUP_DEFAULT="/opt/BCK"  # backups ONLY below /opt; rm -rf only there and only on the agent's own backup dirs <CFG>_<YYYYmmdd-HHMMSS>
 
 is_command() { printf '%s\n' "${AGENT_COMMANDS[@]}" | grep -qxF -- "$1"; }
@@ -747,6 +747,13 @@ local_restore() {  # NetBox not reachable + CFG files changed outside the agent:
   FIXED="${FIXED:+$FIXED; }CFG files changed outside the agent while NetBox was not reachable - restored from the local copy of the running CFG (no restart)${rl:+: restored$rl}${dl:+; removed$dl}"
 }
 
+eff_settings() {  # the settings the agent really uses now (from NetBox) + its local ones -> NetBox compares (page Nastavenia agentov)
+  local tf; tf=$(state time_fmt); [ -n "$tf" ] || tf=eu
+  printf 'interval=%s;leases=%s;time_format=%s;is_test=%s;admin_stopped=%s;agent=%s;local=ALLOW_HTTP:%s,DEFAULT_FIX:%s,APPARMOR_FIX:%s,TEST_SERVER:%s,KEEP_BACKUPS:%s,DHCP_CONF_DIR:%s,ALLOWED_BASE:%s' \
+    "${INTERVAL:-60}" "$(state leases_cfg)" "$tf" "$([ "$(state is_test)" = 1 ] && echo 1 || echo 0)" "$([ "$(state admin_stopped)" = 1 ] && echo 1 || echo 0)" \
+    "$AGENT_VERSION" "$ALLOW_HTTP" "$DEFAULT_FIX" "$APPARMOR_FIX" "$TEST_SERVER" "$KEEP_BACKUPS" "$DHCP_CONF_DIR" "${ALLOWED_BASE:-}"
+}
+
 lease_ips() { [ -f "$1" ] && grep -oE '^lease [0-9.]+' "$1" | sort -u | wc -l || echo 0; }  # different IPs in a leases file
 
 first_leases() {  # first run of the agent on this server: copy the ORIGINAL leases once, whatever the lease copy setting is
@@ -762,7 +769,7 @@ first_leases() {  # first run of the agent on this server: copy the ORIGINAL lea
   log "first run of the agent: original leases copied -> $name ($(lease_ips "$LEASES_FILE") IP)"
 }
 
-applied_add() { grep -qxF "$1" "$STATE_DIR/applied" 2>/dev/null || echo "$1" >>"$STATE_DIR/applied"; }  # settings taken over -> told to NetBox (Audit: done)
+applied_add() { grep -qxF "$1" "$STATE_DIR/applied" 2>/dev/null || echo "$1" >>"$STATE_DIR/applied"; echo 0 >"$STATE_DIR/eff_ts"; }  # settings taken over -> told to NetBox (Audit: done)
 
 mark_agent() { echo 1 >"$STATE_DIR/agent_did"; }  # dhcpd started/stopped by the agent (not by hand)
 
@@ -1037,6 +1044,8 @@ contact() {
   DUP_FIXED=""; dedupe_dhcpd
   reboot_check; [ -z "$REBOOT_STOP" ] && test_keep_off  # test server stopped from NetBox: never left running
   FIX_NOW="${FIXED:-}"; FIXED=""  # server settings the agent fixed (sent once)
+  local eff="" every last; every=$(state settings_every); [[ "$every" =~ ^[0-9]+$ ]] || every=5; last=$(state eff_ts); [[ "$last" =~ ^[0-9]+$ ]] || last=0
+  { [ -z "${EFF_SENT:-}" ] || [ $(( $(date +%s) - last )) -ge $((every * 60)) ]; } && eff=$(eff_settings)  # back-check of the settings (NetBox: sits / does not sit)
   EVENT=$(dhcpd_event); EVENT_NOW=$(dhcpd_running); PID_NOW=$(pid_now); WHY=""; LOG_EVENT=""
   case "$EVENT" in manual_stop) WHY=$(why_changed stop) ;; manual_start) WHY=$(why_changed start) ;; manual_restart) WHY=$(why_changed restart) ;; esac
   FRESH=""; INCLUDES=""
@@ -1053,7 +1062,7 @@ contact() {
     if code=$(curl -sS "${CURL_OPTS[@]}" "${AUTH[@]}" --connect-timeout 10 --max-time 60 -o "$resp" -w '%{http_code} %{redirect_url}' -X POST "${url}?format=text" \
       --data-urlencode "files@$send" --data-urlencode "nofiles=$nofiles" --data-urlencode "disk_hash=$DISK_HASH" --data-urlencode "agent=$AGENT_VERSION" --data-urlencode "isc=$(isc_version)" \
       --data-urlencode "dhcpd=$(dhcpd_running)" --data-urlencode "running=$(state running)" \
-      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "leases_last=$(state leases_ts)" --data-urlencode "leases_sha=$(state leases_sum)" --data-urlencode "leases_copy=$LEASES_EV" --data-urlencode "applied=$APPLIED_EV" --data-urlencode "fresh=$FRESH" --data-urlencode "disk_usage=$(disk_usage)" --data-urlencode "first_leases=$(state first_leases)" --data-urlencode "first_cfg=$(first_cfg_info)" --data-urlencode "includes=$INCLUDES" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" --data-urlencode "insecure=$(case "$url" in http://*) echo 1 ;; esac)" 2>"$WORK/curlerr"); then
+      --data-urlencode "dhcpd_event=$EVENT" --data-urlencode "dhcpd_why=$WHY" --data-urlencode "dhcpd_pid=$(pid_now)" --data-urlencode "leases_last=$(state leases_ts)" --data-urlencode "leases_sha=$(state leases_sum)" --data-urlencode "leases_copy=$LEASES_EV" --data-urlencode "applied=$APPLIED_EV" --data-urlencode "fresh=$FRESH" --data-urlencode "disk_usage=$(disk_usage)" --data-urlencode "first_leases=$(state first_leases)" --data-urlencode "first_cfg=$(first_cfg_info)" --data-urlencode "includes=$INCLUDES" --data-urlencode "svc=$(svc_state)" --data-urlencode "dup=$DUP_FIXED" --data-urlencode "fix=$FIX_NOW" --data-urlencode "eff=$eff" --data-urlencode "svc_why=$(svc_why)" --data-urlencode "cmd_done=$(state cmd_done)" --data-urlencode "insecure=$(case "$url" in http://*) echo 1 ;; esac)" 2>"$WORK/curlerr"); then
       case "${code%% *}" in 200|401|403|409) break ;; esac  # the agent API answered (OK or a real refusal)
       log "NetBox answered ${code%% *} at $url"
       log "    -> not the agent API$([ -n "${code#* }" ] && echo " (redirect to ${code#* })") - trying the next address"
@@ -1062,6 +1071,7 @@ contact() {
     log "NetBox not reachable at $url: $(cat "$WORK/curlerr")"
     code=000
   done
+  [ "${code%% *}" = 200 ] && [ -n "$eff" ] && { date +%s >"$STATE_DIR/eff_ts"; EFF_SENT=1; }
   if [ "$code" = 000 ]; then FIXED="${FIX_NOW:+$FIX_NOW${FIXED:+; }}${FIXED:-}"; local_restore; return 1; fi
   local ck; ck=$(sed -n 's/^check\t\([0-9a-f]\{64\}\)$/\1/p' "$resp" | head -1)
   [ -n "$ck" ] && echo "$ck" >"$STATE_DIR/check"
@@ -1097,7 +1107,8 @@ contact() {
                   applied_add leases; log "setting from NetBox: lease copy every $([ "$a" = 0 ] && echo "- (off)" || echo "$a min"), keep $b copies, directory $c"; }
               else log "SECURITY: lease copy settings from NetBox refused (directory only below /opt): $(printf '%s' "$c" | tr -cd 'A-Za-z0-9_./-' | cut -c1-80)"; fi ;;
       time_format) case "$a" in eu|iso|compact) [ "$(state time_fmt)" = "$a" ] || { echo "$a" >"$STATE_DIR/time_fmt"; applied_add time_format; log "setting from NetBox: date format of lease copy dirs $a ($(date +"$(fmt_date)"))"; } ;; esac ;;
-      test_server) [ "$a" = 1 ] && NB_TEST=1 ;;  # NetBox: this server is marked as test server
+      test_server) [ "$a" = 1 ] && NB_TEST=1 ;;
+      settings_check) [[ "$a" =~ ^(1|5|10|20)$ ]] && [ "$(state settings_every)" != "$a" ] && { echo "$a" >"$STATE_DIR/settings_every"; log "setting from NetBox: settings back-check every $a min"; applied_add settings_check; } ;;  # NetBox: this server is marked as test server
       check) ;;  # ONE control hash of NetBox's CFG, stored above (next contact sends the file list only when the disk differs)
       hash) [[ "$a" =~ ^[0-9a-f]{64}$ ]] && HASH="$a" ;; cfg) [[ "$a" =~ ^[0-9]{2}\.[0-9]{2}\.[0-9]{2}_[0-9]{1,6}$ ]] && CFG="$a" ;; wait) WAIT="$a" ;; error) ERR="$a" ;;
       conf_dir) CONF_DIR="$a" ;; base) BASE="$a" ;; dir) DIRS+=("$a") ;;

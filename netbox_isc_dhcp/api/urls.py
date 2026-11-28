@@ -21,6 +21,7 @@ from ..export import views as export_views
 # agent API (key in "Authorization: Token <key>" from CFG pluginu -> DHCP servery + DHCP server IP); also readable in the browser when logged in
 urlpatterns = router.urls + [
     path("agent/", export_views.PlanView.as_view(), name="agent_plan"),
+    path("agent/settings/", export_views.AgentSettingsAPIView.as_view(), name="agent_settings"),
     path("agent/report/", export_views.ReportView.as_view(), name="agent_report"),
     path("agent/bundle/", export_views.BundleView.as_view(), name="agent_bundle"),
     path("agent/self/", export_views.AgentSelfView.as_view(), name="agent_self"),
