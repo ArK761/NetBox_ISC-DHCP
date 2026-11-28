@@ -3,7 +3,7 @@
 # Every <interval> (set in NetBox) it sends the sha256 of its files, gets the plan (changes only) and applies it:
 # backup (cp to the backup dir) -> download + sha256 check -> install (dhcpd.conf last) -> test -> restart -> delete -> report.
 # On a failed test or a dhcpd that does not start it restores the backup and reports it. Needs: bash, curl, sha256sum, flock.
-AGENT_VERSION="1.30.4"
+AGENT_VERSION="1.30.5"
 CONF_FILE="${ISC_AGENT_CONF:-/etc/isc-dhcp-agent.conf}"
 
 # ---- defaults (override in /etc/isc-dhcp-agent.conf) ----
@@ -124,10 +124,12 @@ case "${1:-}" in
   "") ;;
   *) usage >&2; exit 2 ;;
 esac
+log_tf() {  # date format set in NetBox (Formát dátumu a času), with seconds
+  case "$(cat "$STATE_DIR/time_fmt" 2>/dev/null)" in iso) echo '%Y-%m-%d_%H:%M:%S' ;; compact) echo '%Y%m%d-%H%M%S' ;; *) echo '%d.%m.%Y-%H:%M:%S' ;; esac
+}
+
 log() {
-  local line tf  # date in the format set in NetBox (Formát dátumu a času), with seconds
-  case "$(cat "$STATE_DIR/time_fmt" 2>/dev/null)" in iso) tf='%Y-%m-%d_%H:%M:%S' ;; compact) tf='%Y%m%d-%H%M%S' ;; *) tf='%d.%m.%Y-%H:%M:%S' ;; esac
-  line="$(date "+$tf") $*"
+  local line; line="$(date "+$(log_tf)") $*"  # date in the format set in NetBox, with seconds
   logger -t isc-dhcp-agent -- "$*" 2>/dev/null
   if [ -n "$LOG_FILE" ]; then
     if [ -f "$LOG_FILE" ] && [ "$(du -k "$LOG_FILE" 2>/dev/null | cut -f1)" -gt "${LOG_MAX_KB:-5120}" ]; then mv -f "$LOG_FILE" "$LOG_FILE.1"; fi
@@ -715,7 +717,7 @@ local_restore() {  # NetBox not reachable + CFG files changed outside the agent:
   if ! current_ok "$cur"; then
     echo "$DISK_HASH" >"$STATE_DIR/local_restore"
     log "3/4 local copy checked: DAMAGED (hash does not match) - NOTHING restored, dhcpd keeps running as it is"
-    echo "CFG files changed outside the agent while NetBox was not reachable - the local copy of the running CFG was damaged, nothing restored" >>"$STATE_DIR/fix_pending"
+    echo "$(date "+$(log_tf)") (NetBox not reachable, reported after reconnect): CFG files changed outside the agent - the local copy of the running CFG was damaged, nothing restored" >>"$STATE_DIR/fix_pending"
     return 0
   fi
   log "3/4 local copy checked: hash OK (${h:0:12})"
@@ -747,7 +749,7 @@ local_restore() {  # NetBox not reachable + CFG files changed outside the agent:
   rm -f "$STATE_DIR/local_restore"  # restored: the same change made again later must be handled again (only a damaged copy is remembered)
   if [ "$DISK_HASH" = "$h" ]; then log "done: CFG is back to the last working state (hash ${h:0:12}) - $n restored, $d removed"
   else log "done with problems: CFG hash ${DISK_HASH:0:12} is not the last working ${h:0:12} - $n restored, $d removed"; fi
-  echo "CFG files changed outside the agent while NetBox was not reachable - restored from the local copy of the running CFG (no restart)${rl:+: restored$rl}${dl:+; removed$dl}" >>"$STATE_DIR/fix_pending"
+  echo "$(date "+$(log_tf)") (NetBox not reachable, reported after reconnect): CFG files changed outside the agent - restored from the local copy of the running CFG (no restart)${rl:+: restored$rl}${dl:+; removed$dl}" >>"$STATE_DIR/fix_pending"
 }
 
 eff_settings() {  # the settings the agent really uses now (from NetBox) + its local ones -> NetBox compares (page Nastavenia agentov)
